@@ -18,6 +18,10 @@ class SupplierOut(ORMModel):
     held_balance: Decimal
     currency: str
     notes: str | None = None
+    reservation_url: str | None = None
+    reservation_auth_type: str | None = None
+    reservation_timeout_seconds: int | None = None
+    reservation_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -32,6 +36,11 @@ class SupplierCreate(BaseModel):
     status: str = Field(default="pending", pattern="^(pending|active|blocked)$")
     reward_percent: Decimal = Field(default=Decimal("70.00"), ge=0, le=100)
     notes: str | None = Field(default=None, max_length=1000)
+    reservation_url: str | None = Field(default=None, max_length=1000)
+    reservation_auth_type: str | None = Field(default=None, max_length=50)
+    reservation_auth_secret_encrypted: str | None = Field(default=None, max_length=1000)
+    reservation_timeout_seconds: int | None = Field(default=None, gt=0)
+    reservation_enabled: bool = False
 
 
 class SupplierPatch(BaseModel):
@@ -40,6 +49,11 @@ class SupplierPatch(BaseModel):
     status: str | None = Field(default=None, pattern="^(pending|active|blocked)$")
     reward_percent: Decimal | None = Field(default=None, ge=0, le=100)
     notes: str | None = Field(default=None, max_length=1000)
+    reservation_url: str | None = Field(default=None, max_length=1000)
+    reservation_auth_type: str | None = Field(default=None, max_length=50)
+    reservation_auth_secret_encrypted: str | None = Field(default=None, max_length=1000)
+    reservation_timeout_seconds: int | None = Field(default=None, gt=0)
+    reservation_enabled: bool | None = None
 
 
 class SupplierApiKeyOut(BaseModel):

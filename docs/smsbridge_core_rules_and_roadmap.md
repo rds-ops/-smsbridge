@@ -407,10 +407,10 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Inventory
 
-- remove fake supplier phone flow
-- choose supplier reservation architecture:
+- remove fake supplier phone flow. DONE
+- choose supplier reservation architecture:. DONE
   - exact inventory
-  - reservation callback
+  - reservation callback. DONE
 - fix operator uniqueness issues
 - improve inventory locking
 
@@ -423,8 +423,8 @@ Codex не должен напрямую делать крупный refactor б
 
 ### SMS
 
-- create generic sms_messages table
-- normalize external provider SMS flow
+- create generic sms_messages table. DONE
+- normalize external provider SMS flow. DONE
 - add internal webhook architecture
 
 ---

@@ -60,6 +60,8 @@ def buy_order(client, user_token):
 def test_admin_can_create_activate_block_supplier(client, admin_token):
     supplier = create_supplier(client, admin_token, status="pending")
     assert supplier["status"] == "pending"
+    assert supplier["reservation_enabled"] is False
+    assert "reservation_auth_secret_encrypted" not in supplier
     activated = client.patch(
         f"/admin/suppliers/{supplier['id']}",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -77,6 +79,60 @@ def test_admin_can_create_activate_block_supplier(client, admin_token):
     assert blocked.json()["status"] == "blocked"
 
 
+def test_admin_can_configure_supplier_reservation_settings(client, admin_token):
+    created = client.post(
+        "/admin/suppliers",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "name": "Reservation Supplier",
+            "email": "reservation@example.com",
+            "status": "active",
+            "reward_percent": "70.00",
+            "reservation_url": "https://supplier.example.test/v1/reservations",
+            "reservation_auth_type": "bearer",
+            "reservation_auth_secret_encrypted": "enc:test-secret",
+            "reservation_timeout_seconds": 5,
+            "reservation_enabled": True,
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["reservation_url"] == "https://supplier.example.test/v1/reservations"
+    assert body["reservation_auth_type"] == "bearer"
+    assert body["reservation_timeout_seconds"] == 5
+    assert body["reservation_enabled"] is True
+    assert "reservation_auth_secret_encrypted" not in body
+
+    patched = client.patch(
+        f"/admin/suppliers/{body['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": False, "reservation_timeout_seconds": 10},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["reservation_enabled"] is False
+    assert patched.json()["reservation_timeout_seconds"] == 10
+    assert "reservation_auth_secret_encrypted" not in patched.json()
+
+    listed = client.get("/admin/suppliers", headers={"Authorization": f"Bearer {admin_token}"})
+    assert listed.status_code == 200, listed.text
+    listed_supplier = next(item for item in listed.json() if item["id"] == body["id"])
+    assert listed_supplier["reservation_enabled"] is False
+    assert "reservation_auth_secret_encrypted" not in listed_supplier
+
+
+def test_supplier_reservation_timeout_must_be_positive(client, admin_token):
+    response = client.post(
+        "/admin/suppliers",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "name": "Bad Timeout Supplier",
+            "status": "active",
+            "reservation_timeout_seconds": 0,
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_admin_can_regenerate_supplier_api_key_and_auth_works(client, admin_token):
     supplier = create_supplier(client, admin_token)
     api_key = supplier_key(client, admin_token, supplier["id"])
@@ -84,6 +140,8 @@ def test_admin_can_regenerate_supplier_api_key_and_auth_works(client, admin_toke
     response = client.get("/supplier/v1/me", headers={"Authorization": f"Bearer {api_key}"})
     assert response.status_code == 200, response.text
     assert response.json()["id"] == supplier["id"]
+    assert "reservation_auth_secret_encrypted" not in response.json()
+    assert "reservation_url" not in response.json()
 
 
 def test_blocked_supplier_cannot_update_inventory(client, admin_token):

@@ -238,6 +238,11 @@ class Supplier(Base, TimestampMixin):
     held_balance: Mapped[Decimal] = mapped_column(Numeric(12, 4), default=Decimal("0.00"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    reservation_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    reservation_auth_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    reservation_auth_secret_encrypted: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    reservation_timeout_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reservation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
         CheckConstraint("balance >= 0", name="ck_suppliers_balance_non_negative"),
