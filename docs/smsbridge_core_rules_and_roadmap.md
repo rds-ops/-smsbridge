@@ -416,8 +416,8 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Redis & Concurrency
 
-- replace in-memory rate limiting
-- move rate limit to Redis
+- replace in-memory rate limiting. DONE 
+- move rate limit to Redis. DONE
 - add distributed throttling
 - improve Celery polling locks
 

@@ -1,6 +1,4 @@
 from __future__ import annotations
-import time
-from collections import defaultdict, deque
 
 from fastapi import Request
 from starlette.responses import JSONResponse
@@ -9,22 +7,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models import ApiRequestLog
+from app.services.rate_limit import rate_limiter
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app):
-        super().__init__(app)
-        self.hits: dict[str, deque[float]] = defaultdict(deque)
-
     async def dispatch(self, request: Request, call_next):
-        key = request.client.host if request.client else "unknown"
-        now = time.time()
-        bucket = self.hits[key]
-        while bucket and bucket[0] <= now - 60:
-            bucket.popleft()
-        if len(bucket) >= settings.rate_limit_per_minute:
+        ip_address = request.client.host if request.client else "unknown"
+        result = rate_limiter.check_ip(ip_address, settings.rate_limit_per_minute, 60)
+        if not result.allowed:
             return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
-        bucket.append(now)
         return await call_next(request)
 
 
