@@ -77,3 +77,15 @@ class AdminOrderOut(ORMModel):
     expires_at: datetime
     created_at: datetime
     updated_at: datetime
+
+
+class OrderEventOut(ORMModel):
+    id: int
+    order_id: int
+    old_status: str | None = None
+    new_status: str
+    actor_type: str | None = None
+    actor_user_id: int | None = None
+    reason: str | None = None
+    event_metadata: dict[str, Any] | None = None
+    created_at: datetime

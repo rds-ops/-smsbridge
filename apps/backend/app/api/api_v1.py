@@ -99,7 +99,7 @@ def get_order(public_id: str, db: Session = Depends(get_db), user: User = Depend
 @router.post("/orders/{public_id}/cancel", response_model=OrderOut)
 def cancel_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user_or_api_key)):
     order = order_service.get_user_order(db, user, public_id)
-    order = order_service.cancel_order(db, order)
+    order = order_service.cancel_order(db, order, actor_user_id=user.id)
     db.commit()
     db.refresh(order)
     return order
@@ -108,7 +108,7 @@ def cancel_order(public_id: str, db: Session = Depends(get_db), user: User = Dep
 @router.post("/orders/{public_id}/finish", response_model=OrderOut)
 def finish_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user_or_api_key)):
     order = order_service.get_user_order(db, user, public_id)
-    order = order_service.finish_order(db, order)
+    order = order_service.finish_order(db, order, actor_user_id=user.id)
     db.commit()
     db.refresh(order)
     return order

@@ -413,7 +413,14 @@ def push_sms(db: Session, supplier: Supplier, payload) -> tuple[SupplierSms, boo
         activation.sms_text = payload.text
         activation.sms_code = sms_code
     if order and not is_terminal(order.status) and can_transition(order.status, OrderStatus.SMS_RECEIVED):
-        transition_order(order, OrderStatus.SMS_RECEIVED, reason="supplier_sms_received")
+        transition_order(
+            order,
+            OrderStatus.SMS_RECEIVED,
+            db=db,
+            actor_type="supplier",
+            reason="supplier_sms_received",
+            metadata={"supplier_id": supplier.id},
+        )
         order.sms_text = payload.text
         order.sms_code = sms_code
     db.flush()

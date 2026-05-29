@@ -50,7 +50,6 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
                 provider_cost=price.provider_cost,
                 expires_at=datetime.now(timezone.utc) + timedelta(seconds=settings.mock_order_timeout_seconds),
             )
-            transition_order(order, OrderStatus.WAITING_SMS, reason="supplier_pool_reserved")
             db.add(order)
             db.flush()
             activation = suppliers.reserve_supplier_activation(db, order, price, operator)
@@ -58,6 +57,7 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
                 db.delete(order)
                 last_error = RuntimeError("No active supplier inventory")
                 continue
+            transition_order(order, OrderStatus.WAITING_SMS, db=db, actor_type="system", reason="supplier_pool_reserved")
             wallet.hold(db, user.id, order.id, order.price)
             return order
         order = Order(
@@ -79,13 +79,13 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
             reservation = adapter.get_number(service_code, country_iso2.upper(), operator)
         except Exception as exc:
             wallet.refund(db, user.id, order.id, order.price)
-            transition_order(order, OrderStatus.FAILED, reason="provider_reservation_failed")
+            transition_order(order, OrderStatus.FAILED, db=db, actor_type="system", reason="provider_reservation_failed")
             last_error = exc
             continue
 
         order.provider_order_id = reservation.provider_order_id
         order.phone_number = reservation.phone_number
-        transition_order(order, OrderStatus.WAITING_SMS, reason="provider_reserved")
+        transition_order(order, OrderStatus.WAITING_SMS, db=db, actor_type="system", reason="provider_reserved")
         return order
 
     raise api_error(502, "PROVIDER_UNAVAILABLE", f"All providers failed: {last_error}")
@@ -153,7 +153,7 @@ def get_user_order(db: Session, user: User, public_id: str) -> Order:
     return order
 
 
-def cancel_order(db: Session, order: Order) -> Order:
+def cancel_order(db: Session, order: Order, actor_user_id: int | None = None) -> Order:
     if order.status in {OrderStatus.CANCELLED, OrderStatus.EXPIRED, OrderStatus.REFUNDED}:
         return order
     if order.status in {OrderStatus.COMPLETED, OrderStatus.FAILED}:
@@ -162,12 +162,19 @@ def cancel_order(db: Session, order: Order) -> Order:
     if order.provider_order_id and provider.type != "supplier_pool":
         get_adapter(provider).cancel_order(order.provider_order_id)
     wallet.refund(db, order.user_id, order.id, order.price)
-    transition_order(order, OrderStatus.CANCELLED, reason="buyer_cancelled")
+    transition_order(
+        order,
+        OrderStatus.CANCELLED,
+        db=db,
+        actor_type="buyer",
+        actor_user_id=actor_user_id,
+        reason="buyer_cancelled",
+    )
     suppliers.mark_activation_status(db, order, OrderStatus.CANCELLED)
     return order
 
 
-def finish_order(db: Session, order: Order) -> Order:
+def finish_order(db: Session, order: Order, actor_user_id: int | None = None) -> Order:
     if order.status == OrderStatus.COMPLETED:
         return order
     if order.status != OrderStatus.SMS_RECEIVED:
@@ -175,16 +182,30 @@ def finish_order(db: Session, order: Order) -> Order:
     if order.provider_order_id and order.provider.type != "supplier_pool":
         get_adapter(order.provider).finish_order(order.provider_order_id)
     wallet.capture(db, order.user_id, order.id, order.price)
-    transition_order(order, OrderStatus.COMPLETED, reason="buyer_finished")
+    transition_order(
+        order,
+        OrderStatus.COMPLETED,
+        db=db,
+        actor_type="buyer",
+        actor_user_id=actor_user_id,
+        reason="buyer_finished",
+    )
     suppliers.complete_supplier_reward(db, order)
     return order
 
 
-def refund_order(db: Session, order: Order) -> Order:
+def refund_order(db: Session, order: Order, actor_user_id: int | None = None) -> Order:
     if order.status in {OrderStatus.REFUNDED, OrderStatus.EXPIRED, OrderStatus.CANCELLED}:
         return order
     wallet.refund(db, order.user_id, order.id, order.price)
-    transition_order(order, OrderStatus.REFUNDED, reason="admin_refund")
+    transition_order(
+        order,
+        OrderStatus.REFUNDED,
+        db=db,
+        actor_type="admin",
+        actor_user_id=actor_user_id,
+        reason="admin_refund",
+    )
     suppliers.mark_activation_status(db, order, OrderStatus.REFUNDED)
     return order
 
@@ -198,7 +219,7 @@ def poll_order(db: Session, order: Order) -> Order:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at <= now:
         wallet.refund(db, order.user_id, order.id, order.price)
-        transition_order(order, OrderStatus.EXPIRED, reason="timeout")
+        transition_order(order, OrderStatus.EXPIRED, db=db, actor_type="worker", reason="timeout")
         suppliers.mark_activation_status(db, order, OrderStatus.EXPIRED)
         return order
 
@@ -207,7 +228,7 @@ def poll_order(db: Session, order: Order) -> Order:
 
     status = get_adapter(order.provider).get_order_status(order.provider_order_id or "")
     if status.status == OrderStatus.SMS_RECEIVED:
-        transition_order(order, OrderStatus.SMS_RECEIVED, reason="provider_sms_received")
+        transition_order(order, OrderStatus.SMS_RECEIVED, db=db, actor_type="system", reason="provider_sms_received")
         order.sms_code = status.sms_code
         order.sms_text = status.sms_text
         sms_messages.record_provider_sms(
@@ -220,7 +241,7 @@ def poll_order(db: Session, order: Order) -> Order:
     elif status.status in {"timeout", "failed"}:
         wallet.refund(db, order.user_id, order.id, order.price)
         target_status = OrderStatus.EXPIRED if status.status == "timeout" else OrderStatus.FAILED
-        transition_order(order, target_status, reason=f"provider_{status.status}")
+        transition_order(order, target_status, db=db, actor_type="system", reason=f"provider_{status.status}")
         suppliers.mark_activation_status(db, order, order.status)
     return order
 

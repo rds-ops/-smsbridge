@@ -175,6 +175,23 @@ class Order(Base, TimestampMixin):
     provider: Mapped[Provider] = relationship()
 
 
+class OrderEvent(Base):
+    __tablename__ = "order_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True, nullable=False)
+    old_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    new_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    actor_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    event_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    order: Mapped[Order] = relationship()
+    actor_user: Mapped[Optional[User]] = relationship()
+
+
 class IdempotencyKey(Base, TimestampMixin):
     __tablename__ = "idempotency_keys"
 

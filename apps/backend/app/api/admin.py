@@ -13,6 +13,7 @@ from app.models import (
     ApiRequestLog,
     AuditLog,
     Order,
+    OrderEvent,
     Provider,
     Supplier,
     SupplierActivation,
@@ -26,6 +27,7 @@ from app.schemas.admin import (
     AdjustmentIn,
     DepositIn,
     AdminOrderOut,
+    OrderEventOut,
     ProviderIn,
     ProviderOut,
     UserDetail,
@@ -108,6 +110,20 @@ def order_detail(order_id: int, db: Session = Depends(get_db), admin: User = Dep
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return order
+
+
+@router.get("/orders/{order_id}/events", response_model=list[OrderEventOut])
+def order_events(order_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return list(
+        db.scalars(
+            select(OrderEvent)
+            .where(OrderEvent.order_id == order_id)
+            .order_by(OrderEvent.created_at.asc(), OrderEvent.id.asc())
+        )
+    )
 
 
 @router.get("/providers", response_model=list[ProviderOut])
@@ -280,7 +296,7 @@ def admin_refund(order_id: int, db: Session = Depends(get_db), admin: User = Dep
     order = db.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    order = refund_order(db, order)
+    order = refund_order(db, order, actor_user_id=admin.id)
     add_audit_log(db, "order.refund", "order", str(order.id), admin.id, {})
     db.commit()
     db.refresh(order)
