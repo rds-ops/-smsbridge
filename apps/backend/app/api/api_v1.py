@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -54,8 +54,20 @@ def prices(
 
 
 @router.post("/orders", response_model=OrderOut)
-def create_order(payload: OrderCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user_or_api_key)):
-    order = order_service.create_order(db, user, payload.service_code, payload.country_iso2, payload.operator)
+def create_order(
+    payload: OrderCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_api_key),
+):
+    order = order_service.create_order_idempotent(
+        db,
+        user,
+        payload.service_code,
+        payload.country_iso2,
+        payload.operator,
+        idempotency_key,
+    )
     db.commit()
     db.refresh(order)
     return order

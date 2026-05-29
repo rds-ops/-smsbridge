@@ -23,6 +23,7 @@ class DummyOrder:
     ("current", "target"),
     [
         (OrderStatus.CREATED, OrderStatus.WAITING_SMS),
+        (OrderStatus.CREATED, OrderStatus.FAILED),
         (OrderStatus.WAITING_SMS, OrderStatus.SMS_RECEIVED),
         (OrderStatus.WAITING_SMS, OrderStatus.CANCELLED),
         (OrderStatus.WAITING_SMS, OrderStatus.EXPIRED),

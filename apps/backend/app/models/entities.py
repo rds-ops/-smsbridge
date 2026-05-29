@@ -175,6 +175,24 @@ class Order(Base, TimestampMixin):
     provider: Mapped[Provider] = relationship()
 
 
+class IdempotencyKey(Base, TimestampMixin):
+    __tablename__ = "idempotency_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="in_progress", nullable=False)
+
+    order: Mapped[Optional[Order]] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "action", "key", name="uq_idempotency_user_action_key"),
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

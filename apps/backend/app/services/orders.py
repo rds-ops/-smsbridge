@@ -1,16 +1,31 @@
 from __future__ import annotations
+import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import api_error
-from app.models import Order, Price, User
+from app.models import IdempotencyKey, Order, Price, User
 from app.providers.router import candidate_prices, get_adapter
 from app.services import limits, suppliers, wallet
 from app.services.order_state import OrderStatus, transition_order
+
+ORDER_CREATE_ACTION = "order.create"
+
+
+def order_create_request_hash(service_code: str, country_iso2: str, operator: str | None = None) -> str:
+    payload = {
+        "country_iso2": country_iso2.upper(),
+        "operator": operator or None,
+        "service_code": service_code,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def create_order(db: Session, user: User, service_code: str, country_iso2: str, operator: str | None = None) -> Order:
@@ -45,33 +60,90 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
                 continue
             wallet.hold(db, user.id, order.id, order.price)
             return order
-        adapter = get_adapter(provider)
-        try:
-            reservation = adapter.get_number(service_code, country_iso2.upper(), operator)
-        except Exception as exc:
-            last_error = exc
-            continue
-
         order = Order(
             user_id=user.id,
             provider_id=provider.id,
-            provider_order_id=reservation.provider_order_id,
             service_code=service_code,
             country_iso2=country_iso2.upper(),
             operator=operator,
-            phone_number=reservation.phone_number,
             status=OrderStatus.CREATED,
             price=price.final_price,
             provider_cost=price.provider_cost,
             expires_at=datetime.now(timezone.utc) + timedelta(seconds=settings.mock_order_timeout_seconds),
         )
-        transition_order(order, OrderStatus.WAITING_SMS, reason="provider_reserved")
         db.add(order)
         db.flush()
         wallet.hold(db, user.id, order.id, order.price)
+        adapter = get_adapter(provider)
+        try:
+            reservation = adapter.get_number(service_code, country_iso2.upper(), operator)
+        except Exception as exc:
+            wallet.refund(db, user.id, order.id, order.price)
+            transition_order(order, OrderStatus.FAILED, reason="provider_reservation_failed")
+            last_error = exc
+            continue
+
+        order.provider_order_id = reservation.provider_order_id
+        order.phone_number = reservation.phone_number
+        transition_order(order, OrderStatus.WAITING_SMS, reason="provider_reserved")
         return order
 
     raise api_error(502, "PROVIDER_UNAVAILABLE", f"All providers failed: {last_error}")
+
+
+def create_order_idempotent(
+    db: Session,
+    user: User,
+    service_code: str,
+    country_iso2: str,
+    operator: str | None,
+    idempotency_key: str | None,
+) -> Order:
+    if not idempotency_key:
+        return create_order(db, user, service_code, country_iso2, operator)
+
+    key = idempotency_key.strip()
+    if not key:
+        return create_order(db, user, service_code, country_iso2, operator)
+    if len(key) > 255:
+        raise HTTPException(status_code=400, detail="Idempotency-Key is too long")
+
+    request_hash = order_create_request_hash(service_code, country_iso2, operator)
+    record = IdempotencyKey(
+        user_id=user.id,
+        key=key,
+        action=ORDER_CREATE_ACTION,
+        request_hash=request_hash,
+        status="in_progress",
+    )
+    db.add(record)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = db.scalar(
+            select(IdempotencyKey).where(
+                IdempotencyKey.user_id == user.id,
+                IdempotencyKey.action == ORDER_CREATE_ACTION,
+                IdempotencyKey.key == key,
+            )
+        )
+        if not existing:
+            raise
+        if existing.request_hash != request_hash:
+            raise HTTPException(status_code=409, detail="Idempotency-Key was already used with a different request")
+        if not existing.order_id or existing.status != "completed":
+            raise HTTPException(status_code=409, detail="Idempotent request is still processing")
+        order = db.get(Order, existing.order_id)
+        if not order:
+            raise HTTPException(status_code=409, detail="Idempotency record has no order result")
+        return order
+
+    order = create_order(db, user, service_code, country_iso2, operator)
+    record.order_id = order.id
+    record.status = "completed"
+    db.flush()
+    return order
 
 
 def get_user_order(db: Session, user: User, public_id: str) -> Order:

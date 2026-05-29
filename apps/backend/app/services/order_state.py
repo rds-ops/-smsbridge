@@ -31,6 +31,7 @@ ACTIVE_STATUSES: Final = {
 ALLOWED_TRANSITIONS: Final = {
     OrderStatus.CREATED: {
         OrderStatus.WAITING_SMS,
+        OrderStatus.FAILED,
     },
     OrderStatus.WAITING_SMS: {
         OrderStatus.SMS_RECEIVED,
