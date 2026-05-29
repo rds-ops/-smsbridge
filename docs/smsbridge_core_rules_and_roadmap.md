@@ -393,7 +393,7 @@ Codex не должен напрямую делать крупный refactor б
 - remove provider_cost from buyer API. DONE
 - production secret guard. DONE
 - production admin password guard. DONE
-- validate provider types/statuses
+- validate provider types/statuses. DONE
 - add supplier request logging
 
 ### Wallet & Orders

@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.providers.constants import PROVIDER_STATUS_PATTERN, PROVIDER_TYPE_PATTERN
 from app.schemas.common import ORMModel, UserLimitOut, UserPublic, WalletOut
 
 
@@ -41,8 +42,8 @@ class AdjustmentIn(BaseModel):
 class ProviderIn(BaseModel):
     name: str
     code: str
-    type: str = "mock"
-    status: str = "active"
+    type: str = Field(default="mock", pattern=PROVIDER_TYPE_PATTERN)
+    status: str = Field(default="active", pattern=PROVIDER_STATUS_PATTERN)
     priority: int = 100
     base_url: str | None = None
     default_markup_percent: Decimal = Decimal("25.00")

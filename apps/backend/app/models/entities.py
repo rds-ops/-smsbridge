@@ -8,6 +8,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, In
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.providers.constants import ALLOWED_PROVIDER_STATUSES, ALLOWED_PROVIDER_TYPES
 
 
 def utcnow() -> datetime:
@@ -99,6 +100,11 @@ class Provider(Base, TimestampMixin):
     base_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     api_key_encrypted: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     default_markup_percent: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=Decimal("25.00"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(f"type in {ALLOWED_PROVIDER_TYPES}", name="ck_providers_type_allowed"),
+        CheckConstraint(f"status in {ALLOWED_PROVIDER_STATUSES}", name="ck_providers_status_allowed"),
+    )
 
 
 class Service(Base):

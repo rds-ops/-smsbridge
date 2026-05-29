@@ -4,8 +4,10 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.errors import api_error
 from app.models import Price, Provider
 from app.providers.base import BaseProvider
+from app.providers.constants import ALLOWED_PROVIDER_TYPES
 from app.providers.five_sim import FiveSimProvider
 from app.providers.mock import MockProvider
 from app.providers.sms_activate import SmsActivateProvider
@@ -18,13 +20,15 @@ def get_adapter(provider: Provider) -> BaseProvider:
         return SupplierPoolProvider()
     if provider.type == "mock":
         return MockProvider(provider.code)
-    if provider.code == "5sim":
+    if provider.type == "five_sim" or provider.code == "5sim":
         return FiveSimProvider()
-    if provider.code == "sms_activate":
+    if provider.type == "sms_activate" or provider.code == "sms_activate":
         return SmsActivateProvider()
-    if provider.code == "sms_man":
+    if provider.type == "sms_man" or provider.code == "sms_man":
         return SmsManProvider()
-    return MockProvider(provider.code)
+    if provider.type not in ALLOWED_PROVIDER_TYPES:
+        raise api_error(502, "PROVIDER_UNAVAILABLE", "Provider type is unsupported")
+    raise api_error(502, "PROVIDER_UNAVAILABLE", "Provider adapter is not configured")
 
 
 def final_price(provider_cost: Decimal, markup_percent: Decimal) -> Decimal:
