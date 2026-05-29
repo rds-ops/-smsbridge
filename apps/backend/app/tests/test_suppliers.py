@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
-from app.models import Order, Supplier, SupplierActivation, SupplierSms, SupplierTransaction
+from app.models import Order, SmsMessage, Supplier, SupplierActivation, SupplierSms, SupplierTransaction
 
 
 def create_supplier(client, admin_token, status: str = "active") -> dict:
@@ -133,7 +133,16 @@ def test_supplier_can_push_sms_and_duplicate_is_idempotent(client, admin_token, 
     assert fetched.json()["sms_code"] == "123456"
     db = SessionLocal()
     try:
-        assert db.scalar(select(SupplierSms).where(SupplierSms.supplier_sms_id == "sms_123")) is not None
+        supplier_sms = db.scalar(select(SupplierSms).where(SupplierSms.supplier_sms_id == "sms_123"))
+        assert supplier_sms is not None
+        messages = list(db.scalars(select(SmsMessage).where(SmsMessage.order_id == supplier_sms.order_id)))
+        assert len(messages) == 1
+        assert messages[0].supplier_id == supplier["id"]
+        assert messages[0].supplier_activation_id == supplier_sms.activation_id
+        assert messages[0].source == "supplier"
+        assert messages[0].external_message_id == "sms_123"
+        assert messages[0].text == "Telegram code: 123456"
+        assert messages[0].parsed_code == "123456"
     finally:
         db.close()
 

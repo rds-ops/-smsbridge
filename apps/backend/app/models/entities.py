@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -316,6 +316,37 @@ class SupplierSms(Base):
     order: Mapped[Optional[Order]] = relationship()
 
     __table_args__ = (UniqueConstraint("supplier_id", "supplier_sms_id", name="uq_supplier_sms_external_id"),)
+
+
+class SmsMessage(Base):
+    __tablename__ = "sms_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False)
+    supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True)
+    supplier_activation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("supplier_activations.id"), nullable=True)
+    provider_id: Mapped[Optional[int]] = mapped_column(ForeignKey("providers.id"), nullable=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_message_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    phone_from: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    text: Mapped[str] = mapped_column(String(1000), nullable=False)
+    parsed_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    raw_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    order: Mapped[Order] = relationship()
+    supplier: Mapped[Optional[Supplier]] = relationship()
+    supplier_activation: Mapped[Optional[SupplierActivation]] = relationship()
+    provider: Mapped[Optional[Provider]] = relationship()
+
+    __table_args__ = (
+        Index("ix_sms_messages_order_id", "order_id"),
+        Index("ix_sms_messages_supplier_id", "supplier_id"),
+        Index("ix_sms_messages_provider_id", "provider_id"),
+        Index("ix_sms_messages_created_at", "created_at"),
+        UniqueConstraint("source", "supplier_id", "external_message_id", name="uq_sms_messages_source_supplier_external_id"),
+    )
 
 
 class SupplierTransaction(Base):

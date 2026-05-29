@@ -22,6 +22,7 @@ from app.models import (
     SupplierTransaction,
 )
 from app.providers.mock import COUNTRY_PREFIX
+from app.services import sms_messages
 from app.services.order_state import OrderStatus, can_transition, is_terminal, transition_order
 
 SUPPLIER_POOL_PROVIDER_CODE = "supplier_pool"
@@ -308,6 +309,18 @@ def push_sms(db: Session, supplier: Supplier, payload) -> tuple[SupplierSms, boo
         status="received",
     )
     db.add(sms)
+    sms_messages.record_supplier_sms(
+        db,
+        order=order,
+        activation=activation,
+        supplier_id=supplier.id,
+        supplier_sms_id=payload.supplier_sms_id,
+        phone_number=payload.phone_number,
+        phone_from=payload.phone_from,
+        text=payload.text,
+        parsed_code=sms_code,
+        raw_payload=payload.model_dump() if hasattr(payload, "model_dump") else None,
+    )
     if activation:
         activation.status = "sms_received"
         activation.sms_text = payload.text

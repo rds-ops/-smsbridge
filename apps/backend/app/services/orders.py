@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.errors import api_error
 from app.models import IdempotencyKey, Order, Price, User
 from app.providers.router import candidate_prices, get_adapter
-from app.services import limits, suppliers, wallet
+from app.services import limits, sms_messages, suppliers, wallet
 from app.services.order_state import OrderStatus, transition_order
 
 ORDER_CREATE_ACTION = "order.create"
@@ -210,6 +210,13 @@ def poll_order(db: Session, order: Order) -> Order:
         transition_order(order, OrderStatus.SMS_RECEIVED, reason="provider_sms_received")
         order.sms_code = status.sms_code
         order.sms_text = status.sms_text
+        sms_messages.record_provider_sms(
+            db,
+            order=order,
+            text=status.sms_text or "",
+            parsed_code=status.sms_code,
+            raw_payload={"provider_order_id": order.provider_order_id, "status": status.status},
+        )
     elif status.status in {"timeout", "failed"}:
         wallet.refund(db, order.user_id, order.id, order.price)
         target_status = OrderStatus.EXPIRED if status.status == "timeout" else OrderStatus.FAILED

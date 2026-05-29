@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
-from app.models import Order, Provider, Price, User, WalletTransaction
+from app.models import Order, Provider, Price, SmsMessage, User, WalletTransaction
 from decimal import Decimal
 
 from app.services import orders as order_service
@@ -46,6 +46,32 @@ def test_sms_received_changes_status_to_sms_received(client, user_token):
     response = client.get(f"/api/v1/orders/{order['public_id']}", headers={"Authorization": f"Bearer {user_token}"})
     assert response.json()["status"] == "sms_received"
     assert response.json()["sms_code"]
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        messages = list(db.scalars(select(SmsMessage).where(SmsMessage.order_id == entity.id)))
+        assert len(messages) == 1
+        assert messages[0].provider_id == entity.provider_id
+        assert messages[0].source == "external_provider"
+        assert messages[0].text == entity.sms_text
+        assert messages[0].parsed_code == entity.sms_code
+    finally:
+        db.close()
+
+
+def test_external_provider_polling_does_not_duplicate_sms_messages(client, user_token):
+    order = create_order(client, user_token)
+    assert poll_waiting_orders() >= 1
+    assert poll_waiting_orders() == 0
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        messages = list(db.scalars(select(SmsMessage).where(SmsMessage.order_id == entity.id)))
+        assert len(messages) == 1
+        assert messages[0].text == entity.sms_text
+        assert messages[0].parsed_code == entity.sms_code
+    finally:
+        db.close()
 
 
 def test_finish_order_captures_hold(client, user_token):
