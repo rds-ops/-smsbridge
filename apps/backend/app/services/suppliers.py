@@ -24,6 +24,11 @@ from app.models import (
 from app.providers.mock import COUNTRY_PREFIX
 from app.services import sms_messages
 from app.services.order_state import OrderStatus, can_transition, is_terminal, transition_order
+from app.services.supplier_reservations import (
+    SupplierReservationError,
+    SupplierReservationRequest,
+    reserve_supplier_number,
+)
 
 SUPPLIER_POOL_PROVIDER_CODE = "supplier_pool"
 ACTIVE_ACTIVATION_STATUSES = {"reserved", "waiting_sms", "sms_received"}
@@ -216,9 +221,18 @@ def select_inventory(
 
 
 def _fake_supplier_phone(country_iso2: str) -> str:
+    # Legacy/dev-only fallback for suppliers without reservation callbacks.
+    # Production supplier-pool orders should use supplier reservation callbacks.
     prefix = COUNTRY_PREFIX.get(country_iso2.upper(), "1")
     suffix = str(abs(hash(uuid4().hex)) % 900000000 + 100000000)
     return f"+{prefix}{suffix}"
+
+
+def _order_timeout_seconds(order: Order) -> int:
+    expires_at = order.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return max(1, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
 
 
 def reserve_supplier_activation(db: Session, order: Order, price: Price, operator: str | None) -> SupplierActivation | None:
@@ -227,13 +241,40 @@ def reserve_supplier_activation(db: Session, order: Order, price: Price, operato
         return None
     supplier = inventory.supplier
     inventory.available_count -= 1
-    supplier_activation_id = f"sup_act_{uuid4().hex}"
     supplier_reward = (order.price * supplier.reward_percent / Decimal("100")).quantize(Decimal("0.0001"))
+    if supplier.reservation_enabled:
+        request_id = f"sb-order-{order.public_id}"
+        try:
+            reservation = reserve_supplier_number(
+                supplier,
+                SupplierReservationRequest(
+                    request_id=request_id,
+                    order_public_id=order.public_id,
+                    service_code=order.service_code,
+                    country_iso2=order.country_iso2,
+                    operator=normalize_operator(operator),
+                    client_price=order.price,
+                    supplier_reward=supplier_reward,
+                    timeout_seconds=_order_timeout_seconds(order),
+                ),
+                idempotency_key=request_id,
+            )
+        except SupplierReservationError:
+            inventory.available_count += 1
+            sync_supplier_pool_price(db, order.service_code, order.country_iso2, normalize_operator(operator))
+            return None
+        supplier_activation_id = reservation.supplier_activation_id
+        phone_number = reservation.phone_number
+    else:
+        # Legacy/dev-only path for count-based mock suppliers.
+        supplier_activation_id = f"sup_act_{uuid4().hex}"
+        phone_number = _fake_supplier_phone(order.country_iso2)
+
     activation = SupplierActivation(
         supplier_id=supplier.id,
         order_id=order.id,
         supplier_activation_id=supplier_activation_id,
-        phone_number=_fake_supplier_phone(order.country_iso2),
+        phone_number=phone_number,
         service_code=order.service_code,
         country_iso2=order.country_iso2,
         operator=normalize_operator(operator),

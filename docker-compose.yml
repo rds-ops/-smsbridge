@@ -54,6 +54,19 @@ services:
         condition: service_started
     ports:
       - "3000:3000"
+
+  fake-supplier:
+    profiles: ["dev"]
+    build:
+      context: ./apps/backend
+    environment:
+      SMSBRIDGE_BASE_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8010:8010"
+    command: uvicorn app.dev.fake_supplier_server:app --host 0.0.0.0 --port 8010
   
   adminer:
     image: adminer:latest

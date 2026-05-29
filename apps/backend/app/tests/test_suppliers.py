@@ -5,7 +5,8 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
-from app.models import Order, SmsMessage, Supplier, SupplierActivation, SupplierSms, SupplierTransaction
+from app.models import Order, Provider, SmsMessage, Supplier, SupplierActivation, SupplierInventory, SupplierSms, SupplierTransaction
+from app.services.supplier_reservations import SupplierReservationResult, SupplierReservationUnavailable
 
 
 def create_supplier(client, admin_token, status: str = "active") -> dict:
@@ -201,6 +202,145 @@ def test_supplier_can_push_sms_and_duplicate_is_idempotent(client, admin_token, 
         assert messages[0].external_message_id == "sms_123"
         assert messages[0].text == "Telegram code: 123456"
         assert messages[0].parsed_code == "123456"
+    finally:
+        db.close()
+
+
+def test_reservation_enabled_supplier_uses_callback_phone_and_activation(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    patched = client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    )
+    assert patched.status_code == 200, patched.text
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+
+    seen = {}
+
+    def fake_reserve(supplier_entity, request, *, idempotency_key):
+        seen["supplier_id"] = supplier_entity.id
+        seen["request"] = request
+        seen["idempotency_key"] = idempotency_key
+        return SupplierReservationResult(supplier_activation_id="real-act-123", phone_number="+628111111111")
+
+    monkeypatch.setattr("app.services.suppliers.reserve_supplier_number", fake_reserve)
+
+    order = buy_order(client, user_token)
+
+    assert order["phone_number"] == "+628111111111"
+    assert seen["supplier_id"] == supplier["id"]
+    assert seen["request"].service_code == "telegram"
+    assert seen["request"].country_iso2 == "ID"
+    assert seen["request"].client_price
+    assert seen["request"].supplier_reward
+    assert seen["idempotency_key"] == f"sb-order-{order['public_id']}"
+
+    db = SessionLocal()
+    try:
+        order_entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        assert order_entity.provider_order_id == "real-act-123"
+        activation = db.scalar(select(SupplierActivation).where(SupplierActivation.order_id == order_entity.id))
+        assert activation.supplier_activation_id == "real-act-123"
+        assert activation.phone_number == "+628111111111"
+    finally:
+        db.close()
+
+
+def test_supplier_sms_links_by_returned_reservation_activation_id(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-sms",
+            phone_number="+628222222222",
+        ),
+    )
+
+    order = buy_order(client, user_token)
+    response = client.post(
+        "/supplier/v1/sms",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "supplier_sms_id": "real-sms-1",
+            "phone_number": "+628222222222",
+            "phone_from": "Telegram",
+            "text": "Telegram code: 777888",
+            "supplier_activation_id": "real-act-sms",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    fetched = client.get(f"/api/v1/orders/{order['public_id']}", headers={"Authorization": f"Bearer {user_token}"})
+    assert fetched.json()["status"] == "sms_received"
+    assert fetched.json()["sms_code"] == "777888"
+
+
+def test_reservation_failure_does_not_create_fake_activation_or_hold(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    db = SessionLocal()
+    try:
+        mock_provider = db.scalar(select(Provider).where(Provider.code == "mock"))
+        mock_provider.status = "inactive"
+        db.commit()
+    finally:
+        db.close()
+
+    def fail_reservation(supplier_entity, request, *, idempotency_key):
+        raise SupplierReservationUnavailable("supplier unavailable")
+
+    monkeypatch.setattr("app.services.suppliers.reserve_supplier_number", fail_reservation)
+
+    response = client.post(
+        "/api/v1/orders",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"service_code": "telegram", "country_iso2": "ID"},
+    )
+
+    assert response.status_code == 502
+    balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
+    assert balance["balance"] == "25.0000"
+    assert balance["held_balance"] == "0.0000"
+
+    db = SessionLocal()
+    try:
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.available_count == 5
+        assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
+        assert db.scalar(select(Order).where(Order.user_id == 2)) is None
+    finally:
+        db.close()
+
+
+def test_reservation_disabled_supplier_keeps_legacy_fake_path(client, admin_token, user_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+
+    order = buy_order(client, user_token)
+
+    assert order["status"] == "waiting_sms"
+    assert order["phone_number"].startswith("+62")
+    db = SessionLocal()
+    try:
+        order_entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        assert order_entity.provider_order_id.startswith("sup_act_")
     finally:
         db.close()
 
