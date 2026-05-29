@@ -390,7 +390,7 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Security
 
-- remove provider_cost from buyer API
+- remove provider_cost from buyer API. done
 - production secret guard
 - production admin password guard
 - validate provider types/statuses
@@ -398,7 +398,7 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Wallet & Orders
 
-- add DB constraints for balances
+- add DB constraints for balances. done
 - add explicit order state machine
 - add order transition history
 - add idempotency keys for order creation
