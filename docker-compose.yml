@@ -54,6 +54,14 @@ services:
         condition: service_started
     ports:
       - "3000:3000"
+  
+  adminer:
+    image: adminer:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DESIGN: pepa-linha
 
 volumes:
   postgres_data:

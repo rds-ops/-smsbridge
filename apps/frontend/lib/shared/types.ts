@@ -44,7 +44,6 @@ export type Price = {
   country_iso2: string;
   operator: string | null;
   final_price: string;
-  provider_cost?: string;
   available_count: number;
   delivery_rate: string;
   provider_code?: string;

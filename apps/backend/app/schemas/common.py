@@ -49,13 +49,12 @@ class CountryOut(ORMModel):
     is_active: bool
 
 
-class PriceOut(ORMModel):
+class BuyerPriceOut(ORMModel):
     service_code: str
     country_iso2: str
     operator: str | None = None
     provider_code: str | None = None
     provider_name: str | None = None
-    provider_cost: Decimal | None = None
     final_price: Decimal
     available_count: int
     delivery_rate: Decimal

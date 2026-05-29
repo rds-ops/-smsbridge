@@ -8,11 +8,11 @@ from app.core.security import generate_api_key, hash_api_key
 from app.db.session import get_db
 from app.models import Country, Order, Price, Service, User
 from app.schemas.common import (
+    BuyerPriceOut,
     CountryOut,
     MessageOut,
     OrderCreate,
     OrderOut,
-    PriceOut,
     ServiceOut,
     UserLimitOut,
     WalletOut,
@@ -37,7 +37,7 @@ def countries(db: Session = Depends(get_db), user: User = Depends(get_current_us
     return list(db.scalars(select(Country).where(Country.is_active.is_(True)).order_by(Country.iso2)))
 
 
-@router.get("/prices", response_model=list[PriceOut])
+@router.get("/prices", response_model=list[BuyerPriceOut])
 def prices(
     service_code: str | None = Query(default=None),
     country_iso2: str | None = Query(default=None),

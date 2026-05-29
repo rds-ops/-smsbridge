@@ -120,7 +120,9 @@ def test_api_key_auth_works(client, user_token):
     assert response.json()["currency"] == "USD"
     prices = client.get("/api/v1/prices?service_code=telegram&country_iso2=ID", headers=headers)
     assert prices.status_code == 200
-    assert prices.json()
+    price = prices.json()[0]
+    assert "final_price" in price
+    assert "provider_cost" not in price
     order = client.post("/api/v1/orders", headers=headers, json={"service_code": "telegram", "country_iso2": "ID"})
     assert order.status_code == 200, order.text
     fetched = client.get(f"/api/v1/orders/{order.json()['public_id']}", headers=headers)
