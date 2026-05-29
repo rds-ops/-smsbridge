@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -64,6 +64,11 @@ class Wallet(Base, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
 
     user: Mapped[User] = relationship(back_populates="wallet")
+
+    __table_args__ = (
+        CheckConstraint("balance >= 0", name="ck_wallets_balance_non_negative"),
+        CheckConstraint("held_balance >= 0", name="ck_wallets_held_balance_non_negative"),
+    )
 
 
 class WalletTransaction(Base):
@@ -215,6 +220,11 @@ class Supplier(Base, TimestampMixin):
     held_balance: Mapped[Decimal] = mapped_column(Numeric(12, 4), default=Decimal("0.00"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("balance >= 0", name="ck_suppliers_balance_non_negative"),
+        CheckConstraint("held_balance >= 0", name="ck_suppliers_held_balance_non_negative"),
+    )
 
 
 class SupplierInventory(Base, TimestampMixin):
