@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -343,6 +344,135 @@ def test_reservation_disabled_supplier_keeps_legacy_fake_path(client, admin_toke
         assert order_entity.provider_order_id.startswith("sup_act_")
     finally:
         db.close()
+
+
+def test_cancel_order_triggers_release_callback_for_reservation_enabled_supplier(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-release",
+            phone_number="+628333333333",
+        ),
+    )
+    seen = {}
+
+    def fake_release(supplier_entity, request, *, idempotency_key):
+        seen["supplier_id"] = supplier_entity.id
+        seen["request"] = request
+        seen["idempotency_key"] = idempotency_key
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", fake_release)
+
+    order = buy_order(client, user_token)
+    cancelled = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+    assert seen["supplier_id"] == supplier["id"]
+    assert seen["idempotency_key"] == f"sb-release-{order['public_id']}"
+    assert seen["request"].order_public_id == order["public_id"]
+    assert seen["request"].supplier_activation_id == "real-act-release"
+    assert seen["request"].phone_number == "+628333333333"
+    assert seen["request"].reason == "cancelled"
+
+
+def test_expired_order_triggers_release_callback_for_reservation_enabled_supplier(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-expire",
+            phone_number="+628444444444",
+        ),
+    )
+    seen = {}
+
+    def fake_release(supplier_entity, request, *, idempotency_key):
+        seen["request"] = request
+        seen["idempotency_key"] = idempotency_key
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", fake_release)
+
+    order = buy_order(client, user_token)
+    db = SessionLocal()
+    try:
+        order_entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        order_entity.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+    finally:
+        db.close()
+
+    poll_waiting_orders()
+
+    assert seen["idempotency_key"] == f"sb-release-{order['public_id']}"
+    assert seen["request"].supplier_activation_id == "real-act-expire"
+    assert seen["request"].reason == "expired"
+    fetched = client.get(f"/api/v1/orders/{order['public_id']}", headers={"Authorization": f"Bearer {user_token}"})
+    assert fetched.json()["status"] == "expired"
+
+
+def test_release_failure_does_not_block_cancel_or_refund(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-release-fail",
+            phone_number="+628555555555",
+        ),
+    )
+
+    def fail_release(supplier_entity, request, *, idempotency_key):
+        raise SupplierReservationUnavailable("supplier release unavailable")
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", fail_release)
+
+    order = buy_order(client, user_token)
+    cancelled = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+    balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
+    assert balance["balance"] == "25.0000"
+    assert balance["held_balance"] == "0.0000"
+
+
+def test_release_not_called_for_legacy_fake_supplier(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+
+    def unexpected_release(supplier_entity, request, *, idempotency_key):
+        raise AssertionError("release should not be called for legacy fake supplier")
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", unexpected_release)
+
+    order = buy_order(client, user_token)
+    cancelled = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
 
 
 def test_supplier_reward_created_only_after_completion_and_not_twice(client, admin_token, user_token):

@@ -424,7 +424,7 @@ Codex не должен напрямую делать крупный refactor б
 ### SMS
 
 - create generic sms_messages table. DONE
-- normalize external provider SMS flow. DONE
+- normalize external provider SMS flow
 - add internal webhook architecture
 
 ---

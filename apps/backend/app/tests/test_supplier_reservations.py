@@ -12,6 +12,8 @@ from app.services.supplier_reservations import (
     SupplierReservationRequest,
     SupplierReservationTimeout,
     SupplierReservationUnavailable,
+    SupplierReleaseRequest,
+    release_supplier_number,
     reserve_supplier_number,
 )
 
@@ -26,6 +28,19 @@ def reservation_request() -> SupplierReservationRequest:
         client_price=Decimal("0.5000"),
         supplier_reward=Decimal("0.3500"),
         timeout_seconds=120,
+    )
+
+
+def release_request() -> SupplierReleaseRequest:
+    from datetime import datetime, timezone
+
+    return SupplierReleaseRequest(
+        request_id="sb-release-order-public-id",
+        order_public_id="order-public-id",
+        supplier_activation_id="sup_123",
+        phone_number="+628123456789",
+        reason="cancelled",
+        timestamp=datetime.now(timezone.utc),
     )
 
 
@@ -157,4 +172,51 @@ def test_disabled_reservation_raises_clear_error():
             reservation_request(),
             idempotency_key="idem-1",
             client=client_for(lambda request: httpx.Response(500)),
+        )
+
+
+def test_release_posts_to_derived_release_url_with_auth_and_idempotency_key():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["headers"] = request.headers
+        seen["json"] = request.read()
+        return httpx.Response(204)
+
+    release_supplier_number(
+        supplier(reservation_auth_type="bearer", reservation_auth_secret_encrypted="enc:test-secret"),
+        release_request(),
+        idempotency_key="release-1",
+        client=client_for(handler),
+    )
+
+    assert seen["url"] == "https://supplier.example.test/v1/release"
+    assert seen["headers"]["authorization"] == "Bearer enc:test-secret"
+    assert seen["headers"]["idempotency-key"] == "release-1"
+
+
+def test_release_http_error_raises_supplier_reservation_unavailable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"status": "error"})
+
+    with pytest.raises(SupplierReservationUnavailable):
+        release_supplier_number(
+            supplier(),
+            release_request(),
+            idempotency_key="release-1",
+            client=client_for(handler),
+        )
+
+
+def test_release_timeout_raises_supplier_reservation_timeout():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timed out", request=request)
+
+    with pytest.raises(SupplierReservationTimeout):
+        release_supplier_number(
+            supplier(),
+            release_request(),
+            idempotency_key="release-1",
+            client=client_for(handler),
         )

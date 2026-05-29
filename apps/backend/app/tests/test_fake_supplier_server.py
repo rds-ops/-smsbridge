@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 
 from app.dev.fake_supplier_server import app
 from app.models import Supplier
-from app.services.supplier_reservations import SupplierReservationRequest, reserve_supplier_number
+from app.services.supplier_reservations import (
+    SupplierReleaseRequest,
+    SupplierReservationRequest,
+    release_supplier_number,
+    reserve_supplier_number,
+)
 
 
 class FakeSupplierClient:
@@ -28,6 +33,17 @@ def reservation_payload(country_iso2: str = "ID") -> dict:
         "client_price": "0.5000",
         "supplier_reward": "0.3500",
         "timeout_seconds": 120,
+    }
+
+
+def release_payload(reason: str = "cancelled") -> dict:
+    return {
+        "request_id": "sb-release-order-1",
+        "order_public_id": "order-1",
+        "supplier_activation_id": "fake-sup-act-1",
+        "phone_number": "+628123456789",
+        "reason": reason,
+        "timestamp": "2026-05-29T12:00:00+00:00",
     }
 
 
@@ -90,6 +106,52 @@ def test_fake_supplier_response_validates_against_reservation_client():
 
     assert result.supplier_activation_id.startswith("fake-sup-act-")
     assert result.phone_number.startswith("+")
+
+
+def test_fake_supplier_release_is_idempotent():
+    client = TestClient(app)
+    payload = release_payload()
+
+    first = client.post("/v1/release", headers={"Idempotency-Key": "release-repeat"}, json=payload)
+    second = client.post("/v1/release", headers={"Idempotency-Key": "release-repeat"}, json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == first.json()
+    assert second.json() == {"status": "released"}
+
+
+def test_fake_supplier_release_same_key_different_body_returns_conflict():
+    client = TestClient(app)
+
+    first = client.post("/v1/release", headers={"Idempotency-Key": "release-conflict"}, json=release_payload("cancelled"))
+    second = client.post("/v1/release", headers={"Idempotency-Key": "release-conflict"}, json=release_payload("expired"))
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+
+
+def test_fake_supplier_release_validates_against_reservation_client():
+    from datetime import datetime, timezone
+
+    supplier = Supplier(
+        name="Fake HTTP Supplier",
+        status="active",
+        reservation_enabled=True,
+        reservation_url="http://testserver/v1/reservations",
+        reservation_auth_type="none",
+        reservation_timeout_seconds=5,
+    )
+    request = SupplierReleaseRequest(
+        request_id="sb-release-client",
+        order_public_id="order-client",
+        supplier_activation_id="fake-sup-act-client",
+        phone_number="+628123456789",
+        reason="cancelled",
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    release_supplier_number(supplier, request, idempotency_key="release-client", client=FakeSupplierClient())
 
 
 def test_fake_supplier_send_sms_returns_manual_payload_without_callback_config(monkeypatch):

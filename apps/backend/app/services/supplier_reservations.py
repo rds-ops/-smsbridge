@@ -59,6 +59,26 @@ class SupplierReservationResult:
     expires_at: datetime | None = None
 
 
+@dataclass(frozen=True)
+class SupplierReleaseRequest:
+    request_id: str
+    order_public_id: str
+    supplier_activation_id: str
+    phone_number: str
+    reason: str
+    timestamp: datetime
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "order_public_id": self.order_public_id,
+            "supplier_activation_id": self.supplier_activation_id,
+            "phone_number": self.phone_number,
+            "reason": self.reason,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
 def reserve_supplier_number(
     supplier: Supplier,
     request: SupplierReservationRequest,
@@ -109,6 +129,58 @@ def reserve_supplier_number(
     finally:
         if owns_client:
             http_client.close()
+
+
+def release_supplier_number(
+    supplier: Supplier,
+    request: SupplierReleaseRequest,
+    *,
+    idempotency_key: str,
+    client: httpx.Client | None = None,
+) -> None:
+    if not supplier.reservation_enabled:
+        raise SupplierReservationError("Supplier reservation is disabled")
+    if not supplier.reservation_url:
+        raise SupplierReservationError("Supplier reservation URL is not configured")
+
+    timeout_seconds = supplier.reservation_timeout_seconds or DEFAULT_RESERVATION_TIMEOUT_SECONDS
+    headers = {"Idempotency-Key": idempotency_key}
+    auth_type = (supplier.reservation_auth_type or "none").lower()
+    if auth_type == "bearer":
+        secret = supplier.reservation_auth_secret_encrypted
+        if not secret:
+            raise SupplierReservationError("Supplier reservation bearer auth is not configured")
+        headers["Authorization"] = f"Bearer {secret}"
+    elif auth_type != "none":
+        raise SupplierReservationError("Unsupported supplier reservation auth type")
+
+    owns_client = client is None
+    http_client = client or httpx.Client(timeout=timeout_seconds)
+    try:
+        try:
+            response = http_client.post(
+                _release_url(supplier.reservation_url),
+                json=request.payload(),
+                headers=headers,
+                timeout=timeout_seconds,
+            )
+        except httpx.TimeoutException as exc:
+            raise SupplierReservationTimeout("Supplier release request timed out") from exc
+        except httpx.RequestError as exc:
+            raise SupplierReservationUnavailable("Supplier release request failed") from exc
+
+        if response.status_code >= 400:
+            raise SupplierReservationUnavailable(f"Supplier release returned HTTP {response.status_code}")
+    finally:
+        if owns_client:
+            http_client.close()
+
+
+def _release_url(reservation_url: str) -> str:
+    stripped = reservation_url.rstrip("/")
+    if stripped.endswith("/reservations"):
+        return f"{stripped[: -len('/reservations')]}/release"
+    return f"{stripped}/release"
 
 
 def _parse_reservation_response(data: Any) -> SupplierReservationResult:

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 app = FastAPI(title="smsbridge fake supplier", version="0.1.0")
 
 _reservations: dict[str, dict[str, Any]] = {}
+_releases: dict[str, dict[str, Any]] = {}
 
 COUNTRY_PREFIX = {"IN": "91", "ID": "62", "KZ": "7", "UZ": "998", "PH": "63", "BR": "55", "MX": "52"}
 
@@ -37,7 +38,16 @@ class SmsPayloadIn(BaseModel):
     text: str
 
 
-def _request_hash(payload: ReservationIn) -> str:
+class ReleaseIn(BaseModel):
+    request_id: str = Field(min_length=1, max_length=120)
+    order_public_id: str = Field(min_length=1, max_length=120)
+    supplier_activation_id: str = Field(min_length=1, max_length=120)
+    phone_number: str = Field(min_length=1, max_length=40)
+    reason: str = Field(pattern="^(cancelled|expired|failed)$")
+    timestamp: str
+
+
+def _request_hash(payload: BaseModel) -> str:
     encoded = json.dumps(payload.model_dump(), sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -65,6 +75,20 @@ def reserve(payload: ReservationIn, idempotency_key: str = Header(alias="Idempot
         "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=payload.timeout_seconds)).isoformat(),
     }
     _reservations[idempotency_key] = {"request_hash": body_hash, "response": response}
+    return response
+
+
+@app.post("/v1/release")
+def release(payload: ReleaseIn, idempotency_key: str = Header(alias="Idempotency-Key")):
+    body_hash = _request_hash(payload)
+    existing = _releases.get(idempotency_key)
+    if existing:
+        if existing["request_hash"] != body_hash:
+            raise HTTPException(status_code=409, detail="Idempotency-Key was already used with a different request")
+        return existing["response"]
+
+    response = {"status": "released"}
+    _releases[idempotency_key] = {"request_hash": body_hash, "response": response}
     return response
 
 

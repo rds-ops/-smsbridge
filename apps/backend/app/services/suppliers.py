@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -27,11 +28,16 @@ from app.services.order_state import OrderStatus, can_transition, is_terminal, t
 from app.services.supplier_reservations import (
     SupplierReservationError,
     SupplierReservationRequest,
+    SupplierReleaseRequest,
+    release_supplier_number,
     reserve_supplier_number,
 )
 
 SUPPLIER_POOL_PROVIDER_CODE = "supplier_pool"
 ACTIVE_ACTIVATION_STATUSES = {"reserved", "waiting_sms", "sms_received"}
+RELEASE_ACTIVATION_STATUSES = {OrderStatus.CANCELLED, OrderStatus.EXPIRED, OrderStatus.FAILED}
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_operator(operator: str | None) -> str | None:
@@ -295,9 +301,49 @@ def activation_for_order(db: Session, order_id: int) -> SupplierActivation | Non
     return db.scalar(select(SupplierActivation).where(SupplierActivation.order_id == order_id))
 
 
+def _release_supplier_activation(order: Order, activation: SupplierActivation, reason: str) -> None:
+    if reason not in RELEASE_ACTIVATION_STATUSES:
+        return
+    supplier = activation.supplier
+    if not supplier or not supplier.reservation_enabled:
+        return
+    if not activation.supplier_activation_id:
+        logger.warning(
+            "Supplier reservation release skipped for order_id=%s supplier_id=%s: missing activation id",
+            order.id,
+            supplier.id,
+        )
+        return
+
+    request_id = f"sb-release-{order.public_id}"
+    try:
+        release_supplier_number(
+            supplier,
+            SupplierReleaseRequest(
+                request_id=request_id,
+                order_public_id=order.public_id,
+                supplier_activation_id=activation.supplier_activation_id,
+                phone_number=activation.phone_number,
+                reason=reason,
+                timestamp=datetime.now(timezone.utc),
+            ),
+            idempotency_key=request_id,
+        )
+    except SupplierReservationError:
+        logger.warning(
+            "Supplier reservation release failed for order_id=%s supplier_id=%s reason=%s",
+            order.id,
+            supplier.id,
+            reason,
+            exc_info=True,
+        )
+
+
 def mark_activation_status(db: Session, order: Order, status: str) -> None:
     activation = activation_for_order(db, order.id)
     if activation and activation.status != "completed":
+        if activation.status != status:
+            _release_supplier_activation(order, activation, status)
         activation.status = status
 
 
