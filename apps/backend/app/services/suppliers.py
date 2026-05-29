@@ -22,6 +22,7 @@ from app.models import (
     SupplierTransaction,
 )
 from app.providers.mock import COUNTRY_PREFIX
+from app.services.order_state import OrderStatus, can_transition, is_terminal, transition_order
 
 SUPPLIER_POOL_PROVIDER_CODE = "supplier_pool"
 ACTIVE_ACTIVATION_STATUSES = {"reserved", "waiting_sms", "sms_received"}
@@ -311,8 +312,8 @@ def push_sms(db: Session, supplier: Supplier, payload) -> tuple[SupplierSms, boo
         activation.status = "sms_received"
         activation.sms_text = payload.text
         activation.sms_code = sms_code
-    if order and order.status not in {"completed", "cancelled", "expired", "refunded", "failed"}:
-        order.status = "sms_received"
+    if order and not is_terminal(order.status) and can_transition(order.status, OrderStatus.SMS_RECEIVED):
+        transition_order(order, OrderStatus.SMS_RECEIVED, reason="supplier_sms_received")
         order.sms_text = payload.text
         order.sms_code = sms_code
     db.flush()

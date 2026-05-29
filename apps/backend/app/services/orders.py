@@ -10,6 +10,7 @@ from app.core.errors import api_error
 from app.models import Order, Price, User
 from app.providers.router import candidate_prices, get_adapter
 from app.services import limits, suppliers, wallet
+from app.services.order_state import OrderStatus, transition_order
 
 
 def create_order(db: Session, user: User, service_code: str, country_iso2: str, operator: str | None = None) -> Order:
@@ -29,11 +30,12 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
                 service_code=service_code,
                 country_iso2=country_iso2.upper(),
                 operator=operator,
-                status="waiting_sms",
+                status=OrderStatus.CREATED,
                 price=price.final_price,
                 provider_cost=price.provider_cost,
                 expires_at=datetime.now(timezone.utc) + timedelta(seconds=settings.mock_order_timeout_seconds),
             )
+            transition_order(order, OrderStatus.WAITING_SMS, reason="supplier_pool_reserved")
             db.add(order)
             db.flush()
             activation = suppliers.reserve_supplier_activation(db, order, price, operator)
@@ -58,11 +60,12 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
             country_iso2=country_iso2.upper(),
             operator=operator,
             phone_number=reservation.phone_number,
-            status="waiting_sms",
+            status=OrderStatus.CREATED,
             price=price.final_price,
             provider_cost=price.provider_cost,
             expires_at=datetime.now(timezone.utc) + timedelta(seconds=settings.mock_order_timeout_seconds),
         )
+        transition_order(order, OrderStatus.WAITING_SMS, reason="provider_reserved")
         db.add(order)
         db.flush()
         wallet.hold(db, user.id, order.id, order.price)
@@ -79,65 +82,66 @@ def get_user_order(db: Session, user: User, public_id: str) -> Order:
 
 
 def cancel_order(db: Session, order: Order) -> Order:
-    if order.status in {"cancelled", "expired", "refunded"}:
+    if order.status in {OrderStatus.CANCELLED, OrderStatus.EXPIRED, OrderStatus.REFUNDED}:
         return order
-    if order.status in {"completed", "failed"}:
+    if order.status in {OrderStatus.COMPLETED, OrderStatus.FAILED}:
         raise HTTPException(status_code=409, detail="Order can no longer be cancelled")
     provider = order.provider
     if order.provider_order_id and provider.type != "supplier_pool":
         get_adapter(provider).cancel_order(order.provider_order_id)
     wallet.refund(db, order.user_id, order.id, order.price)
-    order.status = "cancelled"
-    suppliers.mark_activation_status(db, order, "cancelled")
+    transition_order(order, OrderStatus.CANCELLED, reason="buyer_cancelled")
+    suppliers.mark_activation_status(db, order, OrderStatus.CANCELLED)
     return order
 
 
 def finish_order(db: Session, order: Order) -> Order:
-    if order.status == "completed":
+    if order.status == OrderStatus.COMPLETED:
         return order
-    if order.status != "sms_received":
+    if order.status != OrderStatus.SMS_RECEIVED:
         raise HTTPException(status_code=409, detail="Order can only be finished after SMS is received")
     if order.provider_order_id and order.provider.type != "supplier_pool":
         get_adapter(order.provider).finish_order(order.provider_order_id)
     wallet.capture(db, order.user_id, order.id, order.price)
-    order.status = "completed"
+    transition_order(order, OrderStatus.COMPLETED, reason="buyer_finished")
     suppliers.complete_supplier_reward(db, order)
     return order
 
 
 def refund_order(db: Session, order: Order) -> Order:
-    if order.status in {"refunded", "expired", "cancelled"}:
+    if order.status in {OrderStatus.REFUNDED, OrderStatus.EXPIRED, OrderStatus.CANCELLED}:
         return order
     wallet.refund(db, order.user_id, order.id, order.price)
-    order.status = "refunded"
-    suppliers.mark_activation_status(db, order, "refunded")
+    transition_order(order, OrderStatus.REFUNDED, reason="admin_refund")
+    suppliers.mark_activation_status(db, order, OrderStatus.REFUNDED)
     return order
 
 
 def poll_order(db: Session, order: Order) -> Order:
     now = datetime.now(timezone.utc)
-    if order.status != "waiting_sms":
+    if order.status != OrderStatus.WAITING_SMS:
         return order
     expires_at = order.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at <= now:
         wallet.refund(db, order.user_id, order.id, order.price)
-        order.status = "expired"
-        suppliers.mark_activation_status(db, order, "expired")
+        transition_order(order, OrderStatus.EXPIRED, reason="timeout")
+        suppliers.mark_activation_status(db, order, OrderStatus.EXPIRED)
         return order
 
     if order.provider.type == "supplier_pool":
         return order
 
     status = get_adapter(order.provider).get_order_status(order.provider_order_id or "")
-    if status.status == "sms_received":
-        order.status = "sms_received"
+    if status.status == OrderStatus.SMS_RECEIVED:
+        transition_order(order, OrderStatus.SMS_RECEIVED, reason="provider_sms_received")
         order.sms_code = status.sms_code
         order.sms_text = status.sms_text
     elif status.status in {"timeout", "failed"}:
         wallet.refund(db, order.user_id, order.id, order.price)
-        order.status = "expired" if status.status == "timeout" else "failed"
+        target_status = OrderStatus.EXPIRED if status.status == "timeout" else OrderStatus.FAILED
+        transition_order(order, target_status, reason=f"provider_{status.status}")
         suppliers.mark_activation_status(db, order, order.status)
     return order
 
