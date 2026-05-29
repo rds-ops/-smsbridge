@@ -6,8 +6,10 @@ from app.api.admin import router as admin_router
 from app.api.api_v1 import router as api_v1_router
 from app.api.auth import router as auth_router
 from app.api.supplier import router as supplier_router
-from app.core.config import settings
+from app.core.config import settings, validate_production_safety
 from app.core.middleware import ApiRequestLogMiddleware, RateLimitMiddleware
+
+validate_production_safety(settings)
 
 app = FastAPI(
     title="smsbridge API",

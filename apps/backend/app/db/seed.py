@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings, validate_production_safety
 from app.core.security import hash_password
 from app.models import Country, Price, Provider, Service, SystemSetting, User, UserLimit, Wallet
 from app.providers.mock import COUNTRIES, SERVICES
@@ -30,10 +31,11 @@ COUNTRY_NAMES = {
 
 
 def seed(db: Session) -> None:
+    validate_production_safety(settings)
     if not db.scalar(select(User).where(User.email == "admin@smsbridge.local")):
         admin = User(
             email="admin@smsbridge.local",
-            password_hash=hash_password("change-me"),
+            password_hash=hash_password(settings.admin_seed_password),
             role="admin",
             status="active",
             tier="wholesale",

@@ -391,8 +391,8 @@ Codex не должен напрямую делать крупный refactor б
 ### Security
 
 - remove provider_cost from buyer API. DONE
-- production secret guard
-- production admin password guard
+- production secret guard. DONE
+- production admin password guard. DONE
 - validate provider types/statuses
 - add supplier request logging
 
@@ -400,7 +400,7 @@ Codex не должен напрямую делать крупный refactor б
 
 - add DB constraints for balances. DONE
 - add explicit order state machine. DONE
-- add order transition history
+- add order transition history. DONE 
 - add idempotency keys for order creation. DONE
 - fix provider reservation vs wallet hold flow. DONE
 - add transactional order creation wrapper
@@ -419,7 +419,7 @@ Codex не должен напрямую делать крупный refactor б
 - replace in-memory rate limiting. DONE 
 - move rate limit to Redis. DONE
 - add distributed throttling
-- improve Celery polling locks
+- improve Celery polling locks. DONE
 
 ### SMS
 
