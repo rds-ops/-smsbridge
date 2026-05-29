@@ -103,10 +103,23 @@ def test_expired_order_refunds_hold(client, user_token):
         db.commit()
     finally:
         db.close()
-    poll_waiting_orders()
+    assert poll_waiting_orders() >= 1
+    assert poll_waiting_orders() == 0
     balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
     assert balance["balance"] == "25.0000"
     assert balance["held_balance"] == "0.0000"
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        refunds = db.scalar(
+            select(func.count(WalletTransaction.id)).where(
+                WalletTransaction.order_id == entity.id,
+                WalletTransaction.type == "refund",
+            )
+        )
+        assert refunds == 1
+    finally:
+        db.close()
 
 
 def test_blocked_user_cannot_create_order(client, admin_token, user_token):
