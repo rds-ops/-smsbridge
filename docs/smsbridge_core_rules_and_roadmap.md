@@ -394,7 +394,7 @@ Codex не должен напрямую делать крупный refactor б
 - production secret guard. DONE
 - production admin password guard. DONE
 - validate provider types/statuses. DONE
-- add supplier request logging
+- add supplier request logging. DONE
 
 ### Wallet & Orders
 

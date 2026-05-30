@@ -98,6 +98,7 @@ class AuditLogOut(ORMModel):
 class ApiRequestLogOut(ORMModel):
     id: int
     user_id: int | None
+    supplier_id: int | None = None
     endpoint: str
     method: str
     ip_address: str | None

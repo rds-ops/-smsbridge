@@ -22,12 +22,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 class ApiRequestLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/api/", "/admin", "/auth")):
+        if request.url.path.startswith(("/api/", "/admin", "/auth", "/supplier/v1")):
             db = SessionLocal()
             try:
                 db.add(
                     ApiRequestLog(
                         user_id=getattr(request.state, "user_id", None),
+                        supplier_id=getattr(request.state, "supplier_id", None),
                         endpoint=request.url.path,
                         method=request.method,
                         ip_address=request.client.host if request.client else None,
