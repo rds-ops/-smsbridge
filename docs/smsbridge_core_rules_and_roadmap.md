@@ -411,7 +411,7 @@ Codex не должен напрямую делать крупный refactor б
 - choose supplier reservation architecture:. DONE
   - exact inventory
   - reservation callback. DONE
-- fix operator uniqueness issues
+- fix operator uniqueness issues. DONE
 - improve inventory locking
 
 ### Redis & Concurrency

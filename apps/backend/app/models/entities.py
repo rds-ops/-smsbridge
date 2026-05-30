@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -147,7 +147,25 @@ class Price(Base):
     provider: Mapped[Provider] = relationship()
 
     __table_args__ = (
-        UniqueConstraint("provider_id", "service_code", "country_iso2", "operator", name="uq_provider_price"),
+        Index(
+            "uq_prices_provider_service_country_operator_null",
+            "provider_id",
+            "service_code",
+            "country_iso2",
+            unique=True,
+            postgresql_where=text("operator IS NULL"),
+            sqlite_where=text("operator IS NULL"),
+        ),
+        Index(
+            "uq_prices_provider_service_country_operator_value",
+            "provider_id",
+            "service_code",
+            "country_iso2",
+            "operator",
+            unique=True,
+            postgresql_where=text("operator IS NOT NULL"),
+            sqlite_where=text("operator IS NOT NULL"),
+        ),
     )
 
     @property
@@ -291,12 +309,24 @@ class SupplierInventory(Base, TimestampMixin):
     supplier: Mapped[Supplier] = relationship()
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_supplier_inventory_supplier_service_country_operator_null",
+            "supplier_id",
+            "service_code",
+            "country_iso2",
+            unique=True,
+            postgresql_where=text("operator IS NULL"),
+            sqlite_where=text("operator IS NULL"),
+        ),
+        Index(
+            "uq_supplier_inventory_supplier_service_country_operator_value",
             "supplier_id",
             "service_code",
             "country_iso2",
             "operator",
-            name="uq_supplier_inventory_key",
+            unique=True,
+            postgresql_where=text("operator IS NOT NULL"),
+            sqlite_where=text("operator IS NOT NULL"),
         ),
     )
 

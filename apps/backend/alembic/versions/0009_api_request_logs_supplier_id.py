@@ -1,7 +1,7 @@
 from __future__ import annotations
 """api request logs supplier id
 
-Revision ID: 0009_api_request_logs_supplier_id
+Revision ID: 0009_api_request_supplier
 Revises: 0008_provider_type_status_checks
 Create Date: 2026-05-30
 """
@@ -9,7 +9,7 @@ Create Date: 2026-05-30
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0009_api_request_logs_supplier_id"
+revision = "0009_api_request_supplier"
 down_revision = "0008_provider_type_status_checks"
 branch_labels = None
 depends_on = None
