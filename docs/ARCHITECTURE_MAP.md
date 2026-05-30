@@ -53,7 +53,8 @@ Main roles:
 
 - Configured by `settings.redis_url`.
 - Currently used as Celery broker and result backend.
-- Not currently used for distributed rate limiting, locks, idempotency, or durable business state.
+- Used for distributed rate limiting counters (fail-open) and as Celery broker/backend.
+- Not used for durable business state, idempotency keys, or distributed locks beyond Celery polling row locks.
 
 ### Celery worker
 
@@ -105,18 +106,24 @@ Current flow:
 4. Candidates are ordered by provider priority and final customer price.
 5. For each candidate, backend enforces buyer limits with `services/limits.py::enforce_can_order`.
 6. If provider type is `supplier_pool`:
-   - Backend creates an `Order` with `status = waiting_sms`.
+   - Backend creates an `Order` with `status = created`.
    - Backend selects supplier inventory with `SELECT ... FOR UPDATE`.
    - Backend decrements `supplier_inventory.available_count`.
    - Backend creates `SupplierActivation`.
-   - Backend generates a fake supplier phone number.
+   - If supplier reservation callback is enabled for the chosen supplier:
+     - Backend calls supplier reservation callback to obtain a real `phone_number` and `supplier_activation_id`.
+   - Otherwise (legacy/dev-only):
+     - Backend generates a fake supplier phone number.
+   - Backend transitions `created -> waiting_sms`.
    - Backend creates wallet hold.
    - Router commits and returns order/phone.
 7. If provider is external/mock:
+   - Backend creates an `Order` with `status = created`.
+   - Backend creates wallet hold.
    - Backend calls adapter `get_number`.
    - Adapter returns `provider_order_id` and `phone_number`.
-   - Backend creates `Order`.
-   - Backend creates wallet hold.
+   - Backend writes `provider_order_id` / `phone_number` onto the order.
+   - Backend transitions `created -> waiting_sms`.
    - Router commits and returns order/phone.
 
 How it is implemented now:
@@ -188,9 +195,9 @@ Tables/fields updated:
 
 Risk:
 
-- External provider SMS is not stored in a generic SMS/message table.
-- Polling query does not use `FOR UPDATE SKIP LOCKED`; multiple workers could process the same order.
-- There is no internal webhook namespace for providers that support callbacks.
+- External provider SMS persistence is normalized into `sms_messages` (idempotent). DONE
+- Polling query uses `FOR UPDATE SKIP LOCKED` where supported to avoid double-processing. DONE
+- Internal provider webhook namespace exists (`/internal/provider-webhooks/{provider_code}`), but it is skeleton-only and does not process provider events yet. PARTIAL
 
 ### Scenario B: supplier through `POST /supplier/v1/sms`
 
@@ -584,18 +591,21 @@ For this project, one of these strategies must be chosen before supplier pool ca
 
 ### Phase 1: Stabilize Core P0
 
-- Remove `provider_cost` from buyer API.
-- Add explicit order state machine.
-- Fix order creation, wallet hold, and provider reservation ordering.
-- Add buyer order creation idempotency.
-- Replace in-memory rate limiting with Redis rate limiting.
-- Add DB constraints for non-negative wallet and supplier balances.
-- Add generic SMS messages table.
+- Remove `provider_cost` from buyer API. DONE
+- Add explicit order state machine. DONE
+- Add order transition history (order_events). DONE
+- Fix order creation, wallet hold, and provider reservation ordering. DONE
+- Add buyer order creation idempotency. DONE
+- Replace in-memory rate limiting with Redis rate limiting. DONE
+- Add DB constraints for non-negative wallet and supplier balances. DONE
+- Add generic SMS messages table. DONE
 - Decide supplier real number strategy:
   - exact phone inventory, or
-  - supplier reservation callback.
-- Fix nullable `operator` uniqueness risk in `prices` and `supplier_inventory`.
-- Add production guard for default secret and default admin password.
+  - supplier reservation callback. DONE (Option B implemented; exact inventory not implemented)
+- Fix nullable `operator` uniqueness risk in `prices` and `supplier_inventory`. DONE
+- Add production guard for default secret and default admin password. DONE
+- Add internal provider webhook namespace. DONE (skeleton only)
+- Add liveness/readiness health endpoints. DONE
 
 ### Phase 2: Marketplace Accounting P1
 
@@ -693,3 +703,5 @@ Property that repeating the same request does not duplicate side effects. Wallet
 `webhook`
 
 Server-to-server callback from provider/payment system to this backend. Current code does not have `/internal` webhooks yet; supplier SMS push is similar but belongs to supplier API.
+
+Note: There is now an internal provider webhook namespace skeleton at `/internal/provider-webhooks/{provider_code}`, but it is placeholder-only and does not process provider events yet.

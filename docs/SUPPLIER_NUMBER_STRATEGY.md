@@ -1,5 +1,11 @@
 # Supplier Number Strategy
 
+Status (as of 2026-05-30):
+- Reservation callback strategy (Option B) is implemented and integrated into supplier-pool order creation.
+- Release callback is implemented as best-effort (failures must not block refunds/cancel/expire).
+- Legacy `_fake_supplier_phone` path still exists for local/dev/test only and is blocked in production-like environments.
+- A local fake supplier HTTP server exists for integration testing.
+
 ## 1. Current Supplier Flow
 
 The current supplier pool is count-based, not phone-number-based.
@@ -272,40 +278,40 @@ Option A is stronger if the marketplace must fully control inventory, but it is 
 
 ## 6. Proposed MVP Implementation Plan
 
-Task 8B: Add supplier reservation configuration fields.
+Task 8B: Add supplier reservation configuration fields. DONE
 
 - Add nullable fields to `suppliers`: `reservation_url`, encrypted auth secret fields, `reservation_timeout_seconds`, `reservation_enabled`.
 - Add admin create/update schema support.
 - Do not call supplier yet.
 - Add validation tests.
 
-Task 8C: Add supplier reservation client.
+Task 8C: Add supplier reservation client. DONE
 
 - Create `app/services/supplier_reservations.py`.
 - Implement HTTP client wrapper with timeout, auth header, idempotency key, request/response validation.
 - Add unit tests with mocked transport.
 - Do not change order creation yet.
 
-Task 8D: Replace `_fake_supplier_phone` behind a feature flag.
+Task 8D: Integrate reservation callback and isolate `_fake_supplier_phone` as legacy/dev-only. DONE
 
 - In `reserve_supplier_activation`, if supplier reservation is enabled, call the reservation client.
 - On success, use returned phone number and supplier activation id.
 - On failure, leave current fake flow available only for local/dev suppliers.
 - Add wallet refund/fallback tests.
 
-Task 8E: Add cancellation/release callback contract.
+Task 8E: Add cancellation/release callback contract. DONE (best-effort only)
 
 - Draft and implement optional supplier release endpoint call for cancelled/expired orders.
 - Keep release idempotent.
 - Add tests for release timeout and retry-safe behavior.
 
-Task 8F: Add operational visibility.
+Task 8F: Add operational visibility. DONE
 
 - Store sanitized reservation error fields on `supplier_inventory` or `supplier_activations`.
 - Add admin visibility for reservation failures.
 - Add metrics for reservation success rate and latency.
 
-Task 8G: Remove fake supplier phone from production mode.
+Task 8G: Remove fake supplier phone from production mode. DONE (blocked in production-like env; legacy allowed in local/dev/test)
 
 - Block `_fake_supplier_phone` when `environment != local` or when supplier lacks explicit mock mode.
 - Update README and deployment docs.

@@ -8,14 +8,14 @@ Main conclusion: the core direction is correct, but the marketplace core is stil
 
 Critical issues before launch:
 
-- Public/buyer price response exposes `provider_cost`; buyers should not see internal cost.
+- Public/buyer price response exposes `provider_cost`; buyers should not see internal cost. DONE
 - `/api/v1/services` and `/api/v1/countries` require JWT only, while `/api/v1/prices` allows JWT or API key. A real marketplace usually needs public catalog endpoints.
-- Order creation with external providers reserves provider number before wallet hold. If wallet hold fails, provider number is not cancelled.
-- Supplier pool uses generated fake phone numbers instead of supplier-provided real numbers; current inventory is count-only.
+- Order creation with external providers reserves provider number before wallet hold. If wallet hold fails, provider number is not cancelled. DONE
+- Supplier pool uses generated fake phone numbers instead of supplier-provided real numbers; current inventory is count-only. PARTIAL (supplier reservation callback supported; fake phone legacy/dev-only and blocked in production-like env)
 - Supplier inventory decrement and wallet hold are transactional for supplier pool, but external provider stock is not decremented locally.
-- Rate limiting is in process memory, not Redis, so it does not work correctly with multiple backend workers.
-- Admin seed uses known default credentials (`admin@smsbridge.local` / `change-me`) and Docker Compose uses `.env.example`.
-- Status fields are strings, not enums, and lifecycle transitions are only partially enforced.
+- Rate limiting is in process memory, not Redis, so it does not work correctly with multiple backend workers. DONE
+- Admin seed uses known default credentials (`admin@smsbridge.local` / `change-me`) and Docker Compose uses `.env.example`. DONE (production safety guard blocks default secrets/passwords)
+- Status fields are strings, not enums, and lifecycle transitions are only partially enforced. PARTIAL (order state machine + order_events exist; provider type/status validation added in admin schemas; DB enums not added)
 - There is no payment ledger/provider integration, no supplier withdrawal/payout flow, no formal stats/rate aggregation, and no webhook/internal endpoint separation.
 
 ## 2. Current Architecture Map
@@ -96,7 +96,8 @@ Critical issues before launch:
 
 - Configured through `settings.redis_url`.
 - Used as Celery broker and result backend.
-- Not used for app rate limiting, order locks, idempotency keys, stock cache, or distributed queues beyond Celery.
+- Used for distributed API rate limiting counters (fail-open) and Celery broker/backend.
+- Not used for idempotency keys, durable business state, or distributed locks beyond DB row locks and Celery.
 
 ### Docker
 
@@ -485,41 +486,41 @@ Problems and recommendations:
 - Supplier API keys are hashed, which is good. Provider API key encryption is only a field; encryption/decryption not found in current codebase.
 - Password hashing uses `pbkdf2_sha256`; acceptable for MVP, but Argon2id or bcrypt would be stronger.
 - Login has no account lockout, CAPTCHA, or per-account throttle.
-- Rate limit is in-memory per process and keyed only by IP. It will not work across multiple backend replicas and can be bypassed behind proxies unless trusted proxy headers are handled carefully.
+- Rate limit uses Redis counters (fail-open) and is applied as middleware. It is IP-based and still needs proxy header hardening for real deployments.
 - CORS is configurable and currently defaults to `http://localhost:3000`, OK for local.
-- Request logging does not log request bodies, which avoids many sensitive data leaks. It does not log supplier endpoints.
-- Buyer price schema leaks `provider_cost`. Remove from buyer/public schemas.
+- Request logging does not log request bodies, which avoids many sensitive data leaks. Supplier endpoints are included and supplier_id is logged when auth succeeds. DONE
+- Buyer price schema leaks `provider_cost`. Remove from buyer/public schemas. DONE
 - Admin endpoints are protected by `require_admin`, good.
 - Supplier endpoints are protected by supplier API key and active supplier checks on write endpoints, good.
 - No CSRF issue for API bearer tokens in normal usage, but frontend token storage should be reviewed. Frontend uses browser storage logic in `shared/api.ts`; exact storage security should be audited separately.
-- No input validation for provider `type`/`status` in `ProviderIn`; admin can create arbitrary strings.
-- No DB check constraints for money fields and status fields.
+- Provider type/status validation exists in admin schemas. DONE
+- DB check constraints exist for wallet/supplier balances (non-negative). DONE
 - No audit log for buyer API key regeneration.
-- No internal webhook signature validation because internal webhooks are not implemented.
+- Internal provider webhook namespace exists but is skeleton-only and uses shared-secret auth; no signature validation yet. PARTIAL
 
-## 7. Missing Features for MVP
+## 7. Missing Features for MVP (Audit Status)
 
-| Feature | Priority | Why needed | Suggested endpoint/model/service |
-|---|---|---|---|
-| Hide provider costs from buyer/public API | P0 | Prevent margin leakage | `schemas/public.py`, buyer `PriceOut` without `provider_cost`; admin price detail separate |
-| Safe order purchase transaction/idempotency | P0 | Prevent double purchase and provider reservation leaks | `IdempotencyKey` model; `orders.create_order()` transaction wrapper |
-| Real supplier number reservation | P0 | Current supplier pool generates fake phone numbers | `supplier_numbers` model or supplier reservation callback endpoint |
-| Explicit order state machine | P0 | Prevent invalid transitions and make lifecycle auditable | `services/order_state.py`, `order_events` model |
-| Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis |
-| DB money check constraints | P0 | Defense in depth for wallet/supplier balances | Alembic migration for non-negative balances/held balances |
-| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/buyer/payments`, `/internal/payments/webhook` |
-| Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, `provider_price_snapshots`, `price_sync_runs` |
-| Generic SMS message table | P0 | External provider SMS should be stored consistently | `order_messages` / `sms_messages`, `services/messages.py` |
-| Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/providers/{code}/webhook`, `/internal/payments/webhook` |
-| Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payouts`, `/supplier/v1/payouts`, `/admin/supplier-payouts` |
-| Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job |
-| Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas |
-| User wallet transaction history | P1 | Buyers need account transparency | `/buyer/wallet/transactions` or `/api/v1/wallet/transactions` |
-| API key management with multiple keys | P1 | Safe rotation without downtime | `api_keys` table with labels/scopes/last_used_at |
-| Refresh token/session revocation | P1 | Logout and compromised token handling | `sessions`/`refresh_tokens` table |
-| Operator catalog | P1 | Normalize operator names and availability | `operators` table |
-| Provider secret encryption | P1 | Required before real provider credentials | `core/secrets.py`, KMS/Fernet integration |
-| Admin moderation queue | P1 | Supplier onboarding and abuse review | `/admin/moderation/*`, supplier status events |
+| Feature | Priority | Why needed | Suggested endpoint/model/service | Status |
+|---|---|---|---|---|
+| Hide provider costs from buyer/public API | P0 | Prevent margin leakage | Buyer price schema without `provider_cost`; admin schema keeps it | DONE |
+| Safe order purchase transaction/idempotency | P0 | Prevent double purchase and provider reservation leaks | `IdempotencyKey` model; transactional wrapper | DONE |
+| Real supplier number reservation | P0 | Current supplier pool generates fake phone numbers | Supplier reservation callback integration | PARTIAL (callback implemented; exact inventory not implemented) |
+| Explicit order state machine | P0 | Prevent invalid transitions and make lifecycle auditable | `services/order_state.py`, `order_events` model | DONE |
+| Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis | DONE |
+| DB money check constraints | P0 | Defense in depth for wallet/supplier balances | CHECK constraints for non-negative balances/held balances | DONE |
+| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payments/webhook` | NOT DONE |
+| Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, sync runs | NOT DONE |
+| Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
+| Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |
+| Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payouts`, `/supplier/v1/payouts`, `/admin/supplier-payouts` | NOT DONE |
+| Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job | NOT DONE |
+| Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas | NOT DONE |
+| User wallet transaction history | P1 | Buyers need account transparency | `/buyer/wallet/transactions` or `/api/v1/wallet/transactions` | NOT DONE |
+| API key management with multiple keys | P1 | Safe rotation without downtime | `api_keys` table with labels/scopes/last_used_at | NOT DONE |
+| Refresh token/session revocation | P1 | Logout and compromised token handling | `sessions`/`refresh_tokens` table | NOT DONE |
+| Operator catalog | P1 | Normalize operator names and availability | `operators` table | NOT DONE |
+| Provider secret encryption | P1 | Required before real provider credentials | `core/secrets.py`, KMS/Fernet integration | NOT DONE |
+| Admin moderation queue | P1 | Supplier onboarding and abuse review | `/admin/moderation/*`, supplier status events | NOT DONE |
 | Full audit coverage | P1 | Track API key changes, supplier writes, financial ops | extend `AuditLog`, supplier actor support |
 | Public catalog endpoints | P2 | Better unauthenticated discovery | `/public/services`, `/public/countries`, `/public/prices` |
 | OpenAPI/API docs polish | P2 | Developer usability | versioned API docs and examples |
@@ -718,30 +719,30 @@ What should live where:
 Recommended 1-2 week plan:
 
 1. P0 security/API cleanup:
-   - Remove `provider_cost` from buyer/public price response.
-   - Add production startup guard for default `SECRET_KEY` and default seeded admin password.
-   - Include supplier endpoints in request logging or add supplier request log fields.
-   - Validate `ProviderIn.type/status` with allowed values.
+   - Remove `provider_cost` from buyer/public price response. DONE
+   - Add production startup guard for default `SECRET_KEY` and default seeded admin password. DONE
+   - Include supplier endpoints in request logging or add supplier request log fields. DONE
+   - Validate provider type/status values with allowed values. DONE
 
 2. P0 wallet/order safety:
-   - Add DB check constraints for non-negative `wallets.balance`, `wallets.held_balance`, `suppliers.balance`, `suppliers.held_balance`.
-   - Add explicit order state transition service.
-   - Add buyer order creation idempotency key.
-   - Fix external provider flow so wallet hold and provider reservation cannot leak on insufficient balance.
+   - Add DB check constraints for non-negative `wallets.balance`, `wallets.held_balance`, `suppliers.balance`, `suppliers.held_balance`. DONE
+   - Add explicit order state transition service + order events. DONE
+   - Add buyer order creation idempotency key. DONE
+   - Fix external provider flow so wallet hold happens before provider reservation and failures refund holds. DONE
 
 3. P0 stock/pricing correctness:
-   - Fix nullable `operator` unique constraint risk by normalizing operator to a non-null key or adding partial unique indexes.
-   - Add price/stock freshness fields and a provider sync task.
-   - Decide exact supplier inventory model: count-only with supplier reservation callback, or exact phone-number inventory.
+   - Fix nullable `operator` unique constraint risk by normalizing operator to a non-null key or adding partial unique indexes. DONE
+   - Add price/stock freshness fields and a provider sync task. NOT DONE
+   - Decide supplier inventory model (reservation callback vs exact inventory). DONE (reservation callback chosen + implemented; exact phone inventory not implemented)
 
 4. P0 Redis/rate limit:
-   - Replace in-memory `RateLimitMiddleware` with Redis-backed limiter.
-   - Use Redis counters for auth/login throttling and possibly order creation throttles.
+   - Replace in-memory `RateLimitMiddleware` with Redis-backed limiter. DONE
+   - Use Redis counters for auth/login throttling and possibly order creation throttles. PARTIAL (global API rate limit uses Redis; per-endpoint throttles not implemented)
 
 5. P0 SMS/order processing:
-   - Add generic SMS/message table.
-   - Use `FOR UPDATE SKIP LOCKED` in polling task.
-   - Add internal webhook namespace and signature validation plan.
+   - Add generic SMS/message table. DONE
+   - Use `FOR UPDATE SKIP LOCKED` in polling task. DONE
+   - Add internal webhook namespace and signature validation plan. PARTIAL (namespace exists with shared-secret auth; no provider-specific payload validation/processing yet)
 
 6. P1 marketplace accounting:
    - Add supplier payout/withdrawal model.

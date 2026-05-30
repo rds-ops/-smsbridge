@@ -407,7 +407,7 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Inventory
 
-- remove fake supplier phone flow. DONE
+- block legacy fake supplier phone in production/staging. DONE (legacy/dev-only path still exists)
 - choose supplier reservation architecture:. DONE
   - exact inventory
   - reservation callback. DONE
@@ -425,7 +425,9 @@ Codex не должен напрямую делать крупный refactor б
 
 - create generic sms_messages table. DONE
 - normalize external provider SMS flow. DONE
-- add internal webhook architecture
+- add internal provider webhook architecture. DONE (skeleton only; does not process provider events yet)
+- add health endpoints (/health/live, /health/ready). DONE
+- add API docs skeleton (buyer/supplier/callbacks). DONE (draft/internal)
 
 ---
 
