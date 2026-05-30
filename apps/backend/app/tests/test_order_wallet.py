@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
-from app.models import Order, Provider, Price, SmsMessage, User, WalletTransaction
+from app.models import Order, OrderEvent, Provider, Price, SmsMessage, User, WalletTransaction
 from decimal import Decimal
 
 from app.services import orders as order_service
@@ -294,6 +294,9 @@ def test_insufficient_balance_does_not_call_provider_reservation(client, user_to
     balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
     assert balance["balance"] == "0.0000"
     assert balance["held_balance"] == "0.0000"
+    assert count_rows(Order, Order.user_id == 2) == 0
+    assert count_rows(WalletTransaction, WalletTransaction.user_id == 2, WalletTransaction.type == "hold") == 0
+    assert count_rows(OrderEvent) == 0
 
 
 def test_provider_failure_after_hold_refunds_and_marks_order_failed(client, user_token):
@@ -317,6 +320,7 @@ def test_provider_failure_after_hold_refunds_and_marks_order_failed(client, user
     assert balance["held_balance"] == "0.0000"
     assert count_rows(Order, Order.user_id == 2, Order.status == "waiting_sms") == 0
     assert count_rows(WalletTransaction, WalletTransaction.user_id == 2, WalletTransaction.type == "hold") == 0
+    assert count_rows(OrderEvent) == 0
 
 
 def test_provider_failure_after_hold_records_refund_if_transaction_is_committed():

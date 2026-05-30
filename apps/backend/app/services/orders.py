@@ -146,6 +146,24 @@ def create_order_idempotent(
     return order
 
 
+def create_order_idempotent_transactional(
+    db: Session,
+    user: User,
+    service_code: str,
+    country_iso2: str,
+    operator: str | None,
+    idempotency_key: str | None,
+) -> Order:
+    try:
+        order = create_order_idempotent(db, user, service_code, country_iso2, operator, idempotency_key)
+        db.commit()
+        db.refresh(order)
+        return order
+    except Exception:
+        db.rollback()
+        raise
+
+
 def get_user_order(db: Session, user: User, public_id: str) -> Order:
     order = db.scalar(select(Order).where(Order.public_id == public_id, Order.user_id == user.id))
     if not order:

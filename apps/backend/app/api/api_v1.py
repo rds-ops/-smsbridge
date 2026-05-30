@@ -60,7 +60,7 @@ def create_order(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_or_api_key),
 ):
-    order = order_service.create_order_idempotent(
+    return order_service.create_order_idempotent_transactional(
         db,
         user,
         payload.service_code,
@@ -68,9 +68,6 @@ def create_order(
         payload.operator,
         idempotency_key,
     )
-    db.commit()
-    db.refresh(order)
-    return order
 
 
 @router.get("/orders", response_model=list[OrderOut])

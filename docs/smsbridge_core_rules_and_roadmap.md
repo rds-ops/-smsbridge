@@ -403,7 +403,7 @@ Codex не должен напрямую делать крупный refactor б
 - add order transition history. DONE 
 - add idempotency keys for order creation. DONE
 - fix provider reservation vs wallet hold flow. DONE
-- add transactional order creation wrapper
+- add transactional order creation wrapper. DONE
 
 ### Inventory
 

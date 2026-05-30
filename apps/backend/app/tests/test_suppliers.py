@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
-from app.models import Order, Provider, SmsMessage, Supplier, SupplierActivation, SupplierInventory, SupplierSms, SupplierTransaction
+from app.models import Order, OrderEvent, Provider, SmsMessage, Supplier, SupplierActivation, SupplierInventory, SupplierSms, SupplierTransaction
 from app.services.supplier_reservations import SupplierReservationResult, SupplierReservationUnavailable
 
 
@@ -325,6 +325,7 @@ def test_reservation_failure_does_not_create_fake_activation_or_hold(client, adm
         assert inventory.available_count == 5
         assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
         assert db.scalar(select(Order).where(Order.user_id == 2)) is None
+        assert db.scalar(select(OrderEvent)) is None
     finally:
         db.close()
 
