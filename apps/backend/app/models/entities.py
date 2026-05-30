@@ -362,6 +362,32 @@ class SupplierActivation(Base, TimestampMixin):
     )
 
 
+class SupplierReleaseRetry(Base, TimestampMixin):
+    __tablename__ = "supplier_release_retries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    supplier_activation_id: Mapped[int] = mapped_column(ForeignKey("supplier_activations.id"), nullable=False)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True, nullable=False)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True, nullable=False)
+    retry_type: Mapped[str] = mapped_column(String(20), default="release", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True, nullable=False)
+    reason: Mapped[str] = mapped_column(String(20), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_retry_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+    last_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    activation: Mapped[SupplierActivation] = relationship()
+    supplier: Mapped[Supplier] = relationship()
+    order: Mapped[Order] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("supplier_activation_id", "retry_type", name="uq_supplier_release_retry_activation_type"),
+        CheckConstraint("attempt_count >= 0", name="ck_supplier_release_retries_attempt_count_non_negative"),
+        Index("ix_supplier_release_retries_status_next_retry_at", "status", "next_retry_at"),
+    )
+
+
 class SupplierSms(Base):
     __tablename__ = "supplier_sms"
 

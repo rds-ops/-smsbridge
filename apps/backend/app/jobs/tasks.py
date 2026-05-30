@@ -7,6 +7,7 @@ from app.db.session import SessionLocal
 from app.jobs.celery_app import celery_app
 from app.models import Order
 from app.services.orders import poll_order
+from app.services.supplier_release_retries import process_due_release_retries
 
 logger = logging.getLogger(__name__)
 POLL_BATCH_LIMIT = 100
@@ -40,5 +41,22 @@ def poll_waiting_orders() -> int:
         db.commit()
         logger.info("Finished polling waiting SMS orders. processed=%s", processed)
         return processed
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.jobs.tasks.retry_supplier_releases")
+def retry_supplier_releases() -> int:
+    logger.info("Retrying failed supplier release callbacks")
+    db = SessionLocal()
+    try:
+        processed = process_due_release_retries(db)
+        db.commit()
+        logger.info("Finished retrying supplier release callbacks. processed=%s", processed)
+        return processed
+    except Exception:
+        db.rollback()
+        logger.exception("Supplier release retry task failed")
+        raise
     finally:
         db.close()

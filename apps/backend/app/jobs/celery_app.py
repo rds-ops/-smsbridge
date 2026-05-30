@@ -20,6 +20,10 @@ celery_app.conf.beat_schedule = {
     "poll-waiting-orders": {
         "task": "app.jobs.tasks.poll_waiting_orders",
         "schedule": 5.0,
+    },
+    "retry-supplier-releases": {
+        "task": "app.jobs.tasks.retry_supplier_releases",
+        "schedule": 30.0,
     }
 }
 celery_app.conf.timezone = "UTC"

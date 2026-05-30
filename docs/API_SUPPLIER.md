@@ -129,7 +129,7 @@ These are outbound calls from smsbridge to the supplier (supplier must host the 
 
 High level:
 - Reservation callback is used when a supplier is configured with `reservation_enabled=true` (admin configuration).
-- Release callback is best-effort on cancel/expire/fail and must not block buyer refunds.
+- Release callback is best-effort on cancel/expire/fail and must not block buyer refunds. Failed release callbacks are retried by smsbridge with the same idempotency key.
 
 Supplier requirements:
 - HTTPS required for production deployments.
@@ -144,4 +144,3 @@ Supplier requirements:
 - Use `Authorization: Bearer ...` only.
 - smsbridge request logging intentionally does not log request bodies or Authorization headers.
 - Treat SMS `text` as sensitive; avoid logging it on the supplier side.
-

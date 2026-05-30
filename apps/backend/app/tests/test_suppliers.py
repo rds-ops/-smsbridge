@@ -6,7 +6,19 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
-from app.models import Order, OrderEvent, Provider, SmsMessage, Supplier, SupplierActivation, SupplierInventory, SupplierSms, SupplierTransaction
+from app.models import (
+    Order,
+    OrderEvent,
+    Provider,
+    SmsMessage,
+    Supplier,
+    SupplierActivation,
+    SupplierInventory,
+    SupplierReleaseRetry,
+    SupplierSms,
+    SupplierTransaction,
+)
+from app.services.supplier_release_retries import process_due_release_retries
 from app.services.supplier_reservations import SupplierReservationResult, SupplierReservationUnavailable
 
 
@@ -539,6 +551,11 @@ def test_release_failure_does_not_block_cancel_or_refund(client, admin_token, us
         inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
         assert inventory.failed_release_count == 1
         assert inventory.last_release_error == "supplier release unavailable"
+        retry = db.scalar(select(SupplierReleaseRetry).where(SupplierReleaseRetry.supplier_id == supplier["id"]))
+        assert retry is not None
+        assert retry.status == "pending"
+        assert retry.attempt_count == 0
+        assert retry.last_error == "supplier release unavailable"
     finally:
         db.close()
 
@@ -550,6 +567,175 @@ def test_release_failure_does_not_block_cancel_or_refund(client, admin_token, us
     inventory_body = inventory_response.json()[0]
     assert inventory_body["failed_release_count"] == 1
     assert inventory_body["last_release_error"] == "supplier release unavailable"
+
+
+def test_failed_release_does_not_create_duplicate_retry_jobs(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-release-duplicate",
+            phone_number="+628555555556",
+        ),
+    )
+
+    def fail_release(supplier_entity, request, *, idempotency_key):
+        raise SupplierReservationUnavailable("supplier release unavailable")
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", fail_release)
+
+    order = buy_order(client, user_token)
+    first = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+    second = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+
+    db = SessionLocal()
+    try:
+        retries = list(db.scalars(select(SupplierReleaseRetry).where(SupplierReleaseRetry.supplier_id == supplier["id"])))
+        assert len(retries) == 1
+    finally:
+        db.close()
+
+
+def test_release_retry_worker_marks_success(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-release-retry-success",
+            phone_number="+628555555557",
+        ),
+    )
+
+    def fail_initial_release(supplier_entity, request, *, idempotency_key):
+        raise SupplierReservationUnavailable("supplier release unavailable")
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", fail_initial_release)
+    order = buy_order(client, user_token)
+    cancelled = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+    assert cancelled.status_code == 200, cancelled.text
+
+    seen = {}
+
+    def succeed_retry(supplier_entity, request, *, idempotency_key):
+        seen["idempotency_key"] = idempotency_key
+        seen["request"] = request
+
+    monkeypatch.setattr("app.services.supplier_release_retries.release_supplier_number", succeed_retry)
+    db = SessionLocal()
+    try:
+        retry = db.scalar(select(SupplierReleaseRetry).where(SupplierReleaseRetry.supplier_id == supplier["id"]))
+        retry.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+
+        assert process_due_release_retries(db) == 1
+        db.commit()
+        db.refresh(retry)
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert retry.status == "succeeded"
+        assert retry.attempt_count == 1
+        assert retry.last_error is None
+        assert inventory.last_release_at is not None
+        assert inventory.last_release_error is None
+    finally:
+        db.close()
+
+    assert seen["idempotency_key"] == f"sb-release-{order['public_id']}"
+    assert seen["request"].supplier_activation_id == "real-act-release-retry-success"
+
+
+def test_release_retry_worker_retries_then_marks_dead(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-release-retry-dead",
+            phone_number="+628555555558",
+        ),
+    )
+
+    def fail_release(supplier_entity, request, *, idempotency_key):
+        raise SupplierReservationUnavailable("supplier release unavailable")
+
+    monkeypatch.setattr("app.services.suppliers.release_supplier_number", fail_release)
+    monkeypatch.setattr("app.services.supplier_release_retries.release_supplier_number", fail_release)
+    order = buy_order(client, user_token)
+    cancelled = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+    assert cancelled.status_code == 200, cancelled.text
+
+    db = SessionLocal()
+    try:
+        retry = db.scalar(select(SupplierReleaseRetry).where(SupplierReleaseRetry.supplier_id == supplier["id"]))
+        now = datetime.now(timezone.utc)
+        for index in range(4):
+            retry.next_retry_at = now - timedelta(seconds=1)
+            db.commit()
+            assert process_due_release_retries(db, now=now + timedelta(hours=index)) == 1
+            db.commit()
+            db.refresh(retry)
+
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert retry.status == "dead"
+        assert retry.attempt_count == 4
+        assert retry.last_error == "supplier release unavailable"
+        assert inventory.failed_release_count == 5
+    finally:
+        db.close()
+
+
+def test_admin_can_view_supplier_release_retries(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/v1/reservations"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-release-admin-visible",
+            phone_number="+628555555559",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.suppliers.release_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: (_ for _ in ()).throw(
+            SupplierReservationUnavailable("supplier release unavailable")
+        ),
+    )
+
+    order = buy_order(client, user_token)
+    cancelled = client.post(f"/api/v1/orders/{order['public_id']}/cancel", headers={"Authorization": f"Bearer {user_token}"})
+    assert cancelled.status_code == 200, cancelled.text
+
+    response = client.get("/admin/supplier-release-retries", headers={"Authorization": f"Bearer {admin_token}"})
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["status"] == "pending"
+    assert response.json()[0]["reason"] == "cancelled"
 
 
 def test_release_not_called_for_legacy_fake_supplier(client, admin_token, user_token, monkeypatch):

@@ -18,6 +18,7 @@ from app.models import (
     Supplier,
     SupplierActivation,
     SupplierInventory,
+    SupplierReleaseRetry,
     SupplierSms,
     SupplierTransaction,
     User,
@@ -44,6 +45,7 @@ from app.schemas.supplier import (
     SupplierListOut,
     SupplierOut,
     SupplierPatch,
+    SupplierReleaseRetryOut,
     SupplierSmsOut,
     SupplierTransactionOut,
 )
@@ -231,6 +233,17 @@ def supplier_transactions(supplier_id: int, db: Session = Depends(get_db), admin
             select(SupplierTransaction)
             .where(SupplierTransaction.supplier_id == supplier_id)
             .order_by(SupplierTransaction.created_at.desc())
+            .limit(500)
+        )
+    )
+
+
+@router.get("/supplier-release-retries", response_model=list[SupplierReleaseRetryOut])
+def supplier_release_retries(db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    return list(
+        db.scalars(
+            select(SupplierReleaseRetry)
+            .order_by(SupplierReleaseRetry.created_at.desc(), SupplierReleaseRetry.id.desc())
             .limit(500)
         )
     )

@@ -76,7 +76,7 @@ Current behavior:
 - smsbridge may fall back to another supplier/provider depending on the active routing logic.
 - smsbridge does not expose supplier secrets or raw supplier error bodies to buyer clients.
 
-## 2. Supplier Release Callback (Implemented; best-effort)
+## 2. Supplier Release Callback (Implemented; best-effort with retry queue)
 
 Direction: smsbridge -> Supplier
 
@@ -114,6 +114,8 @@ Success:
 
 Failure:
 - Timeouts / 4xx / 5xx are treated as release failure, but do not block order state changes or refunds.
+- Failed releases are persisted in `supplier_release_retries` and retried by the Celery task `app.jobs.tasks.retry_supplier_releases`.
+- Retries are capped and move to `dead` after max attempts; retry requests reuse the same idempotency key.
 
 ## 3. Internal Provider Webhook Endpoint (Skeleton)
 
@@ -153,6 +155,5 @@ Production safety:
 ## 4. Current Limitations
 
 - Provider SMS webhooks are not implemented yet; all external provider SMS ingestion happens via polling.
-- Supplier release callback is best-effort only (no retry queue yet).
+- Supplier release callback is best-effort with a durable retry queue, but no operator escalation UI yet.
 - Callback security is minimal (shared secret or bearer token). mTLS, signature verification, and replay protection are not implemented yet.
-

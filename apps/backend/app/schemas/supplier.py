@@ -171,6 +171,22 @@ class SupplierTransactionOut(ORMModel):
     created_at: datetime
 
 
+class SupplierReleaseRetryOut(ORMModel):
+    id: int
+    supplier_activation_id: int
+    supplier_id: int
+    order_id: int
+    retry_type: str
+    status: str
+    reason: str
+    attempt_count: int
+    next_retry_at: datetime
+    last_error: str | None = None
+    last_attempt_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class SupplierAdjustmentIn(BaseModel):
     amount: Decimal
     reference: str | None = Field(default=None, max_length=255)

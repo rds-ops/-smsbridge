@@ -4,7 +4,7 @@
 
 Project state: the repository already has a working early MVP shape: Next.js frontend, FastAPI backend, PostgreSQL models with Alembic migrations, Redis-backed Celery worker, auth, admin panel API, buyer API, supplier API, wallet holds/captures/refunds, supplier inventory and supplier SMS push.
 
-Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, supplier API key auth, and DB-backed supplier inventory reservation with row locks. The weakest parts are pricing/stock accuracy, lack of explicit order state machine, missing real provider sync, missing payment/deposit provider flow, missing supplier payout lifecycle, weak role model, in-memory rate limiting, and several places where public/customer responses expose internal provider economics.
+Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, and supplier reservation/release compensation. The weakest parts are pricing/stock accuracy, missing real provider sync, missing payment/deposit provider flow, missing supplier payout lifecycle, weak role model, real provider integrations, and provider webhook processing.
 
 Critical issues before launch:
 
@@ -16,7 +16,7 @@ Critical issues before launch:
 - Rate limiting is in process memory, not Redis, so it does not work correctly with multiple backend workers. DONE
 - Admin seed uses known default credentials (`admin@smsbridge.local` / `change-me`) and Docker Compose uses `.env.example`. DONE (production safety guard blocks default secrets/passwords)
 - Status fields are strings, not enums, and lifecycle transitions are only partially enforced. PARTIAL (order state machine + order_events exist; provider type/status validation added in admin schemas; DB enums not added)
-- There is no payment ledger/provider integration, no supplier withdrawal/payout flow, no formal stats/rate aggregation, and no webhook/internal endpoint separation.
+- There is no payment ledger/provider integration, no supplier withdrawal/payout flow, no formal stats/rate aggregation, and provider webhook processing is still skeleton-only.
 
 ## 2. Current Architecture Map
 
@@ -133,15 +133,15 @@ What is mixed:
 | Method | Path | Router/File | Role | Purpose | Risk/Comment |
 |---|---|---|---|---|---|
 | GET | `/health` | `app/main.py` | public | Health check | OK. |
-| POST | `/auth/register` | `app/api/auth.py` | public auth | Create user, wallet and default limits | No email normalization validation beyond lowercasing; no email verification; no brute-force/abuse control beyond in-memory IP rate limit. |
+| POST | `/auth/register` | `app/api/auth.py` | public auth | Create user, wallet and default limits | No email normalization validation beyond lowercasing; no email verification; no brute-force/abuse control beyond global Redis IP rate limit. |
 | POST | `/auth/login` | `app/api/auth.py` | public auth | Password login, returns access/refresh tokens | No lockout/backoff; logs request path only, not body. |
 | POST | `/auth/refresh` | `app/api/auth.py` | auth | Refresh access/refresh pair | Refresh tokens are stateless; no revocation table/session model. |
 | GET | `/auth/me` | `app/api/auth.py` | auth | Current user profile | OK. |
 | GET | `/api/v1/balance` | `app/api/api_v1.py` | buyer/API key | Return wallet balance/held balance | OK, but only current wallet, no transaction history endpoint. |
 | GET | `/api/v1/services` | `app/api/api_v1.py` | buyer JWT | Active services | Should probably be public or public catalog. API key is not accepted here while other buyer API endpoints accept it. |
 | GET | `/api/v1/countries` | `app/api/api_v1.py` | buyer JWT | Active countries | Same issue as services. |
-| GET | `/api/v1/prices` | `app/api/api_v1.py` | buyer/API key | List prices filtered by service/country | Exposes `provider_cost` and provider identity to buyers. This is dangerous. |
-| POST | `/api/v1/orders` | `app/api/api_v1.py` | buyer/API key | Buy/reserve number and hold wallet funds | Core flow exists. External provider reservation happens before wallet hold; if hold fails, provider reservation can leak. |
+| GET | `/api/v1/prices` | `app/api/api_v1.py` | buyer/API key | List prices filtered by service/country | Buyer schema exposes `final_price`, not `provider_cost`. |
+| POST | `/api/v1/orders` | `app/api/api_v1.py` | buyer/API key | Buy/reserve number and hold wallet funds | Uses explicit transactional wrapper and optional `Idempotency-Key`; wallet hold happens before external provider reservation. |
 | GET | `/api/v1/orders` | `app/api/api_v1.py` | buyer JWT | List own orders | API key not accepted here, inconsistent with get order/create/cancel/finish. |
 | GET | `/api/v1/orders/{public_id}` | `app/api/api_v1.py` | buyer/API key | Fetch own order | Ownership enforced. |
 | POST | `/api/v1/orders/{public_id}/cancel` | `app/api/api_v1.py` | buyer/API key | Cancel order and refund hold | Idempotent for cancelled/expired/refunded. |
@@ -171,7 +171,7 @@ What is mixed:
 | POST | `/admin/wallets/adjustment` | `app/api/admin.py` | admin | Manual user wallet adjustment | Creates wallet transaction, prevents negative balance. |
 | POST | `/admin/orders/{order_id}/refund` | `app/api/admin.py` | admin | Refund order | Idempotent for refunded/expired/cancelled. Can attempt refund after completed and fail in wallet if captured. |
 | GET | `/admin/audit-logs` | `app/api/admin.py` | admin | List audit logs | Limit 200 only. |
-| GET | `/admin/api-request-logs` | `app/api/admin.py` | admin | List request logs | Does not include supplier endpoints because middleware only logs `/api/`, `/admin`, `/auth`. |
+| GET | `/admin/api-request-logs` | `app/api/admin.py` | admin | List request logs | Includes buyer/admin/auth/supplier/internal provider webhook metadata; no request bodies. |
 | GET | `/admin/metrics` | `app/api/admin.py` | admin | Basic daily metrics | Gross profit subtracts provider cost but not supplier rewards consistently; no time zone/accounting period abstraction. |
 | GET | `/supplier/v1/me` | `app/api/supplier.py` | supplier | Supplier profile | API key auth. |
 | GET | `/supplier/v1/inventory` | `app/api/supplier.py` | supplier | Supplier inventory list | OK. |
@@ -180,11 +180,11 @@ What is mixed:
 
 Dangerous or wrongly exposed endpoints/fields:
 
-- `/api/v1/prices` exposes `provider_cost` and provider information to buyers.
+- `/api/v1/prices` no longer exposes `provider_cost`; buyer/admin price schemas are separated.
 - `/api/v1/services`, `/api/v1/countries`, `/api/v1/orders` list are JWT-only while other API endpoints accept API keys. This is inconsistent for developer API usage.
 - `/admin/metrics` is admin-only, but its financial math is not production accounting.
-- Supplier endpoints are not included in API request logging.
-- No `/internal/*` namespace exists for webhooks/provider callbacks/system tasks.
+- Supplier endpoints are included in API request logging. DONE
+- `/internal/provider-webhooks/{provider_code}` exists as a skeleton, but does not process real provider webhook payloads yet.
 
 ## 4. Current Database Model Inventory
 
@@ -192,31 +192,31 @@ Dangerous or wrongly exposed endpoints/fields:
 |---|---|---|---|---|
 | `User` / `users` | Buyer/admin accounts | `email`, `password_hash`, `role`, `status`, `tier`, `api_key_hash`, `locale` | One-to-one `UserLimit`, `Wallet`; referenced by `Order`, `WalletTransaction`, `AuditLog`, `ApiRequestLog` | `role`/`status` are strings, no enum/check constraint. No failed login/session/revoked token table. |
 | `UserLimit` / `user_limits` | Per-user order/spend limits | `max_orders_per_minute`, `max_orders_per_day`, `max_active_orders`, `max_daily_spend` | FK `user_id` unique | Good MVP table. Limits are enforced by DB counts, not Redis counters. |
-| `Wallet` / `wallets` | User available and held balance | `balance`, `held_balance`, `currency` | FK `user_id` unique | No DB check constraints for non-negative balances. Integrity enforced in service only. |
+| `Wallet` / `wallets` | User available and held balance | `balance`, `held_balance`, `currency` | FK `user_id` unique | Non-negative balance/held balance DB checks exist. |
 | `WalletTransaction` / `wallet_transactions` | Wallet ledger | `user_id`, `order_id`, `type`, `amount`, `status`, `reference`, `metadata`, `created_at` | FK user/order | Good ledger base. Unique `(order_id,type,status)` makes hold/capture/refund idempotent, but deposit/adjustment with `order_id = NULL` are not idempotent. No enum/check constraints. |
 | `Provider` / `providers` | External provider config | `code`, `type`, `status`, `priority`, `base_url`, `api_key_encrypted`, `default_markup_percent` | Referenced by `Price`, `Order` | `api_key_encrypted` exists but no encryption implementation found in current codebase. Provider adapters are placeholders except mock/supplier pool. |
 | `Service` / `services` | Product/service catalog | `code`, `name_ru`, `name_en`, `category`, `is_active` | Referenced by code in prices/orders/inventory | No FK from `Price.service_code`, `Order.service_code`, `SupplierInventory.service_code`; referential integrity depends on service code validation. |
 | `Country` / `countries` | Country catalog | `iso2`, `name_ru`, `name_en`, `is_active` | Referenced by code in prices/orders/inventory | No FK from country code columns. |
-| `Price` / `prices` | Provider price and available count by service/country/operator | `provider_id`, `service_code`, `country_iso2`, `operator`, `provider_cost`, `final_price`, `available_count`, `delivery_rate` | FK provider | Unique with nullable `operator` can allow duplicates on PostgreSQL because NULLs are distinct. No FK to service/country. Exposes both cost and final price. |
-| `Order` / `orders` | Buyer activation order | `public_id`, `user_id`, `provider_id`, `provider_order_id`, `service_code`, `country_iso2`, `operator`, `phone_number`, `status`, `price`, `provider_cost`, `sms_code`, `sms_text`, `expires_at` | FK user/provider; one supplier activation optional | Missing explicit status enum/state history. No `completed_at`, `cancelled_at`, `refunded_at`, `sms_received_at`, `last_polled_at`, `error_code`. No idempotency key for buyer purchase. |
+| `Price` / `prices` | Provider price and available count by service/country/operator | `provider_id`, `service_code`, `country_iso2`, `operator`, `provider_cost`, `final_price`, `available_count`, `delivery_rate` | FK provider | Nullable `operator` uniqueness is normalized by `operator_key`. No FK to service/country. Buyer schema hides provider cost. |
+| `Order` / `orders` | Buyer activation order | `public_id`, `user_id`, `provider_id`, `provider_order_id`, `service_code`, `country_iso2`, `operator`, `phone_number`, `status`, `price`, `provider_cost`, `sms_code`, `sms_text`, `expires_at` | FK user/provider; one supplier activation optional | State transitions are centralized and logged in `order_events`. No `completed_at`, `cancelled_at`, `refunded_at`, `sms_received_at`, `last_polled_at`, `error_code`. |
 | `AuditLog` / `audit_logs` | Admin/system audit events | `actor_user_id`, `action`, `entity_type`, `entity_id`, `metadata` | FK user nullable | OK base. No actor supplier id. |
-| `ApiRequestLog` / `api_request_logs` | API request logs | `user_id`, `endpoint`, `method`, `ip_address`, `status_code` | FK user nullable | Does not log supplier id; supplier endpoints are not logged by middleware. No duration/user agent. |
+| `ApiRequestLog` / `api_request_logs` | API request logs | `user_id`, `supplier_id`, `endpoint`, `method`, `ip_address`, `status_code` | FK user/supplier nullable | Supplier endpoints are logged. No duration/user agent. |
 | `SystemSetting` / `system_settings` | JSON settings | `key`, `value` | None | OK for small settings. |
 | `Supplier` / `suppliers` | Supplier account/entity | `name`, `email`, `status`, `api_key_hash`, `reward_percent`, `balance`, `held_balance`, `currency` | Referenced by supplier inventory/activation/sms/transactions | No user linkage. No supplier wallet transaction check constraint. No payout account/KYC/moderation fields. |
-| `SupplierInventory` / `supplier_inventory` | Count-based supplier stock by service/country/operator | `supplier_id`, `service_code`, `country_iso2`, `operator`, `available_count`, `success_rate`, `avg_sms_time_seconds`, `status`, `last_sync_at` | FK supplier | No real number pool. Unique with nullable operator can duplicate NULL operator rows on PostgreSQL. No FK to service/country. |
-| `SupplierActivation` / `supplier_activations` | Reserved supplier order mapping | `supplier_id`, `order_id`, `supplier_activation_id`, `phone_number`, `status`, `client_price`, `supplier_reward`, `sms_text`, `sms_code` | FK supplier/order | `order_id` unique. No unique active phone reservation constraint. Phone number is generated fake data currently. |
+| `SupplierInventory` / `supplier_inventory` | Count-based supplier stock by service/country/operator | `supplier_id`, `service_code`, `country_iso2`, `operator`, `available_count`, visibility fields, `status`, `last_sync_at` | FK supplier | No exact real number pool. Nullable `operator` uniqueness is normalized by `operator_key`. No FK to service/country. |
+| `SupplierActivation` / `supplier_activations` | Reserved supplier order mapping | `supplier_id`, `order_id`, `supplier_activation_id`, `phone_number`, `status`, `client_price`, `supplier_reward`, `sms_text`, `sms_code` | FK supplier/order | `order_id` unique. No unique active phone reservation constraint. Reservation-enabled suppliers return real numbers; fake phone is legacy/dev-only and blocked in production-like environments. |
 | `SupplierSms` / `supplier_sms` | SMS messages pushed by supplier | `supplier_id`, `activation_id`, `order_id`, `supplier_sms_id`, `phone_number`, `phone_from`, `text`, `status` | FK supplier/activation/order | Idempotent by supplier SMS id. No parsed code confidence/source metadata. |
-| `SupplierTransaction` / `supplier_transactions` | Supplier ledger | `supplier_id`, `activation_id`, `order_id`, `type`, `amount`, `status`, `reference`, `metadata` | FK supplier/activation/order | Reward idempotency exists. No withdrawal/payout lifecycle. No DB check constraints. |
+| `SupplierTransaction` / `supplier_transactions` | Supplier ledger | `supplier_id`, `activation_id`, `order_id`, `type`, `amount`, `status`, `reference`, `metadata` | FK supplier/activation/order | Reward idempotency exists. No withdrawal/payout lifecycle. Supplier balance DB checks exist. |
+| `SupplierReleaseRetry` / `supplier_release_retries` | Durable retry queue for failed supplier release callbacks | `supplier_activation_id`, `supplier_id`, `order_id`, `status`, `attempt_count`, `next_retry_at`, `last_error` | FK supplier/activation/order | Release retry queue exists with capped retries; no separate UI yet. |
 
 Missing or incomplete tables/fields:
 
 - `payment_methods`, `payment_intents` or `deposits` for real user top-ups.
 - `withdrawal_requests` / `supplier_payouts`.
-- `order_events` or `order_status_history`.
-- `sms_messages` generic table for all providers; current DB only stores supplier pushed SMS separately plus denormalized order SMS fields.
+- Exact supplier phone-number inventory table.
 - `provider_price_snapshots` or `price_sync_runs`.
 - `supplier_number_inventory` if suppliers provide exact phone numbers instead of only counts.
-- `idempotency_keys` for buyer order creation and payment callbacks.
+- `idempotency_keys` for payment callbacks (buyer order creation exists).
 - `sessions` / `refresh_tokens` / token revocation.
 - `roles` / `permissions` if more roles than `user` and `admin` are needed.
 - `operator` catalog/table if operators must be normalized.
@@ -242,7 +242,6 @@ What is normal:
 
 What is risky:
 
-- Buyer `PriceOut` includes `provider_cost`; this leaks margin.
 - Pricing is stored, not computed from a clear pricing policy table. There is no explicit per-service/country markup override.
 - Supplier pool pricing depends on external/mock provider prices and hardcoded default `0.5000` fallback.
 - `Price` does not FK service/country, so stale code values can exist.
@@ -250,7 +249,6 @@ What is risky:
 
 Needed changes:
 
-- Remove `provider_cost` from buyer/public price response.
 - Add pricing policy model: global markup, provider markup, service/country/operator overrides, min price, rounding.
 - Add provider price sync jobs and price freshness metadata.
 - Add internal/admin-only price detail endpoint that includes cost/margin.
@@ -301,17 +299,15 @@ What is normal:
 
 What is risky:
 
-- External provider reservation occurs before wallet hold. If hold fails, the provider number is already reserved and not cancelled.
-- No buyer idempotency key. Retry can buy multiple numbers.
-- No transaction boundary wrapper in service; router commits after service returns. This works for one request but is implicit.
-- No explicit order status transition validation at creation beyond direct assignments.
+- External provider local `prices.available_count` is not decremented after purchase.
+- Exact supplier phone-number inventory is not implemented.
+- Real provider adapters remain placeholders.
 
 Needed changes:
 
-- Lock/check wallet before external provider call, or pre-authorize/hold before provider reservation with rollback/cancel strategy.
-- Add `Idempotency-Key` support for order creation.
-- Wrap purchase flow in explicit transactional service.
-- Add order creation events and provider error fields.
+- Add real provider stock sync/freshness and reconciliation.
+- Add exact phone inventory if the product must control supplier numbers platform-side.
+- Add provider error fields if support/debugging needs structured reservation failure reasons.
 
 ### Number Reservation
 
@@ -319,7 +315,8 @@ How it is now:
 
 - External providers return a phone number from adapter.
 - Supplier pool selects a supplier inventory row with positive count and row-locks it.
-- Supplier pool then generates a fake phone number with `_fake_supplier_phone()`.
+- Reservation-enabled suppliers are called through the supplier reservation callback and return a real phone number and supplier activation id.
+- `_fake_supplier_phone()` remains only as a legacy/dev-only fallback and is blocked in production-like environments.
 
 What is normal:
 
@@ -355,15 +352,13 @@ What is normal:
 
 What is risky:
 
-- No `/internal/provider/webhooks/*` endpoint for provider callbacks.
-- Generic external provider SMS messages are not stored in a message table; only `Order.sms_code` and `Order.sms_text`.
+- `/internal/provider-webhooks/{provider_code}` is a skeleton only and does not process real provider events yet.
+- Real provider webhook payload validation/storage is not implemented.
 - Supplier can push SMS by phone number without activation id; this can attach to latest active activation for that phone.
-- Supplier endpoints are not logged in `ApiRequestLogMiddleware`.
 
 Needed changes:
 
-- Add generic `order_messages` or `sms_messages` table.
-- Add internal webhook endpoints with signature validation.
+- Implement real provider webhook payload validation and route to `sms_messages` / `transition_order`.
 - Prefer activation id for supplier SMS; phone fallback should be strict and audited.
 
 ### Order Lifecycle
@@ -512,6 +507,7 @@ Problems and recommendations:
 | Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, sync runs | NOT DONE |
 | Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
 | Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |
+| Supplier release retry queue | P0 | Failed supplier release callbacks can leave numbers reserved | `supplier_release_retries`, Celery retry task | DONE |
 | Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payouts`, `/supplier/v1/payouts`, `/admin/supplier-payouts` | NOT DONE |
 | Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job | NOT DONE |
 | Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas | NOT DONE |

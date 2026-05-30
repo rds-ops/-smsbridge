@@ -33,6 +33,7 @@ from app.services.supplier_reservations import (
     release_supplier_number,
     reserve_supplier_number,
 )
+from app.services.supplier_release_retries import enqueue_release_retry
 
 SUPPLIER_POOL_PROVIDER_CODE = "supplier_pool"
 ACTIVE_ACTIVATION_STATUSES = {"reserved", "waiting_sms", "sms_received"}
@@ -404,6 +405,8 @@ def _release_supplier_activation(order: Order, activation: SupplierActivation, r
         inventory = _inventory_for_activation(db, activation) if db else None
         if inventory:
             _record_release_failure(inventory, exc)
+        if db:
+            enqueue_release_retry(db, order=order, activation=activation, reason=reason, error=exc)
         logger.warning(
             "Supplier reservation release failed for order_id=%s supplier_id=%s reason=%s",
             order.id,

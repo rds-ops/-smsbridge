@@ -2,7 +2,7 @@
 
 Status (as of 2026-05-30):
 - Reservation callback strategy (Option B) is implemented and integrated into supplier-pool order creation.
-- Release callback is implemented as best-effort (failures must not block refunds/cancel/expire).
+- Release callback is implemented as best-effort with a durable retry queue (failures must not block refunds/cancel/expire).
 - Legacy `_fake_supplier_phone` path still exists for local/dev/test only and is blocked in production-like environments.
 - A local fake supplier HTTP server exists for integration testing.
 
@@ -30,11 +30,11 @@ When a buyer creates an order and `services/orders.py` selects a `Price` whose p
 2. Locks candidate rows with `with_for_update`.
 3. Picks one supplier inventory row by success rate, reward percent, and count.
 4. Decrements `available_count`.
-5. Creates a `SupplierActivation`.
-6. Generates a synthetic `supplier_activation_id`.
-7. Generates a fake phone number through `_fake_supplier_phone`.
-8. Writes that fake number onto both `SupplierActivation.phone_number` and `Order.phone_number`.
-9. Sets `Order.provider_order_id` to the synthetic supplier activation id.
+5. If supplier reservation callback is enabled, calls the supplier reservation endpoint.
+6. Uses the returned real `supplier_activation_id` and `phone_number`.
+7. If reservation callback is not enabled, uses `_fake_supplier_phone` only as a legacy/dev-only fallback.
+8. Blocks the legacy fake-phone path in production-like environments.
+9. Writes phone number and activation id onto `SupplierActivation`, `Order.phone_number`, and `Order.provider_order_id`.
 
 Supplier SMS later arrives through `POST /supplier/v1/sms`. The payload includes `supplier_sms_id`, `phone_number`, `phone_from`, `text`, and optionally `supplier_activation_id`. The backend stores the message in `supplier_sms`, records a generic `sms_messages` row, updates the activation, and denormalizes `sms_text` / `sms_code` onto the order.
 
@@ -299,7 +299,7 @@ Task 8D: Integrate reservation callback and isolate `_fake_supplier_phone` as le
 - On failure, leave current fake flow available only for local/dev suppliers.
 - Add wallet refund/fallback tests.
 
-Task 8E: Add cancellation/release callback contract. DONE (best-effort only)
+Task 8E: Add cancellation/release callback contract. DONE (best-effort with retry queue)
 
 - Draft and implement optional supplier release endpoint call for cancelled/expired orders.
 - Keep release idempotent.
@@ -409,7 +409,7 @@ No changes are required to `orders.phone_number` or `orders.provider_order_id`; 
 
 - Should real supplier reservation be mandatory in production, or can selected suppliers remain in mock/fake mode?
 - What auth scheme should supplier reservation callbacks use first: bearer secret, HMAC signature, mTLS, or IP allowlist plus bearer?
-- Should the backend call a supplier release/cancel endpoint on buyer cancel and expiry in the first real-number release?
+- Release/cancel callback is implemented for buyer cancel and expiry; remaining question is whether it needs a stronger retry SLA or operator escalation workflow.
 - What is the maximum acceptable reservation latency for buyer checkout?
 - Should `available_count` be decremented before or after supplier callback success?
 - Should the platform store full phone numbers forever, redact after retention, or encrypt them at rest?
