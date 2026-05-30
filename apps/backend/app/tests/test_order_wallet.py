@@ -55,6 +55,8 @@ def test_sms_received_changes_status_to_sms_received(client, user_token):
         assert messages[0].source == "external_provider"
         assert messages[0].text == entity.sms_text
         assert messages[0].parsed_code == entity.sms_code
+        assert messages[0].external_message_id is not None
+        assert len(messages[0].external_message_id) == 32
     finally:
         db.close()
 
@@ -70,6 +72,8 @@ def test_external_provider_polling_does_not_duplicate_sms_messages(client, user_
         assert len(messages) == 1
         assert messages[0].text == entity.sms_text
         assert messages[0].parsed_code == entity.sms_code
+        assert messages[0].external_message_id is not None
+        assert len(messages[0].external_message_id) == 32
     finally:
         db.close()
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -50,17 +51,27 @@ def record_provider_sms(
     db: Session,
     *,
     order: Order,
+    provider_order_id: str | None = None,
+    phone_from: str | None = None,
     text: str,
     parsed_code: str | None,
     raw_payload: dict | None = None,
 ) -> SmsMessage:
+    # External providers don't always give a stable message id, but we still want
+    # idempotent persistence across repeated polling.
+    stable_provider_order_id = provider_order_id or order.provider_order_id or ""
+    stable_text = text or ""
+    stable_code = parsed_code or ""
+    external_message_id = hashlib.sha256(
+        f"{stable_provider_order_id}\n{stable_text}\n{stable_code}".encode("utf-8")
+    ).hexdigest()[:32]
+
     existing = db.scalar(
         select(SmsMessage).where(
             SmsMessage.order_id == order.id,
             SmsMessage.provider_id == order.provider_id,
             SmsMessage.source == "external_provider",
-            SmsMessage.text == text,
-            SmsMessage.parsed_code == parsed_code,
+            SmsMessage.external_message_id == external_message_id,
         )
     )
     if existing:
@@ -69,8 +80,9 @@ def record_provider_sms(
         order_id=order.id,
         provider_id=order.provider_id,
         source="external_provider",
-        external_message_id=None,
+        external_message_id=external_message_id,
         phone_number=order.phone_number,
+        phone_from=phone_from,
         text=text,
         parsed_code=parsed_code,
         raw_payload=raw_payload,

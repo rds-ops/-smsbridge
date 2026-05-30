@@ -255,6 +255,7 @@ def poll_order(db: Session, order: Order) -> Order:
         sms_messages.record_provider_sms(
             db,
             order=order,
+            provider_order_id=order.provider_order_id,
             text=status.sms_text or "",
             parsed_code=status.sms_code,
             raw_payload={"provider_order_id": order.provider_order_id, "status": status.status},
