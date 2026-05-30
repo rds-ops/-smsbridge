@@ -36,11 +36,11 @@ from app.schemas.admin import (
 )
 from app.schemas.common import ApiRequestLogOut, AuditLogOut, OrderOut, WalletOut
 from app.schemas.supplier import (
+    AdminSupplierInventoryOut,
     SupplierAdjustmentIn,
     SupplierActivationOut,
     SupplierApiKeyOut,
     SupplierCreate,
-    SupplierInventoryOut,
     SupplierListOut,
     SupplierOut,
     SupplierPatch,
@@ -188,7 +188,7 @@ def regenerate_supplier_api_key(supplier_id: int, db: Session = Depends(get_db),
     return SupplierApiKeyOut(api_key=raw)
 
 
-@router.get("/suppliers/{supplier_id}/inventory", response_model=list[SupplierInventoryOut])
+@router.get("/suppliers/{supplier_id}/inventory", response_model=list[AdminSupplierInventoryOut])
 def supplier_inventory(supplier_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
     return list(
         db.scalars(

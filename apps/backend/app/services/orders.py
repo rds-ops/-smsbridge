@@ -158,9 +158,12 @@ def create_order_idempotent_transactional(
         order = create_order_idempotent(db, user, service_code, country_iso2, operator, idempotency_key)
         db.commit()
         db.refresh(order)
+        suppliers.pop_pending_reservation_failures(db)
         return order
     except Exception:
+        reservation_failures = suppliers.pop_pending_reservation_failures(db)
         db.rollback()
+        suppliers.persist_reservation_failures(db, reservation_failures)
         raise
 
 

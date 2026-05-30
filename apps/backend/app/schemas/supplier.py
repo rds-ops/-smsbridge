@@ -87,6 +87,15 @@ class SupplierInventoryOut(ORMModel):
     updated_at: datetime
 
 
+class AdminSupplierInventoryOut(SupplierInventoryOut):
+    last_reservation_at: datetime | None = None
+    last_reservation_error: str | None = None
+    failed_reservation_count: int = 0
+    last_release_at: datetime | None = None
+    last_release_error: str | None = None
+    failed_release_count: int = 0
+
+
 class SupplierInventoryItemIn(BaseModel):
     service_code: str = Field(min_length=2, max_length=50)
     country_iso2: str = Field(min_length=2, max_length=2)

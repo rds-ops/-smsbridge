@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.errors import api_error
+from app.core.config import settings
 from app.models import (
     Country,
     Order,
@@ -38,6 +39,7 @@ ACTIVE_ACTIVATION_STATUSES = {"reserved", "waiting_sms", "sms_received"}
 RELEASE_ACTIVATION_STATUSES = {OrderStatus.CANCELLED, OrderStatus.EXPIRED, OrderStatus.FAILED}
 
 logger = logging.getLogger(__name__)
+RESERVATION_FAILURES_KEY = "supplier_reservation_failures"
 
 
 def normalize_operator(operator: str | None) -> str | None:
@@ -227,11 +229,70 @@ def select_inventory(
 
 
 def _fake_supplier_phone(country_iso2: str) -> str:
-    # Legacy/dev-only fallback for suppliers without reservation callbacks.
-    # Production supplier-pool orders should use supplier reservation callbacks.
+    # Local/dev/test-only fallback for suppliers without reservation callbacks.
+    # Production suppliers must use reservation callbacks or future exact inventory.
     prefix = COUNTRY_PREFIX.get(country_iso2.upper(), "1")
     suffix = str(abs(hash(uuid4().hex)) % 900000000 + 100000000)
     return f"+{prefix}{suffix}"
+
+
+def _sanitize_supplier_error(exc: Exception | str) -> str:
+    message = str(exc).strip() if not isinstance(exc, str) else exc.strip()
+    if not message:
+        message = exc.__class__.__name__ if not isinstance(exc, str) else "supplier_error"
+    message = re.sub(r"Bearer\s+\S+", "Bearer [redacted]", message, flags=re.IGNORECASE)
+    return message[:255]
+
+
+def _record_reservation_success(inventory: SupplierInventory) -> None:
+    inventory.last_reservation_at = datetime.now(timezone.utc)
+    inventory.last_reservation_error = None
+
+
+def _record_reservation_failure(inventory: SupplierInventory, error: Exception | str) -> None:
+    inventory.failed_reservation_count = (inventory.failed_reservation_count or 0) + 1
+    inventory.last_reservation_error = _sanitize_supplier_error(error)
+
+
+def _remember_reservation_failure(db: Session, inventory: SupplierInventory, error: Exception | str) -> None:
+    failures = db.info.setdefault(RESERVATION_FAILURES_KEY, [])
+    failures.append((inventory.id, _sanitize_supplier_error(error)))
+
+
+def _record_release_success(inventory: SupplierInventory) -> None:
+    inventory.last_release_at = datetime.now(timezone.utc)
+    inventory.last_release_error = None
+
+
+def _record_release_failure(inventory: SupplierInventory, error: Exception | str) -> None:
+    inventory.failed_release_count = (inventory.failed_release_count or 0) + 1
+    inventory.last_release_error = _sanitize_supplier_error(error)
+
+
+def pop_pending_reservation_failures(db: Session) -> list[tuple[int, str]]:
+    return list(db.info.pop(RESERVATION_FAILURES_KEY, []))
+
+
+def persist_reservation_failures(db: Session, failures: list[tuple[int, str]]) -> None:
+    if not failures:
+        return
+    for inventory_id, error in failures:
+        inventory = db.get(SupplierInventory, inventory_id)
+        if inventory:
+            _record_reservation_failure(inventory, error)
+    db.commit()
+
+
+def _inventory_for_activation(db: Session, activation: SupplierActivation) -> SupplierInventory | None:
+    operator = normalize_operator(activation.operator)
+    return db.scalar(
+        select(SupplierInventory).where(
+            SupplierInventory.supplier_id == activation.supplier_id,
+            SupplierInventory.service_code == activation.service_code,
+            SupplierInventory.country_iso2 == activation.country_iso2,
+            SupplierInventory.operator.is_(operator) if operator is None else SupplierInventory.operator == operator,
+        )
+    )
 
 
 def _order_timeout_seconds(order: Order) -> int:
@@ -265,13 +326,22 @@ def reserve_supplier_activation(db: Session, order: Order, price: Price, operato
                 ),
                 idempotency_key=request_id,
             )
-        except SupplierReservationError:
+        except SupplierReservationError as exc:
             inventory.available_count += 1
+            _record_reservation_failure(inventory, exc)
+            _remember_reservation_failure(db, inventory, exc)
             sync_supplier_pool_price(db, order.service_code, order.country_iso2, normalize_operator(operator))
             return None
+        _record_reservation_success(inventory)
         supplier_activation_id = reservation.supplier_activation_id
         phone_number = reservation.phone_number
     else:
+        if settings.is_production_like:
+            inventory.available_count += 1
+            _record_reservation_failure(inventory, "reservation_callback_required")
+            _remember_reservation_failure(db, inventory, "reservation_callback_required")
+            sync_supplier_pool_price(db, order.service_code, order.country_iso2, normalize_operator(operator))
+            return None
         # Legacy/dev-only path for count-based mock suppliers.
         supplier_activation_id = f"sup_act_{uuid4().hex}"
         phone_number = _fake_supplier_phone(order.country_iso2)
@@ -329,7 +399,11 @@ def _release_supplier_activation(order: Order, activation: SupplierActivation, r
             ),
             idempotency_key=request_id,
         )
-    except SupplierReservationError:
+    except SupplierReservationError as exc:
+        db = object_session(activation)
+        inventory = _inventory_for_activation(db, activation) if db else None
+        if inventory:
+            _record_release_failure(inventory, exc)
         logger.warning(
             "Supplier reservation release failed for order_id=%s supplier_id=%s reason=%s",
             order.id,
@@ -337,6 +411,11 @@ def _release_supplier_activation(order: Order, activation: SupplierActivation, r
             reason,
             exc_info=True,
         )
+    else:
+        db = object_session(activation)
+        inventory = _inventory_for_activation(db, activation) if db else None
+        if inventory:
+            _record_release_success(inventory)
 
 
 def mark_activation_status(db: Session, order: Order, status: str) -> None:

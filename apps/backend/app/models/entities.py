@@ -305,6 +305,12 @@ class SupplierInventory(Base, TimestampMixin):
     avg_sms_time_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", index=True, nullable=False)
     last_sync_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_reservation_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_reservation_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    failed_reservation_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_release_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_release_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    failed_release_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     supplier: Mapped[Supplier] = relationship()
 

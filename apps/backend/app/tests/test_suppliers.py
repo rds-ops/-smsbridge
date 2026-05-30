@@ -245,8 +245,36 @@ def test_reservation_enabled_supplier_uses_callback_phone_and_activation(client,
         activation = db.scalar(select(SupplierActivation).where(SupplierActivation.order_id == order_entity.id))
         assert activation.supplier_activation_id == "real-act-123"
         assert activation.phone_number == "+628111111111"
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.last_reservation_at is not None
+        assert inventory.last_reservation_error is None
     finally:
         db.close()
+
+
+def test_reservation_enabled_supplier_works_in_production_like_env(client, admin_token, user_token, monkeypatch):
+    monkeypatch.setattr("app.services.suppliers.settings.environment", "production")
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="prod-real-act",
+            phone_number="+628999999999",
+        ),
+    )
+
+    order = buy_order(client, user_token)
+
+    assert order["status"] == "waiting_sms"
+    assert order["phone_number"] == "+628999999999"
 
 
 def test_supplier_sms_links_by_returned_reservation_activation_id(client, admin_token, user_token, monkeypatch):
@@ -323,6 +351,8 @@ def test_reservation_failure_does_not_create_fake_activation_or_hold(client, adm
     try:
         inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
         assert inventory.available_count == 5
+        assert inventory.failed_reservation_count == 1
+        assert inventory.last_reservation_error == "supplier unavailable"
         assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
         assert db.scalar(select(Order).where(Order.user_id == 2)) is None
         assert db.scalar(select(OrderEvent)) is None
@@ -345,6 +375,46 @@ def test_reservation_disabled_supplier_keeps_legacy_fake_path(client, admin_toke
         assert order_entity.provider_order_id.startswith("sup_act_")
     finally:
         db.close()
+
+
+def test_production_blocks_legacy_fake_supplier_path(client, admin_token, user_token, monkeypatch):
+    monkeypatch.setattr("app.services.suppliers.settings.environment", "production")
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    db = SessionLocal()
+    try:
+        mock_provider = db.scalar(select(Provider).where(Provider.code == "mock"))
+        mock_provider.status = "inactive"
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/v1/orders",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"service_code": "telegram", "country_iso2": "ID"},
+    )
+
+    assert response.status_code == 502
+    balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
+    assert balance["balance"] == "25.0000"
+    assert balance["held_balance"] == "0.0000"
+    db = SessionLocal()
+    try:
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.available_count == 5
+        assert inventory.failed_reservation_count == 1
+        assert inventory.last_reservation_error == "reservation_callback_required"
+        assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
+    finally:
+        db.close()
+    inventory_response = client.get(
+        f"/admin/suppliers/{supplier['id']}/inventory",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert inventory_response.status_code == 200, inventory_response.text
+    assert inventory_response.json()[0]["failed_reservation_count"] == 1
 
 
 def test_cancel_order_triggers_release_callback_for_reservation_enabled_supplier(client, admin_token, user_token, monkeypatch):
@@ -383,6 +453,13 @@ def test_cancel_order_triggers_release_callback_for_reservation_enabled_supplier
     assert seen["request"].supplier_activation_id == "real-act-release"
     assert seen["request"].phone_number == "+628333333333"
     assert seen["request"].reason == "cancelled"
+    db = SessionLocal()
+    try:
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.last_release_at is not None
+        assert inventory.last_release_error is None
+    finally:
+        db.close()
 
 
 def test_expired_order_triggers_release_callback_for_reservation_enabled_supplier(client, admin_token, user_token, monkeypatch):
@@ -457,6 +534,22 @@ def test_release_failure_does_not_block_cancel_or_refund(client, admin_token, us
     balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
     assert balance["balance"] == "25.0000"
     assert balance["held_balance"] == "0.0000"
+    db = SessionLocal()
+    try:
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.failed_release_count == 1
+        assert inventory.last_release_error == "supplier release unavailable"
+    finally:
+        db.close()
+
+    inventory_response = client.get(
+        f"/admin/suppliers/{supplier['id']}/inventory",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert inventory_response.status_code == 200, inventory_response.text
+    inventory_body = inventory_response.json()[0]
+    assert inventory_body["failed_release_count"] == 1
+    assert inventory_body["last_release_error"] == "supplier release unavailable"
 
 
 def test_release_not_called_for_legacy_fake_supplier(client, admin_token, user_token, monkeypatch):
