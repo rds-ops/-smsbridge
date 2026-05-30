@@ -11,6 +11,7 @@ UNSAFE_SECRET_KEYS = {
     "secret",
     "test-secret",
 }
+UNSAFE_INTERNAL_WEBHOOK_SECRETS = {"change-me", "changeme", "secret", "test-secret"}
 DEFAULT_ADMIN_PASSWORDS = {"change-me"}
 MIN_PRODUCTION_SECRET_KEY_LENGTH = 32
 
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     secret_key: str = "change-this-secret"
     admin_seed_password: str = "change-me"
+    internal_webhook_secret: str = "change-me"
     access_token_minutes: int = 60
     refresh_token_minutes: int = 60 * 24 * 14
     cors_origins: str = "http://localhost:3000"
@@ -55,6 +57,12 @@ def validate_production_safety(config: Settings) -> None:
 
     if config.admin_seed_password in DEFAULT_ADMIN_PASSWORDS:
         raise RuntimeError("Unsafe production configuration: ADMIN_SEED_PASSWORD uses a default password")
+
+    internal_secret = config.internal_webhook_secret.strip()
+    if not internal_secret:
+        raise RuntimeError("Unsafe production configuration: INTERNAL_WEBHOOK_SECRET must not be empty")
+    if internal_secret in UNSAFE_INTERNAL_WEBHOOK_SECRETS:
+        raise RuntimeError("Unsafe production configuration: INTERNAL_WEBHOOK_SECRET uses a known default value")
 
 
 @lru_cache

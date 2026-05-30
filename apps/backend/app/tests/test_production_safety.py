@@ -10,6 +10,7 @@ def settings(**kwargs) -> Settings:
         "environment": "local",
         "secret_key": "change-this-in-production",
         "admin_seed_password": "change-me",
+        "internal_webhook_secret": "change-me",
     }
     defaults.update(kwargs)
     return Settings(**defaults)
@@ -48,5 +49,30 @@ def test_production_env_accepts_strong_custom_values():
             environment="production",
             secret_key="prod-secret-key-with-more-than-32-characters",
             admin_seed_password="not-the-default-admin-password",
+            internal_webhook_secret="prod-internal-webhook-secret-with-more-than-32-chars",
         )
     )
+
+
+def test_production_env_rejects_default_internal_webhook_secret():
+    with pytest.raises(RuntimeError, match="INTERNAL_WEBHOOK_SECRET uses a known default value"):
+        validate_production_safety(
+            settings(
+                environment="production",
+                secret_key="prod-secret-key-with-more-than-32-characters",
+                admin_seed_password="not-the-default-admin-password",
+                internal_webhook_secret="change-me",
+            )
+        )
+
+
+def test_production_env_rejects_empty_internal_webhook_secret():
+    with pytest.raises(RuntimeError, match="INTERNAL_WEBHOOK_SECRET must not be empty"):
+        validate_production_safety(
+            settings(
+                environment="production",
+                secret_key="prod-secret-key-with-more-than-32-characters",
+                admin_seed_password="not-the-default-admin-password",
+                internal_webhook_secret="",
+            )
+        )
