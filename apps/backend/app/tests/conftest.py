@@ -4,6 +4,7 @@ from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_smsbridge.db"
 os.environ["SECRET_KEY"] = "test-secret"
+os.environ["ENVIRONMENT"] = "test"
 os.environ["MOCK_SMS_DELAY_SECONDS"] = "0"
 os.environ["MOCK_SUCCESS_RATE"] = "1"
 os.environ["MOCK_ORDER_TIMEOUT_SECONDS"] = "1"
