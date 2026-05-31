@@ -265,6 +265,11 @@ class PaymentIntent(Base, TimestampMixin):
     succeeded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_webhook_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_webhook_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_webhook_status: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    last_webhook_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    failed_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     user: Mapped[User] = relationship()
 

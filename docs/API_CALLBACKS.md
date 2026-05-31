@@ -205,6 +205,7 @@ Important:
 Operational visibility:
 - Admins can call `GET /admin/payment-intents/reconciliation` to see read-only counts and recent examples of payment intent / wallet credit mismatches.
 - This endpoint does not mutate wallet balances or payment intent status.
+- Admin payment intent list/detail includes safe lifecycle fields such as last webhook time, event id/idempotency key, requested webhook status, sanitized webhook error, and failed reason.
 
 ## 5. Current Limitations
 

@@ -22,6 +22,12 @@ PAYMENT_INTENT_TRANSITIONS = {
     "created": {"pending", "failed", "cancelled"},
     "pending": {"succeeded", "failed", "cancelled"},
 }
+PAYMENT_WEBHOOK_ERROR_MESSAGES = {
+    "invalid_status": "Unsupported payment webhook status",
+    "invalid_transition": "Invalid payment intent status transition",
+    "payment_intent_not_found": "Payment intent not found",
+    "duplicate": "Duplicate payment webhook event",
+}
 
 
 def payment_intent_request_hash(*, amount: Decimal, provider: str, currency: str) -> str:
@@ -134,6 +140,13 @@ def process_payment_webhook(
         payload_hash=payload_hash,
     )
     if existing:
+        _record_duplicate_webhook_attempt(
+            db,
+            provider=provider_normalized,
+            payload=payload,
+            external_event_id=external_event_id,
+            idempotency_key=key,
+        )
         return PaymentWebhookEvent(
             provider=provider_normalized,
             external_event_id=external_event_id,
@@ -145,12 +158,35 @@ def process_payment_webhook(
     intent = _find_payment_intent(db, provider=provider_normalized, payload=payload)
     target_status = _string_or_none(payload.get("status"))
     event_status = "ignored"
+    event_error: str | None = None
 
     if intent and target_status in PAYMENT_WEBHOOK_TARGET_STATUSES and _can_transition(intent.status, target_status):
+        _record_webhook_visibility(
+            intent,
+            external_event_id=external_event_id,
+            idempotency_key=key,
+            target_status=target_status,
+            event_status="processed",
+            event_error=None,
+            payload=payload,
+        )
         if target_status == "succeeded":
             wallet.deposit_payment_intent(db, intent)
         _transition_payment_intent(intent, target_status)
         event_status = "processed"
+    elif intent:
+        event_error = "invalid_status" if target_status not in PAYMENT_WEBHOOK_TARGET_STATUSES else "invalid_transition"
+        _record_webhook_visibility(
+            intent,
+            external_event_id=external_event_id,
+            idempotency_key=key,
+            target_status=target_status,
+            event_status="ignored",
+            event_error=event_error,
+            payload=payload,
+        )
+    else:
+        event_error = "payment_intent_not_found"
 
     event = PaymentWebhookEvent(
         provider=provider_normalized,
@@ -164,6 +200,13 @@ def process_payment_webhook(
         db.flush()
     except IntegrityError:
         db.rollback()
+        _record_duplicate_webhook_attempt(
+            db,
+            provider=provider_normalized,
+            payload=payload,
+            external_event_id=external_event_id,
+            idempotency_key=key,
+        )
         return PaymentWebhookEvent(
             provider=provider_normalized,
             external_event_id=external_event_id,
@@ -236,3 +279,55 @@ def _string_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _record_duplicate_webhook_attempt(
+    db: Session,
+    *,
+    provider: str,
+    payload: dict[str, Any],
+    external_event_id: str | None,
+    idempotency_key: str | None,
+) -> None:
+    intent = _find_payment_intent(db, provider=provider, payload=payload)
+    if not intent:
+        return
+    _record_webhook_visibility(
+        intent,
+        external_event_id=external_event_id,
+        idempotency_key=idempotency_key,
+        target_status=_string_or_none(payload.get("status")),
+        event_status="duplicate",
+        event_error="duplicate",
+        payload=payload,
+    )
+    db.flush()
+
+
+def _record_webhook_visibility(
+    intent: PaymentIntent,
+    *,
+    external_event_id: str | None,
+    idempotency_key: str | None,
+    target_status: str | None,
+    event_status: str,
+    event_error: str | None,
+    payload: dict[str, Any],
+) -> None:
+    intent.last_webhook_at = datetime.now(timezone.utc)
+    intent.last_webhook_event_id = _truncate(external_event_id or idempotency_key, 255)
+    intent.last_webhook_status = _truncate(target_status or event_status, 40)
+    intent.last_webhook_error = _truncate(PAYMENT_WEBHOOK_ERROR_MESSAGES.get(event_error), 255) if event_error else None
+    if target_status == "failed":
+        intent.failed_reason = _sanitize_failure_reason(payload)
+
+
+def _sanitize_failure_reason(payload: dict[str, Any]) -> str | None:
+    reason = _string_or_none(payload.get("failed_reason") or payload.get("reason") or payload.get("error_code"))
+    return _truncate(reason, 255)
+
+
+def _truncate(value: str | None, max_length: int) -> str | None:
+    if value is None:
+        return None
+    return value[:max_length]

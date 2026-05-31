@@ -4,7 +4,7 @@
 
 Project state: the repository already has a working early MVP shape: Next.js frontend, FastAPI backend, PostgreSQL models with Alembic migrations, Redis-backed Celery worker, auth, admin panel API, buyer API, supplier API, wallet holds/captures/refunds, supplier inventory and supplier SMS push.
 
-Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, and supplier reservation/release compensation. The weakest parts are pricing/stock accuracy, missing real provider sync, missing payment/deposit provider flow, missing supplier payout lifecycle, weak role model, real provider integrations, and provider webhook processing.
+Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, supplier reservation/release compensation, and payment intent accounting foundations. The weakest parts are pricing/stock accuracy, missing real payment provider verification, missing supplier payout lifecycle, weak role model, real provider integrations, and provider webhook processing.
 
 Critical issues before launch:
 
@@ -16,7 +16,7 @@ Critical issues before launch:
 - Rate limiting is in process memory, not Redis, so it does not work correctly with multiple backend workers. DONE
 - Admin seed uses known default credentials (`admin@smsbridge.local` / `change-me`) and Docker Compose uses `.env.example`. DONE (production safety guard blocks default secrets/passwords)
 - Status fields are strings, not enums, and lifecycle transitions are only partially enforced. PARTIAL (order state machine + order_events exist; provider type/status validation added in admin schemas; DB enums not added)
-- There is no payment ledger/provider integration, no supplier withdrawal/payout flow, no formal stats/rate aggregation, and provider webhook processing is still skeleton-only.
+- Payment intents, idempotent webhook wallet crediting, lifecycle visibility, and reconciliation visibility exist, but real payment provider verification/reconciliation is still missing. Supplier withdrawal/payout flow, formal stats/rate aggregation, and provider webhook processing are still skeleton/incomplete.
 
 ## 2. Current Architecture Map
 
@@ -193,7 +193,7 @@ Dangerous or wrongly exposed endpoints/fields:
 | `User` / `users` | Buyer/admin accounts | `email`, `password_hash`, `role`, `status`, `tier`, `api_key_hash`, `locale` | One-to-one `UserLimit`, `Wallet`; referenced by `Order`, `WalletTransaction`, `AuditLog`, `ApiRequestLog` | `role`/`status` are strings, no enum/check constraint. No failed login/session/revoked token table. |
 | `UserLimit` / `user_limits` | Per-user order/spend limits | `max_orders_per_minute`, `max_orders_per_day`, `max_active_orders`, `max_daily_spend` | FK `user_id` unique | Good MVP table. Limits are enforced by DB counts, not Redis counters. |
 | `Wallet` / `wallets` | User available and held balance | `balance`, `held_balance`, `currency` | FK `user_id` unique | Non-negative balance/held balance DB checks exist. |
-| `WalletTransaction` / `wallet_transactions` | Wallet ledger | `user_id`, `order_id`, `type`, `amount`, `status`, `reference`, `metadata`, `created_at` | FK user/order | Good ledger base. Unique `(order_id,type,status)` makes hold/capture/refund idempotent, but deposit/adjustment with `order_id = NULL` are not idempotent. No enum/check constraints. |
+| `WalletTransaction` / `wallet_transactions` | Wallet ledger | `user_id`, `order_id`, `payment_intent_id`, `type`, `amount`, `status`, `reference`, `metadata`, `created_at` | FK user/order/payment intent | Good ledger base. Unique `(order_id,type,status)` makes hold/capture/refund idempotent; unique non-null `payment_intent_id` makes payment intent deposits idempotent. Manual deposit/adjustment with no order/payment intent are not idempotent. No enum/check constraints. |
 | `Provider` / `providers` | External provider config | `code`, `type`, `status`, `priority`, `base_url`, `api_key_encrypted`, `default_markup_percent` | Referenced by `Price`, `Order` | `api_key_encrypted` exists but no encryption implementation found in current codebase. Provider adapters are placeholders except mock/supplier pool. |
 | `Service` / `services` | Product/service catalog | `code`, `name_ru`, `name_en`, `category`, `is_active` | Referenced by code in prices/orders/inventory | No FK from `Price.service_code`, `Order.service_code`, `SupplierInventory.service_code`; referential integrity depends on service code validation. |
 | `Country` / `countries` | Country catalog | `iso2`, `name_ru`, `name_en`, `is_active` | Referenced by code in prices/orders/inventory | No FK from country code columns. |
@@ -211,7 +211,7 @@ Dangerous or wrongly exposed endpoints/fields:
 
 Missing or incomplete tables/fields:
 
-- `payment_methods`, `payment_intents` or `deposits` for real user top-ups.
+- `payment_methods` or provider-specific deposit records for real user top-ups.
 - `withdrawal_requests` / `supplier_payouts`.
 - Exact supplier phone-number inventory table.
 - `provider_price_snapshots` or `price_sync_runs`.
@@ -503,7 +503,7 @@ Problems and recommendations:
 | Explicit order state machine | P0 | Prevent invalid transitions and make lifecycle auditable | `services/order_state.py`, `order_events` model | DONE |
 | Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis | DONE |
 | DB money check constraints | P0 | Defense in depth for wallet/supplier balances | CHECK constraints for non-negative balances/held balances | DONE |
-| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payment-webhooks/{provider}` | PARTIAL (intent model/API and status-only webhook skeleton exist; wallet crediting not implemented) |
+| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payment-webhooks/{provider}` | PARTIAL (intent model/API, idempotent webhook wallet crediting, admin lifecycle/reconciliation visibility exist; real provider verification/reconciliation not implemented) |
 | Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, sync runs | NOT DONE |
 | Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
 | Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |

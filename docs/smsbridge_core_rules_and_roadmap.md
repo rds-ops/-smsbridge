@@ -446,6 +446,7 @@ Codex не должен напрямую делать крупный refactor б
 - deposit providers
 - internal payment webhook skeleton/status transitions. DONE (foundation only; no real provider verification yet)
 - idempotent wallet crediting from successful payment intents. DONE
+- payment intent lifecycle visibility. DONE
 - webhook verification
 - idempotent deposits. PARTIAL (payment intent webhook deposits are idempotent; real provider deposit flows are not implemented)
 - payment credit consistency/reconciliation visibility. PARTIAL (admin read-only checks only)

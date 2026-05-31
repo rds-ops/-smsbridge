@@ -45,6 +45,11 @@ def test_admin_can_list_and_fetch_payment_intents(client, admin_token, user_toke
     assert detail.status_code == 200, detail.text
     assert detail.json()["public_id"] == intent["public_id"]
     assert detail.json()["idempotency_key"] is None
+    assert "last_webhook_at" in detail.json()
+    assert "last_webhook_event_id" in detail.json()
+    assert "last_webhook_status" in detail.json()
+    assert "last_webhook_error" in detail.json()
+    assert "failed_reason" in detail.json()
 
 
 def test_admin_payment_intent_filters(client, admin_token, user_token):
@@ -116,6 +121,10 @@ def test_payment_webhook_succeeded_transition_credits_wallet_once(client, admin_
         entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
         assert entity.status == "succeeded"
         assert entity.succeeded_at is not None
+        assert entity.last_webhook_at is not None
+        assert entity.last_webhook_event_id == "evt-succeeded"
+        assert entity.last_webhook_status == "succeeded"
+        assert entity.last_webhook_error is None
         tx = db.scalar(
             select(WalletTransaction).where(
                 WalletTransaction.payment_intent_id == entity.id,
@@ -139,6 +148,19 @@ def test_payment_webhook_succeeded_transition_credits_wallet_once(client, admin_
     assert reconciliation.json()["counts"]["succeeded_missing_credit"] == 0
     assert reconciliation.json()["counts"]["credit_non_succeeded"] == 0
 
+    detail = client.get(f"/admin/payment-intents/{entity.id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["last_webhook_at"] is not None
+    assert detail.json()["last_webhook_event_id"] == "evt-succeeded"
+    assert detail.json()["last_webhook_status"] == "succeeded"
+    assert detail.json()["last_webhook_error"] is None
+
+    buyer_detail = client.get(f"/api/v1/payment-intents/{intent['public_id']}", headers={"Authorization": f"Bearer {user_token}"})
+    assert buyer_detail.status_code == 200, buyer_detail.text
+    assert "last_webhook_at" not in buyer_detail.json()
+    assert "last_webhook_event_id" not in buyer_detail.json()
+    assert "last_webhook_error" not in buyer_detail.json()
+
 
 def test_payment_webhook_duplicate_event_does_not_process_twice(client, user_token):
     intent = create_payment_intent(client, user_token)
@@ -156,6 +178,10 @@ def test_payment_webhook_duplicate_event_does_not_process_twice(client, user_tok
     db = SessionLocal()
     try:
         assert db.scalar(select(func.count(PaymentWebhookEvent.id))) == 1
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        assert entity.last_webhook_event_id == "evt-duplicate"
+        assert entity.last_webhook_status == "pending"
+        assert entity.last_webhook_error == "Duplicate payment webhook event"
     finally:
         db.close()
 
@@ -232,6 +258,10 @@ def test_payment_webhook_invalid_transition_ignored(client, user_token):
         entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
         assert entity.status == "failed"
         assert entity.succeeded_at is None
+        assert entity.last_webhook_event_id == "evt-succeeded-after-failed"
+        assert entity.last_webhook_status == "succeeded"
+        assert entity.last_webhook_error == "Invalid payment intent status transition"
+        assert entity.failed_reason is None
         assert db.scalar(
             select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
         ) == 0
@@ -320,7 +350,10 @@ def test_failed_and_cancelled_webhooks_do_not_credit_wallet(client, user_token):
     failed = client.post(
         "/internal/payment-webhooks/manual_test",
         headers={"X-Internal-Webhook-Secret": "change-me"},
-        json=webhook_payload(failed_intent["public_id"], "failed", "evt-no-credit-failed"),
+        json={
+            **webhook_payload(failed_intent["public_id"], "failed", "evt-no-credit-failed"),
+            "failed_reason": "card_declined:test-details",
+        },
     )
     cancelled = client.post(
         "/internal/payment-webhooks/manual_test",
@@ -330,6 +363,16 @@ def test_failed_and_cancelled_webhooks_do_not_credit_wallet(client, user_token):
     assert failed.status_code == 200, failed.text
     assert cancelled.status_code == 200, cancelled.text
     assert wallet_snapshot(client, user_token) == before
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == failed_intent["public_id"]))
+        assert entity.status == "failed"
+        assert entity.failed_reason == "card_declined:test-details"
+        assert entity.last_webhook_status == "failed"
+        assert entity.last_webhook_error is None
+    finally:
+        db.close()
 
 
 def test_buyer_wallet_transaction_history_includes_payment_intent_deposit(client, user_token):

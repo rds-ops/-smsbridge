@@ -109,6 +109,11 @@ class AdminPaymentIntentOut(ORMModel):
     succeeded_at: datetime | None = None
     failed_at: datetime | None = None
     cancelled_at: datetime | None = None
+    last_webhook_at: datetime | None = None
+    last_webhook_event_id: str | None = None
+    last_webhook_status: str | None = None
+    last_webhook_error: str | None = None
+    failed_reason: str | None = None
 
 
 class PaymentCreditIssueOut(ORMModel):
