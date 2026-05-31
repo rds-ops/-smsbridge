@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, get_current_user_or_api_key
 from app.core.security import generate_api_key, hash_api_key
 from app.db.session import get_db
-from app.models import Country, Order, Price, Service, User
+from app.models import Country, Order, Price, Service, User, WalletTransaction
 from app.schemas.common import (
     BuyerPriceOut,
+    BuyerWalletTransactionOut,
     CountryOut,
     MessageOut,
     OrderCreate,
@@ -124,4 +125,34 @@ def limits(user: User = Depends(get_current_user_or_api_key)):
     if not user.limit:
         raise HTTPException(status_code=404, detail="Limits not configured")
     return user.limit
+
+
+@router.get("/wallet/transactions", response_model=list[BuyerWalletTransactionOut])
+def wallet_transactions(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_api_key),
+):
+    stmt = (
+        select(WalletTransaction, Order.public_id)
+        .outerjoin(Order, WalletTransaction.order_id == Order.id)
+        .where(WalletTransaction.user_id == user.id)
+        .order_by(WalletTransaction.created_at.desc(), WalletTransaction.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = db.execute(stmt).all()
+    return [
+        BuyerWalletTransactionOut(
+            id=tx.id,
+            type=tx.type,
+            amount=tx.amount,
+            status=tx.status,
+            order_public_id=order_public_id,
+            reference=tx.reference,
+            created_at=tx.created_at,
+        )
+        for tx, order_public_id in rows
+    ]
 

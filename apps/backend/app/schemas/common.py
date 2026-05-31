@@ -104,3 +104,13 @@ class ApiRequestLogOut(ORMModel):
     ip_address: str | None
     status_code: int
     created_at: datetime
+
+
+class BuyerWalletTransactionOut(ORMModel):
+    id: int
+    type: str
+    amount: Decimal
+    status: str
+    order_public_id: str | None = None
+    reference: str | None = None
+    created_at: datetime

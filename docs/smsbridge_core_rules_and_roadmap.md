@@ -466,7 +466,7 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Buyer Transparency
 
-- wallet transaction history
+- wallet transaction history. DONE
 - payment history
 - API key management
 - multiple API keys

@@ -56,6 +56,33 @@ curl -sS "$BASE_URL/api/v1/balance" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+## Wallet Transaction History
+
+`GET /api/v1/wallet/transactions`
+
+Query params:
+- `limit` (default 100, max 500)
+- `offset` (default 0)
+
+Response items include:
+- `id`
+- `type` (`deposit`, `adjustment`, `hold`, `capture`, `refund`)
+- `amount`
+- `status`
+- `order_public_id` (nullable)
+- `reference` (nullable)
+- `created_at`
+
+Notes:
+- This endpoint returns only the authenticated user's transactions.
+- It does not expose internal provider/supplier cost fields.
+
+Example:
+```bash
+curl -sS "$BASE_URL/api/v1/wallet/transactions?limit=50&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## Catalog: Services, Countries, Prices
 
 `GET /api/v1/services`
@@ -212,4 +239,3 @@ Some internal services also return structured API errors with fields like:
 Client guidance:
 - Treat all non-2xx as failures.
 - On network timeout, you may retry `POST /api/v1/orders` with the same `Idempotency-Key` to avoid duplicate holds/orders.
-
