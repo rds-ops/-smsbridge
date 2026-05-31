@@ -448,6 +448,7 @@ Codex не должен напрямую делать крупный refactor б
 - idempotent wallet crediting from successful payment intents. DONE
 - webhook verification
 - idempotent deposits. PARTIAL (payment intent webhook deposits are idempotent; real provider deposit flows are not implemented)
+- payment credit consistency/reconciliation visibility. PARTIAL (admin read-only checks only)
 - payment reconciliation
 
 ### Supplier Payouts

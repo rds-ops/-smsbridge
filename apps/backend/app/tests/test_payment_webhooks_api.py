@@ -62,6 +62,11 @@ def test_non_admin_blocked_from_payment_intent_admin(client, user_token):
     assert response.status_code == 403
 
 
+def test_payment_credit_reconciliation_admin_only(client, user_token):
+    response = client.get("/admin/payment-intents/reconciliation", headers={"Authorization": f"Bearer {user_token}"})
+    assert response.status_code == 403
+
+
 def test_payment_webhook_requires_secret(client, user_token):
     intent = create_payment_intent(client, user_token)
     response = client.post("/internal/payment-webhooks/manual_test", json=webhook_payload(intent["public_id"], "pending"))
@@ -82,7 +87,7 @@ def _balance_amount(snapshot: dict) -> Decimal:
     return Decimal(str(snapshot["balance"]))
 
 
-def test_payment_webhook_succeeded_transition_credits_wallet_once(client, user_token):
+def test_payment_webhook_succeeded_transition_credits_wallet_once(client, admin_token, user_token):
     intent = create_payment_intent(client, user_token)
     before = wallet_snapshot(client, user_token)
 
@@ -126,6 +131,14 @@ def test_payment_webhook_succeeded_transition_credits_wallet_once(client, user_t
     finally:
         db.close()
 
+    reconciliation = client.get(
+        "/admin/payment-intents/reconciliation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert reconciliation.status_code == 200, reconciliation.text
+    assert reconciliation.json()["counts"]["succeeded_missing_credit"] == 0
+    assert reconciliation.json()["counts"]["credit_non_succeeded"] == 0
+
 
 def test_payment_webhook_duplicate_event_does_not_process_twice(client, user_token):
     intent = create_payment_intent(client, user_token)
@@ -145,6 +158,54 @@ def test_payment_webhook_duplicate_event_does_not_process_twice(client, user_tok
         assert db.scalar(select(func.count(PaymentWebhookEvent.id))) == 1
     finally:
         db.close()
+
+
+def test_payment_credit_reconciliation_reports_succeeded_without_wallet_transaction(client, admin_token, user_token):
+    intent = create_payment_intent(client, user_token)
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        entity.status = "succeeded"
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/admin/payment-intents/reconciliation", headers={"Authorization": f"Bearer {admin_token}"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["counts"]["succeeded_missing_credit"] == 1
+    issue = body["issues"][0]
+    assert issue["issue_type"] == "succeeded_missing_credit"
+    assert issue["payment_intent_public_id"] == intent["public_id"]
+    assert issue["wallet_transaction_id"] is None
+
+
+def test_payment_credit_reconciliation_reports_credit_for_non_succeeded_intent(client, admin_token, user_token):
+    intent = create_payment_intent(client, user_token)
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        db.add(
+            WalletTransaction(
+                user_id=entity.user_id,
+                payment_intent_id=entity.id,
+                type="deposit",
+                amount=entity.amount,
+                reference=f"payment_intent:{entity.public_id}",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/admin/payment-intents/reconciliation", headers={"Authorization": f"Bearer {admin_token}"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["counts"]["credit_non_succeeded"] == 1
+    issue = body["issues"][0]
+    assert issue["issue_type"] == "credit_non_succeeded"
+    assert issue["payment_intent_public_id"] == intent["public_id"]
+    assert issue["wallet_transaction_id"] is not None
 
 
 def test_payment_webhook_invalid_transition_ignored(client, user_token):

@@ -31,6 +31,7 @@ from app.schemas.admin import (
     DepositIn,
     AdminOrderOut,
     OrderEventOut,
+    PaymentCreditReconciliationOut,
     ProviderIn,
     ProviderOut,
     UserDetail,
@@ -54,6 +55,7 @@ from app.schemas.supplier import (
 from app.services.audit import add_audit_log
 from app.services.limits import apply_tier_limits
 from app.services.orders import refund_order
+from app.services.payment_reconciliation import reconcile_payment_credits
 from app.services.suppliers import supplier_adjustment
 from app.services.wallet import adjustment, deposit
 
@@ -154,6 +156,15 @@ def payment_intents(
             .offset(max(0, offset))
         )
     )
+
+
+@router.get("/payment-intents/reconciliation", response_model=PaymentCreditReconciliationOut)
+def payment_intents_reconciliation(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    return reconcile_payment_credits(db, limit=limit)
 
 
 @router.get("/payment-intents/{payment_intent_id}", response_model=AdminPaymentIntentOut)

@@ -202,9 +202,14 @@ Important:
 - Real provider signature verification is not implemented yet.
 - Raw webhook payload is not stored.
 
+Operational visibility:
+- Admins can call `GET /admin/payment-intents/reconciliation` to see read-only counts and recent examples of payment intent / wallet credit mismatches.
+- This endpoint does not mutate wallet balances or payment intent status.
+
 ## 5. Current Limitations
 
 - Provider SMS webhooks are not implemented yet; all external provider SMS ingestion happens via polling.
 - Real payment provider verification/signature validation is not implemented yet.
+- Real provider-side payment reconciliation is not implemented yet.
 - Supplier release callback is best-effort with a durable retry queue, but no operator escalation UI yet.
 - Callback security is minimal (shared secret or bearer token). mTLS, signature verification, and replay protection are not implemented yet.

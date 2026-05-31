@@ -109,3 +109,20 @@ class AdminPaymentIntentOut(ORMModel):
     succeeded_at: datetime | None = None
     failed_at: datetime | None = None
     cancelled_at: datetime | None = None
+
+
+class PaymentCreditIssueOut(ORMModel):
+    issue_type: str
+    payment_intent_id: int | None = None
+    payment_intent_public_id: str | None = None
+    user_id: int | None = None
+    provider: str | None = None
+    amount: Decimal | None = None
+    status: str | None = None
+    wallet_transaction_id: int | None = None
+    created_at: datetime | None = None
+
+
+class PaymentCreditReconciliationOut(ORMModel):
+    counts: dict[str, int]
+    issues: list[PaymentCreditIssueOut]
