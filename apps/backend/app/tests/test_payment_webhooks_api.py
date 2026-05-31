@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
+import pytest
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models import PaymentIntent, PaymentWebhookEvent, WalletTransaction
+from app.models import PaymentIntent, PaymentWebhookEvent, Wallet, WalletTransaction
 
 
 def create_payment_intent(client, token: str, amount: str = "10.0000") -> dict:
@@ -75,7 +78,11 @@ def test_payment_webhook_invalid_secret_rejected(client, user_token):
     assert response.status_code == 403
 
 
-def test_payment_webhook_valid_transitions_and_no_wallet_credit(client, user_token):
+def _balance_amount(snapshot: dict) -> Decimal:
+    return Decimal(str(snapshot["balance"]))
+
+
+def test_payment_webhook_succeeded_transition_credits_wallet_once(client, user_token):
     intent = create_payment_intent(client, user_token)
     before = wallet_snapshot(client, user_token)
 
@@ -96,14 +103,26 @@ def test_payment_webhook_valid_transitions_and_no_wallet_credit(client, user_tok
     assert succeeded.json()["status"] == "processed"
 
     after = wallet_snapshot(client, user_token)
-    assert after == before
+    assert _balance_amount(after) == _balance_amount(before) + Decimal("10.0000")
+    assert after["held_balance"] == before["held_balance"]
 
     db = SessionLocal()
     try:
         entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
         assert entity.status == "succeeded"
         assert entity.succeeded_at is not None
-        assert db.scalar(select(func.count(WalletTransaction.id)).where(WalletTransaction.user_id == 2)) == 0
+        tx = db.scalar(
+            select(WalletTransaction).where(
+                WalletTransaction.payment_intent_id == entity.id,
+                WalletTransaction.type == "deposit",
+                WalletTransaction.user_id == entity.user_id,
+            )
+        )
+        assert tx is not None
+        assert tx.amount == Decimal("10.0000")
+        assert tx.reference == f"payment_intent:{entity.public_id}"
+        assert tx.tx_metadata["payment_intent_public_id"] == entity.public_id
+        assert tx.tx_metadata["provider"] == "manual_test"
     finally:
         db.close()
 
@@ -130,6 +149,7 @@ def test_payment_webhook_duplicate_event_does_not_process_twice(client, user_tok
 
 def test_payment_webhook_invalid_transition_ignored(client, user_token):
     intent = create_payment_intent(client, user_token)
+    before = wallet_snapshot(client, user_token)
     failed = client.post(
         "/internal/payment-webhooks/manual_test",
         headers={"X-Internal-Webhook-Secret": "change-me"},
@@ -151,12 +171,17 @@ def test_payment_webhook_invalid_transition_ignored(client, user_token):
         entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
         assert entity.status == "failed"
         assert entity.succeeded_at is None
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
+        ) == 0
     finally:
         db.close()
+    assert wallet_snapshot(client, user_token) == before
 
 
 def test_repeated_succeeded_event_does_not_double_process(client, user_token):
     intent = create_payment_intent(client, user_token)
+    before = wallet_snapshot(client, user_token)
     client.post(
         "/internal/payment-webhooks/manual_test",
         headers={"X-Internal-Webhook-Secret": "change-me"},
@@ -178,6 +203,133 @@ def test_repeated_succeeded_event_does_not_double_process(client, user_token):
     assert second.status_code == 200, second.text
     assert second.json()["status"] == "duplicate"
 
+    after = wallet_snapshot(client, user_token)
+    assert _balance_amount(after) == _balance_amount(before) + Decimal("10.0000")
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
+        ) == 1
+    finally:
+        db.close()
+
+
+def test_different_succeeded_event_for_succeeded_intent_does_not_double_credit(client, user_token):
+    intent = create_payment_intent(client, user_token)
+    before = wallet_snapshot(client, user_token)
+    client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(intent["public_id"], "pending", "evt-alt-pending"),
+    )
+    first = client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(intent["public_id"], "succeeded", "evt-alt-succeeded-1"),
+    )
+    second = client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(intent["public_id"], "succeeded", "evt-alt-succeeded-2"),
+    )
+
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "processed"
+    assert second.status_code == 200, second.text
+    assert second.json()["status"] == "ignored"
+    assert _balance_amount(wallet_snapshot(client, user_token)) == _balance_amount(before) + Decimal("10.0000")
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
+        ) == 1
+    finally:
+        db.close()
+
+
+def test_failed_and_cancelled_webhooks_do_not_credit_wallet(client, user_token):
+    failed_intent = create_payment_intent(client, user_token, amount="4.0000")
+    cancelled_intent = create_payment_intent(client, user_token, amount="5.0000")
+    before = wallet_snapshot(client, user_token)
+
+    failed = client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(failed_intent["public_id"], "failed", "evt-no-credit-failed"),
+    )
+    cancelled = client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(cancelled_intent["public_id"], "cancelled", "evt-no-credit-cancelled"),
+    )
+    assert failed.status_code == 200, failed.text
+    assert cancelled.status_code == 200, cancelled.text
+    assert wallet_snapshot(client, user_token) == before
+
+
+def test_buyer_wallet_transaction_history_includes_payment_intent_deposit(client, user_token):
+    intent = create_payment_intent(client, user_token, amount="6.0000")
+    client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(intent["public_id"], "pending", "evt-history-pending"),
+    )
+    succeeded = client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(intent["public_id"], "succeeded", "evt-history-succeeded"),
+    )
+    assert succeeded.status_code == 200, succeeded.text
+
+    history = client.get("/api/v1/wallet/transactions", headers={"Authorization": f"Bearer {user_token}"})
+    assert history.status_code == 200, history.text
+    deposit_rows = [
+        row for row in history.json()
+        if row["type"] == "deposit" and row["reference"] == f"payment_intent:{intent['public_id']}"
+    ]
+    assert len(deposit_rows) == 1
+    assert deposit_rows[0]["amount"] == "6.0000"
+    assert deposit_rows[0]["order_public_id"] is None
+    assert "metadata" not in deposit_rows[0]
+
+
+def test_payment_intent_not_marked_succeeded_if_wallet_credit_fails(client, user_token, monkeypatch):
+    intent = create_payment_intent(client, user_token)
+    pending = client.post(
+        "/internal/payment-webhooks/manual_test",
+        headers={"X-Internal-Webhook-Secret": "change-me"},
+        json=webhook_payload(intent["public_id"], "pending", "evt-credit-fail-pending"),
+    )
+    assert pending.status_code == 200, pending.text
+
+    def fail_credit(*args, **kwargs):
+        raise RuntimeError("credit failed")
+
+    monkeypatch.setattr("app.services.payment_intents.wallet.deposit_payment_intent", fail_credit)
+    with pytest.raises(RuntimeError, match="credit failed"):
+        client.post(
+            "/internal/payment-webhooks/manual_test",
+            headers={"X-Internal-Webhook-Secret": "change-me"},
+            json=webhook_payload(intent["public_id"], "succeeded", "evt-credit-fail-succeeded"),
+        )
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        wallet = db.scalar(select(Wallet).where(Wallet.user_id == entity.user_id))
+        assert entity.status == "pending"
+        assert entity.succeeded_at is None
+        assert wallet.balance == Decimal("25.0000")
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
+        ) == 0
+    finally:
+        db.close()
+
 
 def test_payment_webhook_unsupported_provider_rejected(client):
     response = client.post(
@@ -186,4 +338,3 @@ def test_payment_webhook_unsupported_provider_rejected(client):
         json={"event_id": "evt-unknown", "status": "pending"},
     )
     assert response.status_code == 400
-

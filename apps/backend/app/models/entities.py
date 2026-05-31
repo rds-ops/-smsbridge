@@ -78,6 +78,7 @@ class WalletTransaction(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), index=True, nullable=True)
+    payment_intent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("payment_intents.id"), index=True, nullable=True)
     type: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="completed", nullable=False)
@@ -85,7 +86,16 @@ class WalletTransaction(Base):
     tx_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
-    __table_args__ = (UniqueConstraint("order_id", "type", "status", name="uq_wallet_order_type_status"),)
+    __table_args__ = (
+        UniqueConstraint("order_id", "type", "status", name="uq_wallet_order_type_status"),
+        Index(
+            "uq_wallet_transactions_payment_intent_id_not_null",
+            "payment_intent_id",
+            unique=True,
+            postgresql_where=text("payment_intent_id IS NOT NULL"),
+            sqlite_where=text("payment_intent_id IS NOT NULL"),
+        ),
+    )
 
 
 class Provider(Base, TimestampMixin):

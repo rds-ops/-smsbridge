@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Wallet, WalletTransaction
+from app.models import PaymentIntent, Wallet, WalletTransaction
 from app.core.errors import api_error
 
 
@@ -33,6 +33,40 @@ def deposit(db: Session, user_id: int, amount: Decimal, reference: str | None = 
     wallet = _wallet_for_update(db, user_id)
     wallet.balance += amount
     db.add(WalletTransaction(user_id=user_id, type="deposit", amount=amount, reference=reference))
+    return wallet
+
+
+def deposit_payment_intent(db: Session, intent: PaymentIntent) -> Wallet:
+    if intent.amount <= 0:
+        raise HTTPException(status_code=400, detail="Deposit amount must be positive")
+
+    wallet = _wallet_for_update(db, intent.user_id)
+    existing = db.scalar(
+        select(WalletTransaction).where(
+            WalletTransaction.payment_intent_id == intent.id,
+            WalletTransaction.type == "deposit",
+            WalletTransaction.status == "completed",
+        )
+    )
+    if existing:
+        return wallet
+
+    wallet.balance += intent.amount
+    reference = intent.provider_reference or f"payment_intent:{intent.public_id}"
+    db.add(
+        WalletTransaction(
+            user_id=intent.user_id,
+            payment_intent_id=intent.id,
+            type="deposit",
+            amount=intent.amount,
+            reference=reference,
+            tx_metadata={
+                "payment_intent_public_id": intent.public_id,
+                "provider": intent.provider,
+                "provider_reference": intent.provider_reference,
+            },
+        )
+    )
     return wallet
 
 

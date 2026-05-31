@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import PaymentIntent, PaymentWebhookEvent, User
+import app.services.wallet as wallet
 
 PAYMENT_INTENT_EXPIRY_MINUTES = 30
 ALLOWED_PAYMENT_PROVIDERS = {"manual_test", "payme", "click", "crypto_usdt"}
@@ -146,6 +147,8 @@ def process_payment_webhook(
     event_status = "ignored"
 
     if intent and target_status in PAYMENT_WEBHOOK_TARGET_STATUSES and _can_transition(intent.status, target_status):
+        if target_status == "succeeded":
+            wallet.deposit_payment_intent(db, intent)
         _transition_payment_intent(intent, target_status)
         event_status = "processed"
 

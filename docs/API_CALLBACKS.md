@@ -152,9 +152,9 @@ Logging:
 Production safety:
 - In production-like environments, startup config validation rejects empty/default `INTERNAL_WEBHOOK_SECRET`.
 
-## 4. Internal Payment Webhook Endpoint (Skeleton)
+## 4. Internal Payment Webhook Endpoint (Foundation)
 
-Status: Skeleton/foundation only. It can transition payment intent statuses but does not credit wallet balances.
+Status: Foundation only. It can transition payment intent statuses and credits wallet balance exactly once when an intent transitions to `succeeded`. Real provider signature verification is not implemented yet.
 
 Endpoint:
 - `POST /internal/payment-webhooks/{provider}`
@@ -196,14 +196,15 @@ Webhook event persistence:
 - If no event id exists, duplicate detection falls back to provider + deterministic payload hash.
 
 Important:
-- `succeeded` does not credit wallet balance yet.
+- `succeeded` credits the buyer wallet only when the payment intent transitions into `succeeded`.
+- Wallet crediting creates a `WalletTransaction` with `type = deposit` linked to the payment intent.
+- Replayed duplicate events and alternate succeeded events for an already-succeeded payment intent do not credit again.
 - Real provider signature verification is not implemented yet.
 - Raw webhook payload is not stored.
 
 ## 5. Current Limitations
 
 - Provider SMS webhooks are not implemented yet; all external provider SMS ingestion happens via polling.
-- Payment webhooks do not credit wallets yet.
 - Real payment provider verification/signature validation is not implemented yet.
 - Supplier release callback is best-effort with a durable retry queue, but no operator escalation UI yet.
 - Callback security is minimal (shared secret or bearer token). mTLS, signature verification, and replay protection are not implemented yet.

@@ -64,8 +64,9 @@ Current provider behavior:
 
 Important:
 - Creating a payment intent does not credit wallet balance yet.
-- Internal payment webhooks may update payment intent status, but still do not credit wallet balance yet.
-- This is a foundation for future real payment provider integrations.
+- Internal payment webhooks can update payment intent status.
+- When an internal webhook transitions a payment intent to `succeeded`, the wallet is credited once with a `deposit` wallet transaction.
+- Real payment provider verification/signature integrations are not implemented yet.
 
 Idempotency behavior:
 - Same user + same key + same request body returns the same payment intent.
@@ -129,6 +130,7 @@ Response items include:
 Notes:
 - This endpoint returns only the authenticated user's transactions.
 - It does not expose internal provider/supplier cost fields.
+- Successful payment intents appear as `deposit` transactions with no linked order.
 
 Example:
 ```bash
