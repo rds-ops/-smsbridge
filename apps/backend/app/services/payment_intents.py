@@ -217,6 +217,40 @@ def process_payment_webhook(
     return event, intent
 
 
+def manual_complete_payment_intent(db: Session, intent: PaymentIntent) -> PaymentIntent:
+    if intent.provider != "manual_test":
+        raise HTTPException(status_code=400, detail="Manual completion is only supported for manual_test payment intents")
+    if intent.status == "succeeded":
+        return intent
+    if intent.status not in {"created", "pending"}:
+        raise HTTPException(status_code=409, detail="Payment intent cannot be manually completed from its current status")
+
+    if intent.status == "created":
+        process_payment_webhook(
+            db,
+            provider="manual_test",
+            payload={
+                "event_id": f"manual-complete-{intent.public_id}-pending",
+                "payment_intent_public_id": intent.public_id,
+                "status": "pending",
+            },
+            idempotency_key=f"manual-complete-{intent.public_id}-pending",
+        )
+
+    process_payment_webhook(
+        db,
+        provider="manual_test",
+        payload={
+            "event_id": f"manual-complete-{intent.public_id}-succeeded",
+            "payment_intent_public_id": intent.public_id,
+            "status": "succeeded",
+        },
+        idempotency_key=f"manual-complete-{intent.public_id}-succeeded",
+    )
+    db.flush()
+    return intent
+
+
 def _existing_webhook_event(
     db: Session,
     *,

@@ -55,6 +55,7 @@ from app.schemas.supplier import (
 from app.services.audit import add_audit_log
 from app.services.limits import apply_tier_limits
 from app.services.orders import refund_order
+from app.services.payment_intents import manual_complete_payment_intent
 from app.services.payment_reconciliation import reconcile_payment_credits
 from app.services.suppliers import supplier_adjustment
 from app.services.wallet import adjustment, deposit
@@ -165,6 +166,22 @@ def payment_intents_reconciliation(
     admin: User = Depends(require_admin),
 ):
     return reconcile_payment_credits(db, limit=limit)
+
+
+@router.post("/payment-intents/{payment_intent_id}/manual-complete", response_model=AdminPaymentIntentOut)
+def payment_intent_manual_complete(
+    payment_intent_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    intent = db.get(PaymentIntent, payment_intent_id)
+    if not intent:
+        raise HTTPException(status_code=404, detail="Payment intent not found")
+    intent = manual_complete_payment_intent(db, intent)
+    add_audit_log(db, "payment_intent.manual_complete", "payment_intent", str(intent.id), admin.id, {})
+    db.commit()
+    db.refresh(intent)
+    return intent
 
 
 @router.get("/payment-intents/{payment_intent_id}", response_model=AdminPaymentIntentOut)

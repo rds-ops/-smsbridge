@@ -4,7 +4,7 @@
 
 Project state: the repository already has a working early MVP shape: Next.js frontend, FastAPI backend, PostgreSQL models with Alembic migrations, Redis-backed Celery worker, auth, admin panel API, buyer API, supplier API, wallet holds/captures/refunds, supplier inventory and supplier SMS push.
 
-Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, supplier reservation/release compensation, and payment intent accounting foundations. The weakest parts are pricing/stock accuracy, missing real payment provider verification, missing supplier payout lifecycle, weak role model, real provider integrations, and provider webhook processing.
+Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, supplier reservation/release compensation, and payment intent accounting foundations including manual_test admin completion for local/dev simulation. The weakest parts are pricing/stock accuracy, missing real payment provider verification, missing supplier payout lifecycle, weak role model, real provider integrations, and provider webhook processing.
 
 Critical issues before launch:
 
@@ -503,7 +503,7 @@ Problems and recommendations:
 | Explicit order state machine | P0 | Prevent invalid transitions and make lifecycle auditable | `services/order_state.py`, `order_events` model | DONE |
 | Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis | DONE |
 | DB money check constraints | P0 | Defense in depth for wallet/supplier balances | CHECK constraints for non-negative balances/held balances | DONE |
-| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payment-webhooks/{provider}` | PARTIAL (intent model/API, idempotent webhook wallet crediting, admin lifecycle/reconciliation visibility exist; real provider verification/reconciliation not implemented) |
+| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payment-webhooks/{provider}`, `/admin/payment-intents/{id}/manual-complete` | PARTIAL (intent model/API, idempotent webhook wallet crediting, admin manual_test completion, lifecycle/reconciliation visibility exist; real provider verification/reconciliation not implemented) |
 | Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, sync runs | NOT DONE |
 | Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
 | Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |

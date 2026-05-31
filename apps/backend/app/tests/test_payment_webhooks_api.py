@@ -72,6 +72,146 @@ def test_payment_credit_reconciliation_admin_only(client, user_token):
     assert response.status_code == 403
 
 
+def test_admin_can_manual_complete_manual_test_payment_intent(client, admin_token, user_token):
+    intent = create_payment_intent(client, user_token, amount="9.0000")
+    before = wallet_snapshot(client, user_token)
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        intent_id = entity.id
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/admin/payment-intents/{intent_id}/manual-complete",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "succeeded"
+    assert response.json()["last_webhook_event_id"] == f"manual-complete-{intent['public_id']}-succeeded"
+
+    after = wallet_snapshot(client, user_token)
+    assert _balance_amount(after) == _balance_amount(before) + Decimal("9.0000")
+
+    history = client.get("/api/v1/wallet/transactions", headers={"Authorization": f"Bearer {user_token}"})
+    assert history.status_code == 200, history.text
+    deposits = [
+        row for row in history.json()
+        if row["type"] == "deposit" and row["reference"] == f"payment_intent:{intent['public_id']}"
+    ]
+    assert len(deposits) == 1
+    assert deposits[0]["amount"] == "9.0000"
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        assert entity.status == "succeeded"
+        assert entity.succeeded_at is not None
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
+        ) == 1
+    finally:
+        db.close()
+
+
+def test_manual_complete_is_idempotent_for_succeeded_intent(client, admin_token, user_token):
+    intent = create_payment_intent(client, user_token, amount="8.0000")
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        intent_id = entity.id
+    finally:
+        db.close()
+
+    first = client.post(
+        f"/admin/payment-intents/{intent_id}/manual-complete",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    second = client.post(
+        f"/admin/payment-intents/{intent_id}/manual-complete",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["status"] == "succeeded"
+
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.id == intent_id))
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(WalletTransaction.payment_intent_id == entity.id)
+        ) == 1
+    finally:
+        db.close()
+
+
+def test_manual_complete_non_admin_blocked(client, user_token):
+    intent = create_payment_intent(client, user_token)
+    db = SessionLocal()
+    try:
+        entity = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == intent["public_id"]))
+        intent_id = entity.id
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/admin/payment-intents/{intent_id}/manual-complete",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert response.status_code == 403
+
+
+def test_manual_complete_rejects_non_manual_test_provider(client, admin_token):
+    db = SessionLocal()
+    try:
+        intent = PaymentIntent(
+            user_id=2,
+            provider="payme",
+            currency="USD",
+            amount=Decimal("5.0000"),
+            status="created",
+            intent_metadata={},
+        )
+        db.add(intent)
+        db.commit()
+        intent_id = intent.id
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/admin/payment-intents/{intent_id}/manual-complete",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 400, response.text
+
+
+def test_manual_complete_rejects_failed_cancelled_and_expired_intents(client, admin_token, user_token):
+    failed_intent = create_payment_intent(client, user_token, amount="2.0000")
+    cancelled_intent = create_payment_intent(client, user_token, amount="3.0000")
+    expired_intent = create_payment_intent(client, user_token, amount="4.0000")
+
+    db = SessionLocal()
+    try:
+        failed = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == failed_intent["public_id"]))
+        cancelled = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == cancelled_intent["public_id"]))
+        expired = db.scalar(select(PaymentIntent).where(PaymentIntent.public_id == expired_intent["public_id"]))
+        failed.status = "failed"
+        cancelled.status = "cancelled"
+        expired.status = "expired"
+        ids = [failed.id, cancelled.id, expired.id]
+        db.commit()
+    finally:
+        db.close()
+
+    for intent_id in ids:
+        response = client.post(
+            f"/admin/payment-intents/{intent_id}/manual-complete",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 409, response.text
+
+
 def test_payment_webhook_requires_secret(client, user_token):
     intent = create_payment_intent(client, user_token)
     response = client.post("/internal/payment-webhooks/manual_test", json=webhook_payload(intent["public_id"], "pending"))
