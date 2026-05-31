@@ -90,3 +90,22 @@ class OrderEventOut(ORMModel):
     reason: str | None = None
     event_metadata: dict[str, Any] | None = None
     created_at: datetime
+
+
+class AdminPaymentIntentOut(ORMModel):
+    id: int
+    public_id: str
+    user_id: int
+    provider: str
+    currency: str
+    amount: Decimal
+    status: str
+    provider_reference: str | None = None
+    idempotency_key: str | None = None
+    metadata: dict[str, Any] = Field(validation_alias="intent_metadata")
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime | None = None
+    succeeded_at: datetime | None = None
+    failed_at: datetime | None = None
+    cancelled_at: datetime | None = None

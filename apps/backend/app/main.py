@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.api.admin import router as admin_router
 from app.api.api_v1 import router as api_v1_router
 from app.api.auth import router as auth_router
+from app.api.internal_payment_webhooks import router as internal_payment_webhooks_router
 from app.api.internal_provider_webhooks import router as internal_provider_webhooks_router
 from app.api.supplier import router as supplier_router
 from app.core.config import settings, validate_production_safety
@@ -36,6 +37,7 @@ app.include_router(api_v1_router)
 app.include_router(admin_router)
 app.include_router(supplier_router)
 app.include_router(internal_provider_webhooks_router)
+app.include_router(internal_payment_webhooks_router)
 
 
 @app.get("/health")

@@ -14,6 +14,7 @@ from app.models import (
     AuditLog,
     Order,
     OrderEvent,
+    PaymentIntent,
     Provider,
     Supplier,
     SupplierActivation,
@@ -26,6 +27,7 @@ from app.models import (
 )
 from app.schemas.admin import (
     AdjustmentIn,
+    AdminPaymentIntentOut,
     DepositIn,
     AdminOrderOut,
     OrderEventOut,
@@ -126,6 +128,44 @@ def order_events(order_id: int, db: Session = Depends(get_db), admin: User = Dep
             .order_by(OrderEvent.created_at.asc(), OrderEvent.id.asc())
         )
     )
+
+
+@router.get("/payment-intents", response_model=list[AdminPaymentIntentOut])
+def payment_intents(
+    status: str | None = None,
+    provider: str | None = None,
+    user_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    stmt = select(PaymentIntent)
+    if status:
+        stmt = stmt.where(PaymentIntent.status == status)
+    if provider:
+        stmt = stmt.where(PaymentIntent.provider == provider)
+    if user_id:
+        stmt = stmt.where(PaymentIntent.user_id == user_id)
+    return list(
+        db.scalars(
+            stmt.order_by(PaymentIntent.created_at.desc(), PaymentIntent.id.desc())
+            .limit(max(1, min(limit, 500)))
+            .offset(max(0, offset))
+        )
+    )
+
+
+@router.get("/payment-intents/{payment_intent_id}", response_model=AdminPaymentIntentOut)
+def payment_intent_detail(
+    payment_intent_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    intent = db.get(PaymentIntent, payment_intent_id)
+    if not intent:
+        raise HTTPException(status_code=404, detail="Payment intent not found")
+    return intent
 
 
 @router.get("/providers", response_model=list[ProviderOut])

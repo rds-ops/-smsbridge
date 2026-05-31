@@ -152,8 +152,58 @@ Logging:
 Production safety:
 - In production-like environments, startup config validation rejects empty/default `INTERNAL_WEBHOOK_SECRET`.
 
-## 4. Current Limitations
+## 4. Internal Payment Webhook Endpoint (Skeleton)
+
+Status: Skeleton/foundation only. It can transition payment intent statuses but does not credit wallet balances.
+
+Endpoint:
+- `POST /internal/payment-webhooks/{provider}`
+
+Auth:
+- Header `X-Internal-Webhook-Secret: <secret>`
+- Optional `Idempotency-Key` header for caller-side replay safety.
+
+Supported provider path values:
+- `manual_test`
+- `payme`
+- `click`
+- `crypto_usdt`
+
+Payload shape for current skeleton:
+```json
+{
+  "event_id": "provider-event-id",
+  "payment_intent_public_id": "payment-intent-public-id",
+  "status": "pending"
+}
+```
+
+Current target lookup:
+- `payment_intent_public_id` or `public_id`
+- `provider_reference` if present
+
+Allowed status transitions:
+- `created -> pending`
+- `created -> failed`
+- `created -> cancelled`
+- `pending -> succeeded`
+- `pending -> failed`
+- `pending -> cancelled`
+
+Webhook event persistence:
+- Events are stored in `payment_webhook_events`.
+- Duplicate detection uses provider + external event id when present.
+- If no event id exists, duplicate detection falls back to provider + deterministic payload hash.
+
+Important:
+- `succeeded` does not credit wallet balance yet.
+- Real provider signature verification is not implemented yet.
+- Raw webhook payload is not stored.
+
+## 5. Current Limitations
 
 - Provider SMS webhooks are not implemented yet; all external provider SMS ingestion happens via polling.
+- Payment webhooks do not credit wallets yet.
+- Real payment provider verification/signature validation is not implemented yet.
 - Supplier release callback is best-effort with a durable retry queue, but no operator escalation UI yet.
 - Callback security is minimal (shared secret or bearer token). mTLS, signature verification, and replay protection are not implemented yet.

@@ -577,7 +577,7 @@ For this project, one of these strategies must be chosen before supplier pool ca
 | Nullable operator unique constraints | P0 | PostgreSQL can allow duplicate rows where operator is NULL | `prices`, `supplier_inventory` | DONE |
 | Default admin credentials and default secret | P0 | Production takeover risk | `core/config.py` | DONE |
 | Supplier endpoints not request-logged | P1 | Reduced auditability for supplier writes | `core/middleware.py` | DONE |
-| No payment/deposit model | P1 | Manual deposits cannot support real users safely | `admin.wallets/deposit` only | Add payment intents, provider refs, webhooks, idempotency. |
+| No payment/deposit model | P1 | Manual deposits cannot support real users safely | `payment_intents`, `/internal/payment-webhooks/{provider}` | PARTIAL: model/API and status-only webhook skeleton exist; wallet crediting and real provider integrations are not implemented. |
 | No supplier payout lifecycle | P1 | Suppliers cannot withdraw through system | Not found in current codebase | Add payout requests, holds, admin approval, ledger events. |
 | Provider adapters mostly placeholders | P1 | Real stock/order lifecycle not implemented | `providers/five_sim.py`, `sms_activate.py`, `sms_man.py` | Implement after secrets, abuse controls, sync jobs. |
 | No stats/rate calculation | P1 | Provider/supplier routing cannot optimize quality | Only self-reported `success_rate` | Add stats aggregation from actual orders/activations. |
@@ -607,9 +607,9 @@ For this project, one of these strategies must be chosen before supplier pool ca
 ### Phase 2: Marketplace Accounting P1
 
 - Add real payment/deposit flow:
-  - payment intent table
+  - payment intent table (partial foundation exists)
   - payment provider references
-  - signed internal payment webhook
+  - signed internal payment webhook (status-only shared-secret skeleton exists)
   - idempotent deposit crediting
 - Add supplier payout flow:
   - payout request

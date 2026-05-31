@@ -503,7 +503,7 @@ Problems and recommendations:
 | Explicit order state machine | P0 | Prevent invalid transitions and make lifecycle auditable | `services/order_state.py`, `order_events` model | DONE |
 | Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis | DONE |
 | DB money check constraints | P0 | Defense in depth for wallet/supplier balances | CHECK constraints for non-negative balances/held balances | DONE |
-| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payments/webhook` | NOT DONE |
+| Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payment-webhooks/{provider}` | PARTIAL (intent model/API and status-only webhook skeleton exist; wallet crediting not implemented) |
 | Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, sync runs | NOT DONE |
 | Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
 | Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |

@@ -64,6 +64,7 @@ Current provider behavior:
 
 Important:
 - Creating a payment intent does not credit wallet balance yet.
+- Internal payment webhooks may update payment intent status, but still do not credit wallet balance yet.
 - This is a foundation for future real payment provider integrations.
 
 Idempotency behavior:

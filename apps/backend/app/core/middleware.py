@@ -22,7 +22,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 class ApiRequestLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/api/", "/admin", "/auth", "/supplier/v1", "/internal/provider-webhooks")):
+        if request.url.path.startswith(
+            ("/api/", "/admin", "/auth", "/supplier/v1", "/internal/provider-webhooks", "/internal/payment-webhooks")
+        ):
             db = SessionLocal()
             try:
                 db.add(

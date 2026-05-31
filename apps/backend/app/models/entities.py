@@ -252,6 +252,9 @@ class PaymentIntent(Base, TimestampMixin):
     request_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     intent_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    succeeded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship()
 
@@ -266,6 +269,34 @@ class PaymentIntent(Base, TimestampMixin):
             postgresql_where=text("idempotency_key IS NOT NULL"),
             sqlite_where=text("idempotency_key IS NOT NULL"),
         ),
+    )
+
+
+PAYMENT_WEBHOOK_EVENT_STATUSES = ("processed", "duplicate", "ignored", "failed")
+
+
+class PaymentWebhookEvent(Base):
+    __tablename__ = "payment_webhook_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    external_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(f"status in {PAYMENT_WEBHOOK_EVENT_STATUSES}", name="ck_payment_webhook_events_status_allowed"),
+        Index(
+            "uq_payment_webhook_events_provider_external_event_id",
+            "provider",
+            "external_event_id",
+            unique=True,
+            postgresql_where=text("external_event_id IS NOT NULL"),
+            sqlite_where=text("external_event_id IS NOT NULL"),
+        ),
+        UniqueConstraint("provider", "payload_hash", name="uq_payment_webhook_events_provider_payload_hash"),
     )
 
 
