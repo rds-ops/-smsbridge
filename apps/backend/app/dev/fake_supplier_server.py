@@ -32,7 +32,7 @@ class ReservationIn(BaseModel):
 
 class SmsPayloadIn(BaseModel):
     supplier_sms_id: str = Field(default_factory=lambda: f"fake-sms-{uuid4().hex[:12]}")
-    supplier_activation_id: str
+    supplier_activation_id: str | None = None
     phone_number: str
     phone_from: str | None = "FakeSupplier"
     text: str

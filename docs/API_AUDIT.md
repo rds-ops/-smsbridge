@@ -408,7 +408,7 @@ What is normal:
 What is risky:
 
 - No DB check constraints for non-negative balances.
-- No real payment provider integration or payment state model.
+- Payment intent state model exists for `manual_test` local/dev simulation, but no real payment provider integration or provider signature verification exists.
 - Manual deposit has no idempotency. Duplicate admin request can double-credit.
 - `spent_today` uses hold transactions, so refunded orders still count toward daily spend.
 

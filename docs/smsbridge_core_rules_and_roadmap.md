@@ -443,7 +443,7 @@ Codex не должен напрямую делать крупный refactor б
 ### Payments
 
 - payment intents foundation (model + buyer API skeleton). DONE
-- deposit providers
+- deposit providers. DEFERRED (Cryptomus/Payssion planned future adapters; local testing uses `manual_test`)
 - internal payment webhook skeleton/status transitions. DONE (foundation only; no real provider verification yet)
 - idempotent wallet crediting from successful payment intents. DONE
 - payment intent lifecycle visibility. DONE

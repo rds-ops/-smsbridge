@@ -52,15 +52,28 @@ Change these before any real deployment.
 
 ## Local Test Flow
 
+For the full local marketplace flow, including `manual_test` payment intents, fake supplier reservation, supplier SMS push, finishing an order, and release callback checks, see:
+
+- `docs/LOCAL_E2E_TESTING.md`
+
+Optional helper:
+
+```bash
+python tools/local_e2e_smoke.py
+```
+
+The helper uses only the Python standard library and is for local manual smoke testing, not CI.
+
+Quick frontend smoke path:
+
 1. Start the stack: `docker compose up --build`
 2. Open the frontend: http://localhost:3000
 3. Sign in as admin: `admin@smsbridge.local` / `change-me`
-4. Open `/admin` and add a manual deposit to `user_id` 2.
+4. Open `/admin` and add funds or complete a local `manual_test` payment intent.
 5. Log out, then sign in as user: `user@smsbridge.local` / `change-me`
-6. Open `/buy`, choose a service and country, and buy a mock number.
-7. Open the order page and wait for the Celery worker to poll the mock provider.
-8. If SMS arrives, finish the order to capture the hold. If you cancel before SMS, the hold is refunded.
-9. Confirm balance and held balance on `/dashboard`, and check history on `/orders`.
+6. Open `/buy`, choose a service and country, and buy a mock/supplier number.
+7. If SMS arrives, finish the order to capture the hold. If you cancel before SMS, the hold is refunded.
+8. Confirm balance and held balance on `/dashboard`, and check history on `/orders`.
 
 ## Backend Commands
 
@@ -234,6 +247,14 @@ Duplicate `supplier_sms_id` values return success with `duplicate: true`, so sup
 - finishing the order captures the client hold and creates the supplier reward
 
 `MockProvider` remains available as the development fallback when no supplier inventory matches.
+
+For local supplier callback testing, run the dev-only fake supplier server:
+
+```bash
+docker compose --profile dev up -d fake-supplier
+```
+
+Use `http://fake-supplier:8010/v1/reservations` as the supplier reservation URL when the backend is running in Docker Compose.
 
 ## Wholesale Client Foundation
 
