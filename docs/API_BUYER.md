@@ -41,6 +41,58 @@ curl -sS -X POST "$BASE_URL/api/v1/api-key/regenerate" \
   -H "Authorization: Bearer $JWT"
 ```
 
+## Payment Intents (Deposit Foundation)
+
+`POST /api/v1/payment-intents`
+
+Headers:
+- `Authorization: Bearer <token>`
+- `Idempotency-Key: <string>` (optional, recommended)
+
+Body:
+```json
+{
+  "amount": "10.0000",
+  "provider": "manual_test",
+  "currency": "USD"
+}
+```
+
+Current provider behavior:
+- Allowlist: `manual_test`, `payme`, `click`, `crypto_usdt`
+- Enabled now: `manual_test` only
+
+Important:
+- Creating a payment intent does not credit wallet balance yet.
+- This is a foundation for future real payment provider integrations.
+
+Idempotency behavior:
+- Same user + same key + same request body returns the same payment intent.
+- Same user + same key + different body returns `409`.
+- Different users can reuse the same key.
+
+Example:
+```bash
+curl -sS -X POST "$BASE_URL/api/v1/payment-intents" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: pay-intent-1" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":"10.0000","provider":"manual_test","currency":"USD"}'
+```
+
+`GET /api/v1/payment-intents/{public_id}`
+
+- Returns only the authenticated user's own payment intent.
+
+Response fields:
+- `public_id`
+- `provider`
+- `currency`
+- `amount`
+- `status`
+- `expires_at`
+- `created_at`
+
 ## Wallet / Balance
 
 `GET /api/v1/balance`

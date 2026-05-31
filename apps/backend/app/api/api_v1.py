@@ -14,11 +14,14 @@ from app.schemas.common import (
     MessageOut,
     OrderCreate,
     OrderOut,
+    PaymentIntentCreateIn,
+    PaymentIntentOut,
     ServiceOut,
     UserLimitOut,
     WalletOut,
 )
 from app.services import orders as order_service
+from app.services import payment_intents as payment_intent_service
 
 router = APIRouter(prefix="/api/v1", tags=["user-api"])
 
@@ -155,4 +158,33 @@ def wallet_transactions(
         )
         for tx, order_public_id in rows
     ]
+
+
+@router.post("/payment-intents", response_model=PaymentIntentOut)
+def create_payment_intent(
+    payload: PaymentIntentCreateIn,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_api_key),
+):
+    intent = payment_intent_service.create_payment_intent(
+        db,
+        user=user,
+        amount=payload.amount,
+        provider=payload.provider,
+        currency=payload.currency,
+        idempotency_key=idempotency_key,
+    )
+    db.commit()
+    db.refresh(intent)
+    return intent
+
+
+@router.get("/payment-intents/{public_id}", response_model=PaymentIntentOut)
+def get_payment_intent(
+    public_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_or_api_key),
+):
+    return payment_intent_service.get_user_payment_intent(db, user=user, public_id=public_id)
 

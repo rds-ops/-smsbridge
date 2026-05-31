@@ -234,6 +234,41 @@ class IdempotencyKey(Base, TimestampMixin):
     )
 
 
+PAYMENT_INTENT_STATUSES = ("created", "pending", "succeeded", "failed", "cancelled", "expired")
+
+
+class PaymentIntent(Base, TimestampMixin):
+    __tablename__ = "payment_intents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid4()), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), index=True, default="created", nullable=False)
+    provider_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    request_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    intent_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_payment_intents_amount_positive"),
+        CheckConstraint(f"status in {PAYMENT_INTENT_STATUSES}", name="ck_payment_intents_status_allowed"),
+        Index(
+            "uq_payment_intents_user_idempotency_key_not_null",
+            "user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+            sqlite_where=text("idempotency_key IS NOT NULL"),
+        ),
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

@@ -114,3 +114,19 @@ class BuyerWalletTransactionOut(ORMModel):
     order_public_id: str | None = None
     reference: str | None = None
     created_at: datetime
+
+
+class PaymentIntentCreateIn(BaseModel):
+    amount: Decimal = Field(gt=0)
+    provider: str = Field(min_length=2, max_length=40)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+
+class PaymentIntentOut(ORMModel):
+    public_id: str
+    provider: str
+    currency: str
+    amount: Decimal
+    status: str
+    expires_at: datetime | None = None
+    created_at: datetime

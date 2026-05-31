@@ -442,7 +442,7 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Payments
 
-- payment intents
+- payment intents foundation (model + buyer API skeleton). PARTIAL
 - deposit providers
 - webhook verification
 - idempotent deposits
