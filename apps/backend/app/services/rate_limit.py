@@ -34,6 +34,18 @@ class RedisRateLimiter:
     def ip_key(ip_address: str) -> str:
         return f"rate_limit:ip:{ip_address}"
 
+    @staticmethod
+    def user_key(user_id: int) -> str:
+        return f"rate_limit:user:{user_id}"
+
+    @staticmethod
+    def buyer_api_key_key(api_key_id: int) -> str:
+        return f"rate_limit:buyer_api_key:{api_key_id}"
+
+    @staticmethod
+    def supplier_key(supplier_id: int) -> str:
+        return f"rate_limit:supplier:{supplier_id}"
+
     def check(self, key: str, limit: int, window_seconds: int = 60) -> RateLimitResult:
         try:
             pipe = self.client.pipeline(transaction=True)

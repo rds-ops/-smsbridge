@@ -124,6 +124,9 @@ def test_multiple_limiters_share_same_redis_state():
 
 def test_rate_limit_uses_namespaced_ip_keys():
     assert RedisRateLimiter.ip_key("1.2.3.4") == "rate_limit:ip:1.2.3.4"
+    assert RedisRateLimiter.user_key(123) == "rate_limit:user:123"
+    assert RedisRateLimiter.buyer_api_key_key(456) == "rate_limit:buyer_api_key:456"
+    assert RedisRateLimiter.supplier_key(789) == "rate_limit:supplier:789"
 
 
 def test_redis_failure_fails_open_without_crashing():
@@ -145,12 +148,12 @@ def test_middleware_returns_existing_429_response_when_limit_exceeded(monkeypatc
 
     monkeypatch.setattr(
         rate_limit.rate_limiter,
-        "check_ip",
-        lambda ip_address, limit, window_seconds: rate_limit.RateLimitResult(
+        "check",
+        lambda key, limit, window_seconds: rate_limit.RateLimitResult(
             allowed=False,
             count=limit + 1,
             limit=limit,
-            key=RedisRateLimiter.ip_key(ip_address),
+            key=key,
         ),
     )
 
@@ -158,3 +161,109 @@ def test_middleware_returns_existing_429_response_when_limit_exceeded(monkeypatc
 
     assert response.status_code == 429
     assert response.json() == {"detail": "Rate limit exceeded"}
+
+
+def test_health_endpoints_bypass_rate_limit(monkeypatch):
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.get("/health/live")
+    def health_live():
+        return {"status": "ok"}
+
+    def fail_if_called(key, limit, window_seconds):
+        raise AssertionError("health endpoint should not call rate limiter")
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", fail_if_called)
+
+    response = TestClient(app).get("/health/live")
+
+    assert response.status_code == 200
+
+
+def test_rate_limit_uses_managed_api_key_bucket(client, user_token, monkeypatch):
+    seen_keys: list[str] = []
+
+    def capture(key, limit, window_seconds):
+        seen_keys.append(key)
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+    created = client.post(
+        "/api/v1/api-keys",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"name": "rate limit key", "scopes": ["wallet:read"]},
+    )
+    assert created.status_code == 200, created.text
+
+    seen_keys.clear()
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created.json()['api_key']}"})
+    assert response.status_code == 200, response.text
+
+    from app.db.session import SessionLocal
+    from app.models import BuyerApiKey
+    from sqlalchemy import select
+
+    with SessionLocal() as db:
+        key_id = db.scalar(select(BuyerApiKey.id).where(BuyerApiKey.public_id == created.json()["public_id"]))
+    assert seen_keys[-1] == RedisRateLimiter.buyer_api_key_key(key_id)
+
+
+def test_different_managed_api_keys_have_separate_rate_buckets(client, user_token, monkeypatch):
+    seen_keys: list[str] = []
+
+    def capture(key, limit, window_seconds):
+        seen_keys.append(key)
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+    first = client.post(
+        "/api/v1/api-keys",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"name": "first", "scopes": ["wallet:read"]},
+    ).json()
+    second = client.post(
+        "/api/v1/api-keys",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"name": "second", "scopes": ["wallet:read"]},
+    ).json()
+
+    seen_keys.clear()
+    assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {first['api_key']}"}).status_code == 200
+    first_bucket = seen_keys[-1]
+    assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {second['api_key']}"}).status_code == 200
+    second_bucket = seen_keys[-1]
+
+    assert first_bucket.startswith("rate_limit:buyer_api_key:")
+    assert second_bucket.startswith("rate_limit:buyer_api_key:")
+    assert first_bucket != second_bucket
+
+
+def test_rate_limit_uses_jwt_user_bucket(client, user_token, monkeypatch):
+    seen_keys: list[str] = []
+
+    def capture(key, limit, window_seconds):
+        seen_keys.append(key)
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert response.status_code == 200, response.text
+    assert seen_keys[-1] == RedisRateLimiter.user_key(2)
+
+
+def test_rate_limit_uses_ip_bucket_for_unauthenticated_requests(client, monkeypatch):
+    seen_keys: list[str] = []
+
+    def capture(key, limit, window_seconds):
+        seen_keys.append(key)
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+
+    response = client.post("/auth/login", json={"email": "missing@example.com", "password": "bad"})
+
+    assert response.status_code == 401
+    assert seen_keys[-1].startswith("rate_limit:ip:")
