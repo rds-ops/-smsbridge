@@ -42,6 +42,31 @@ class User(Base, TimestampMixin):
         return bool(self.api_key_hash)
 
 
+BUYER_API_KEY_STATUSES = ("active", "revoked")
+
+
+class BuyerApiKey(Base):
+    __tablename__ = "buyer_api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid4()), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    key_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True, nullable=False)
+    scopes: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(f"status in {BUYER_API_KEY_STATUSES}", name="ck_buyer_api_keys_status_allowed"),
+    )
+
+
 class UserLimit(Base, TimestampMixin):
     __tablename__ = "user_limits"
 

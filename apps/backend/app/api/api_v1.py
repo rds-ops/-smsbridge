@@ -10,6 +10,9 @@ from app.models import Country, Order, Price, Service, User, WalletTransaction
 from app.schemas.common import (
     BuyerPriceOut,
     BuyerWalletTransactionOut,
+    BuyerApiKeyCreateIn,
+    BuyerApiKeyCreateOut,
+    BuyerApiKeyOut,
     CountryOut,
     MessageOut,
     OrderCreate,
@@ -22,6 +25,7 @@ from app.schemas.common import (
 )
 from app.services import orders as order_service
 from app.services import payment_intents as payment_intent_service
+from app.services import buyer_api_keys as buyer_api_key_service
 
 router = APIRouter(prefix="/api/v1", tags=["user-api"])
 
@@ -121,6 +125,47 @@ def regenerate_api_key(db: Session = Depends(get_db), user: User = Depends(get_c
     user.api_key_hash = hash_api_key(raw)
     db.commit()
     return {"api_key": raw, "message": "Store this key now. It will not be shown again."}
+
+
+@router.post("/api-keys", response_model=BuyerApiKeyCreateOut)
+def create_api_key(
+    payload: BuyerApiKeyCreateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    api_key, raw = buyer_api_key_service.create_buyer_api_key(
+        db,
+        user,
+        name=payload.name,
+        scopes=payload.scopes,
+    )
+    db.commit()
+    db.refresh(api_key)
+    return {
+        "id": api_key.id,
+        "public_id": api_key.public_id,
+        "name": api_key.name,
+        "key_prefix": api_key.key_prefix,
+        "status": api_key.status,
+        "scopes": api_key.scopes,
+        "last_used_at": api_key.last_used_at,
+        "created_at": api_key.created_at,
+        "revoked_at": api_key.revoked_at,
+        "api_key": raw,
+    }
+
+
+@router.get("/api-keys", response_model=list[BuyerApiKeyOut])
+def list_api_keys(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return buyer_api_key_service.list_buyer_api_keys(db, user)
+
+
+@router.post("/api-keys/{public_id}/revoke", response_model=BuyerApiKeyOut)
+def revoke_api_key(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    api_key = buyer_api_key_service.revoke_buyer_api_key(db, user, public_id)
+    db.commit()
+    db.refresh(api_key)
+    return api_key
 
 
 @router.get("/limits", response_model=UserLimitOut)

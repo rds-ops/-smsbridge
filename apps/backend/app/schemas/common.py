@@ -116,6 +116,28 @@ class BuyerWalletTransactionOut(ORMModel):
     created_at: datetime
 
 
+class BuyerApiKeyCreateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    scopes: dict[str, Any] | None = None
+
+
+class BuyerApiKeyOut(ORMModel):
+    id: int
+    public_id: str
+    name: str | None = None
+    key_prefix: str
+    status: str
+    scopes: dict[str, Any] | None = None
+    last_used_at: datetime | None = None
+    created_at: datetime
+    revoked_at: datetime | None = None
+
+
+class BuyerApiKeyCreateOut(BuyerApiKeyOut):
+    api_key: str
+    message: str = "Store this key now. It will not be shown again."
+
+
 class PaymentIntentCreateIn(BaseModel):
     amount: Decimal = Field(gt=0)
     provider: str = Field(min_length=2, max_length=40)

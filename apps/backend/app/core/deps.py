@@ -1,4 +1,6 @@
 from __future__ import annotations
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -6,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token, hash_api_key
 from app.db.session import get_db
-from app.models import Supplier, User
+from app.models import BuyerApiKey, Supplier, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -47,7 +49,21 @@ def get_current_user_or_api_key(
         if user:
             return _remember_user(request, user)
 
-    user = db.scalar(select(User).where(User.api_key_hash == hash_api_key(token)))
+    token_hash = hash_api_key(token)
+    managed_key = db.scalar(
+        select(BuyerApiKey).where(
+            BuyerApiKey.key_hash == token_hash,
+            BuyerApiKey.status == "active",
+        )
+    )
+    if managed_key:
+        managed_key.last_used_at = datetime.now(timezone.utc)
+        db.commit()
+        user = db.get(User, managed_key.user_id)
+        if user:
+            return _remember_user(request, user)
+
+    user = db.scalar(select(User).where(User.api_key_hash == token_hash))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token or API key")
     return _remember_user(request, user)

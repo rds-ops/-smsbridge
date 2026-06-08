@@ -2,6 +2,7 @@ from __future__ import annotations
 from app.models.entities import (
     ApiRequestLog,
     AuditLog,
+    BuyerApiKey,
     Country,
     IdempotencyKey,
     Order,
@@ -29,6 +30,7 @@ from app.models.entities import (
 __all__ = [
     "ApiRequestLog",
     "AuditLog",
+    "BuyerApiKey",
     "Country",
     "IdempotencyKey",
     "Order",
