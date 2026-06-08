@@ -455,11 +455,13 @@ Codex не должен напрямую делать крупный refactor б
 
 ### Supplier Payouts
 
-- payout requests
-- supplier payout holds
-- admin payout approval
-- mark-paid flow
-- payout ledger
+- payout requests. DONE (internal accounting skeleton)
+- supplier payout holds. DONE
+- admin payout approval. DONE
+- mark-paid flow. DONE (manual/admin-only; no external payout provider)
+- payout ledger. DONE
+- real external payout provider integration
+- payout verification/reconciliation
 
 ### Stats
 

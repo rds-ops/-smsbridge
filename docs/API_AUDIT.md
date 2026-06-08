@@ -4,7 +4,7 @@
 
 Project state: the repository already has a working early MVP shape: Next.js frontend, FastAPI backend, PostgreSQL models with Alembic migrations, Redis-backed Celery worker, auth, admin panel API, buyer API, supplier API, wallet holds/captures/refunds, supplier inventory and supplier SMS push.
 
-Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, supplier reservation/release compensation, and payment intent accounting foundations including manual_test admin completion for local/dev simulation. The weakest parts are pricing/stock accuracy, missing real payment provider verification, missing supplier payout lifecycle, weak role model, real provider integrations, and provider webhook processing.
+Main conclusion: the core direction is correct, but the marketplace core is still incomplete for a production 5sim-like service. The strongest parts are wallet transaction integrity, idempotent hold/capture/refund paths, buyer order idempotency, supplier API key auth, DB-backed supplier inventory reservation with row locks, order state/history, Redis-backed rate limiting, supplier reservation/release compensation, supplier payout request accounting skeleton, and payment intent accounting foundations including manual_test admin completion for local/dev simulation. The weakest parts are pricing/stock accuracy, missing real payment provider verification, missing real external payout provider integration, weak role model, real provider integrations, and provider webhook processing.
 
 Critical issues before launch:
 
@@ -16,7 +16,7 @@ Critical issues before launch:
 - Rate limiting is in process memory, not Redis, so it does not work correctly with multiple backend workers. DONE
 - Admin seed uses known default credentials (`admin@smsbridge.local` / `change-me`) and Docker Compose uses `.env.example`. DONE (production safety guard blocks default secrets/passwords)
 - Status fields are strings, not enums, and lifecycle transitions are only partially enforced. PARTIAL (order state machine + order_events exist; provider type/status validation added in admin schemas; DB enums not added)
-- Payment intents, idempotent webhook wallet crediting, lifecycle visibility, and reconciliation visibility exist, but real payment provider verification/reconciliation is still missing. Supplier withdrawal/payout flow, formal stats/rate aggregation, and provider webhook processing are still skeleton/incomplete.
+- Payment intents, idempotent webhook wallet crediting, lifecycle visibility, and reconciliation visibility exist, but real payment provider verification/reconciliation is still missing. Supplier payout request accounting exists, but real external payout provider execution is not implemented. Formal stats/rate aggregation and provider webhook processing are still skeleton/incomplete.
 
 ## 2. Current Architecture Map
 
@@ -167,6 +167,11 @@ What is mixed:
 | GET | `/admin/suppliers/{supplier_id}/sms` | `app/api/admin.py` | admin | Supplier SMS records | OK, sensitive content; admin only. |
 | GET | `/admin/suppliers/{supplier_id}/transactions` | `app/api/admin.py` | admin | Supplier transaction ledger | OK. |
 | POST | `/admin/suppliers/{supplier_id}/adjustment` | `app/api/admin.py` | admin | Manual supplier balance adjustment | Creates transaction, prevents negative supplier balance. |
+| GET | `/admin/supplier-payout-requests` | `app/api/admin.py` | admin | List supplier payout requests | Skeleton only; no external payout provider. |
+| GET | `/admin/supplier-payout-requests/{id}` | `app/api/admin.py` | admin | Supplier payout request detail | Admin-only operational view. |
+| POST | `/admin/supplier-payout-requests/{id}/approve` | `app/api/admin.py` | admin | Approve supplier payout request | Status-only approval; held funds remain held. |
+| POST | `/admin/supplier-payout-requests/{id}/reject` | `app/api/admin.py` | admin | Reject supplier payout request | Releases held funds back to supplier balance and writes ledger. |
+| POST | `/admin/supplier-payout-requests/{id}/mark-paid` | `app/api/admin.py` | admin | Mark supplier payout paid | Decreases supplier held balance and writes ledger; no external money sent. |
 | POST | `/admin/wallets/deposit` | `app/api/admin.py` | admin | Manual user deposit | Creates wallet transaction. No payment provider integration. |
 | POST | `/admin/wallets/adjustment` | `app/api/admin.py` | admin | Manual user wallet adjustment | Creates wallet transaction, prevents negative balance. |
 | POST | `/admin/orders/{order_id}/refund` | `app/api/admin.py` | admin | Refund order | Idempotent for refunded/expired/cancelled. Can attempt refund after completed and fail in wallet if captured. |
@@ -176,6 +181,8 @@ What is mixed:
 | GET | `/supplier/v1/me` | `app/api/supplier.py` | supplier | Supplier profile | API key auth. |
 | GET | `/supplier/v1/inventory` | `app/api/supplier.py` | supplier | Supplier inventory list | OK. |
 | POST | `/supplier/v1/inventory/update` | `app/api/supplier.py` | supplier active | Upsert count-based inventory | No real phone-number inventory; no idempotency key; max 500 items. |
+| POST | `/supplier/v1/payout-requests` | `app/api/supplier.py` | supplier active | Request payout from supplier balance | Moves balance to held balance and writes `payout_hold`; no external payout provider. |
+| GET | `/supplier/v1/payout-requests` | `app/api/supplier.py` | supplier | List own payout requests | Supplier-scoped. |
 | POST | `/supplier/v1/sms` | `app/api/supplier.py` | supplier active | Push SMS for activation/phone | Idempotent by supplier SMS id. Does not require activation id if phone matches active activation. |
 
 Dangerous or wrongly exposed endpoints/fields:
@@ -202,17 +209,18 @@ Dangerous or wrongly exposed endpoints/fields:
 | `AuditLog` / `audit_logs` | Admin/system audit events | `actor_user_id`, `action`, `entity_type`, `entity_id`, `metadata` | FK user nullable | OK base. No actor supplier id. |
 | `ApiRequestLog` / `api_request_logs` | API request logs | `user_id`, `supplier_id`, `endpoint`, `method`, `ip_address`, `status_code` | FK user/supplier nullable | Supplier endpoints are logged. No duration/user agent. |
 | `SystemSetting` / `system_settings` | JSON settings | `key`, `value` | None | OK for small settings. |
-| `Supplier` / `suppliers` | Supplier account/entity | `name`, `email`, `status`, `api_key_hash`, `reward_percent`, `balance`, `held_balance`, `currency` | Referenced by supplier inventory/activation/sms/transactions | No user linkage. No supplier wallet transaction check constraint. No payout account/KYC/moderation fields. |
+| `Supplier` / `suppliers` | Supplier account/entity | `name`, `email`, `status`, `api_key_hash`, `reward_percent`, `balance`, `held_balance`, `currency` | Referenced by supplier inventory/activation/sms/transactions/payout requests | No user linkage. No supplier wallet transaction check constraint. No KYC/moderation fields. |
 | `SupplierInventory` / `supplier_inventory` | Count-based supplier stock by service/country/operator | `supplier_id`, `service_code`, `country_iso2`, `operator`, `available_count`, visibility fields, `status`, `last_sync_at` | FK supplier | No exact real number pool. Nullable `operator` uniqueness is normalized by `operator_key`. No FK to service/country. |
 | `SupplierActivation` / `supplier_activations` | Reserved supplier order mapping | `supplier_id`, `order_id`, `supplier_activation_id`, `phone_number`, `status`, `client_price`, `supplier_reward`, `sms_text`, `sms_code` | FK supplier/order | `order_id` unique. No unique active phone reservation constraint. Reservation-enabled suppliers return real numbers; fake phone is legacy/dev-only and blocked in production-like environments. |
 | `SupplierSms` / `supplier_sms` | SMS messages pushed by supplier | `supplier_id`, `activation_id`, `order_id`, `supplier_sms_id`, `phone_number`, `phone_from`, `text`, `status` | FK supplier/activation/order | Idempotent by supplier SMS id. No parsed code confidence/source metadata. |
-| `SupplierTransaction` / `supplier_transactions` | Supplier ledger | `supplier_id`, `activation_id`, `order_id`, `type`, `amount`, `status`, `reference`, `metadata` | FK supplier/activation/order | Reward idempotency exists. No withdrawal/payout lifecycle. Supplier balance DB checks exist. |
+| `SupplierTransaction` / `supplier_transactions` | Supplier ledger | `supplier_id`, `activation_id`, `order_id`, `type`, `amount`, `status`, `reference`, `metadata` | FK supplier/activation/order | Reward idempotency exists. Payout hold/release/paid ledger entries exist. Supplier balance DB checks exist. |
 | `SupplierReleaseRetry` / `supplier_release_retries` | Durable retry queue for failed supplier release callbacks | `supplier_activation_id`, `supplier_id`, `order_id`, `status`, `attempt_count`, `next_retry_at`, `last_error` | FK supplier/activation/order | Release retry queue exists with capped retries; no separate UI yet. |
+| `SupplierPayoutRequest` / `supplier_payout_requests` | Supplier payout lifecycle skeleton | `public_id`, `supplier_id`, `amount`, `currency`, `status`, payout details, admin/failure notes, lifecycle timestamps | FK supplier | Internal accounting only. External payout provider integration, KYC, payout reconciliation and real provider status webhooks are not implemented. |
 
 Missing or incomplete tables/fields:
 
 - `payment_methods` or provider-specific deposit records for real user top-ups.
-- `withdrawal_requests` / `supplier_payouts`.
+- External payout provider transfer records/status webhooks.
 - Exact supplier phone-number inventory table.
 - `provider_price_snapshots` or `price_sync_runs`.
 - `supplier_number_inventory` if suppliers provide exact phone numbers instead of only counts.
@@ -434,16 +442,16 @@ What is normal:
 
 What is risky:
 
-- Supplier payout/withdrawal flow not found in current codebase.
+- Supplier payout requests exist, including payout holds, admin approval, reject release, and mark-paid ledger entries.
 - Supplier reward uses current supplier reward percent in transaction metadata but activation reward was calculated earlier; this is mostly OK, but metadata can be confusing if percent changed.
-- `held_balance` is present but unused for payout holds.
-- No minimum payout, payout account, payout status, or admin approval model.
+- `held_balance` is used for pending payout holds.
+- No minimum payout, KYC, real payout account verification, external provider execution, or payout reconciliation exists yet.
 
 Needed changes:
 
-- Add supplier withdrawal requests and payout transactions.
-- Use supplier held balance for pending withdrawals.
-- Add admin approve/reject/mark-paid endpoints.
+- Add real external payout provider integration and reconciliation.
+- Add payout account verification/KYC and minimum payout policy.
+- Add provider status callbacks or operator reconciliation for paid/failed external transfers.
 
 ### Rate/statistics
 
@@ -508,7 +516,7 @@ Problems and recommendations:
 | Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
 | Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |
 | Supplier release retry queue | P0 | Failed supplier release callbacks can leave numbers reserved | `supplier_release_retries`, Celery retry task | DONE |
-| Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payouts`, `/supplier/v1/payouts`, `/admin/supplier-payouts` | NOT DONE |
+| Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payout_requests`, `/supplier/v1/payout-requests`, `/admin/supplier-payout-requests` | PARTIAL (request/hold/admin approve/reject/mark-paid ledger skeleton; no external payout provider) |
 | Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job | NOT DONE |
 | Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas | NOT DONE |
 | User wallet transaction history | P1 | Buyers need account transparency | `/buyer/wallet/transactions` or `/api/v1/wallet/transactions` | NOT DONE |
@@ -571,8 +579,8 @@ Keep `/api/v1` if external developers already use it, but internally map it as b
 - `POST /supplier/v1/sms`
 - `GET /supplier/v1/activations`
 - `GET /supplier/v1/transactions`
-- `POST /supplier/v1/payouts`
-- `GET /supplier/v1/payouts`
+- `POST /supplier/v1/payout-requests`
+- `GET /supplier/v1/payout-requests`
 
 ### `/admin`
 
@@ -600,10 +608,11 @@ Keep `/api/v1` if external developers already use it, but internally map it as b
 - `GET /admin/suppliers/{id}/sms`
 - `GET /admin/suppliers/{id}/transactions`
 - `POST /admin/suppliers/{id}/adjustment`
-- `GET /admin/supplier-payouts`
-- `POST /admin/supplier-payouts/{id}/approve`
-- `POST /admin/supplier-payouts/{id}/reject`
-- `POST /admin/supplier-payouts/{id}/mark-paid`
+- `GET /admin/supplier-payout-requests`
+- `GET /admin/supplier-payout-requests/{id}`
+- `POST /admin/supplier-payout-requests/{id}/approve`
+- `POST /admin/supplier-payout-requests/{id}/reject`
+- `POST /admin/supplier-payout-requests/{id}/mark-paid`
 - `GET /admin/audit-logs`
 - `GET /admin/api-request-logs`
 
@@ -741,9 +750,9 @@ Recommended 1-2 week plan:
    - Add internal webhook namespace and signature validation plan. PARTIAL (namespace exists with shared-secret auth; no provider-specific payload validation/processing yet)
 
 6. P1 marketplace accounting:
-   - Add supplier payout/withdrawal model.
+   - Add supplier payout/withdrawal model. PARTIAL (request/hold/admin approve/reject/mark-paid skeleton; no external payout provider)
    - Add wallet transaction history endpoint for buyers.
-   - Add supplier transaction/payout endpoints for suppliers.
+   - Add supplier transaction/payout endpoints for suppliers. PARTIAL (payout request list/create exists; transaction list is admin-only)
 
 7. P1 observability/admin:
    - Add pagination to admin/users/orders/supplier logs.

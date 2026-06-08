@@ -187,6 +187,37 @@ class SupplierReleaseRetryOut(ORMModel):
     updated_at: datetime
 
 
+class SupplierPayoutRequestCreateIn(BaseModel):
+    amount: Decimal = Field(gt=0)
+    payout_method: str | None = Field(default=None, max_length=80)
+    payout_address: str | None = Field(default=None, max_length=255)
+
+
+class SupplierPayoutRequestOut(ORMModel):
+    id: int
+    public_id: str
+    supplier_id: int
+    amount: Decimal
+    currency: str
+    status: str
+    payout_method: str | None = None
+    payout_address: str | None = None
+    admin_note: str | None = None
+    failure_reason: str | None = None
+    requested_at: datetime
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    paid_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SupplierPayoutActionIn(BaseModel):
+    admin_note: str | None = Field(default=None, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 class SupplierAdjustmentIn(BaseModel):
     amount: Decimal
     reference: str | None = Field(default=None, max_length=255)

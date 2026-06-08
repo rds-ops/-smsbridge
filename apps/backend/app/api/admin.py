@@ -19,6 +19,7 @@ from app.models import (
     Supplier,
     SupplierActivation,
     SupplierInventory,
+    SupplierPayoutRequest,
     SupplierReleaseRetry,
     SupplierSms,
     SupplierTransaction,
@@ -48,6 +49,8 @@ from app.schemas.supplier import (
     SupplierListOut,
     SupplierOut,
     SupplierPatch,
+    SupplierPayoutActionIn,
+    SupplierPayoutRequestOut,
     SupplierReleaseRetryOut,
     SupplierSmsOut,
     SupplierTransactionOut,
@@ -57,7 +60,12 @@ from app.services.limits import apply_tier_limits
 from app.services.orders import refund_order
 from app.services.payment_intents import manual_complete_payment_intent
 from app.services.payment_reconciliation import reconcile_payment_credits
-from app.services.suppliers import supplier_adjustment
+from app.services.suppliers import (
+    approve_supplier_payout_request,
+    mark_supplier_payout_paid,
+    reject_supplier_payout_request,
+    supplier_adjustment,
+)
 from app.services.wallet import adjustment, deposit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -315,6 +323,88 @@ def supplier_release_retries(db: Session = Depends(get_db), admin: User = Depend
             .limit(500)
         )
     )
+
+
+@router.get("/supplier-payout-requests", response_model=list[SupplierPayoutRequestOut])
+def supplier_payout_requests(
+    status: str | None = None,
+    supplier_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    stmt = select(SupplierPayoutRequest)
+    if status:
+        stmt = stmt.where(SupplierPayoutRequest.status == status)
+    if supplier_id:
+        stmt = stmt.where(SupplierPayoutRequest.supplier_id == supplier_id)
+    return list(
+        db.scalars(
+            stmt.order_by(SupplierPayoutRequest.created_at.desc(), SupplierPayoutRequest.id.desc())
+            .limit(max(1, min(limit, 500)))
+            .offset(max(0, offset))
+        )
+    )
+
+
+@router.get("/supplier-payout-requests/{payout_id}", response_model=SupplierPayoutRequestOut)
+def supplier_payout_request_detail(
+    payout_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    payout = db.get(SupplierPayoutRequest, payout_id)
+    if not payout:
+        raise HTTPException(status_code=404, detail="Supplier payout request not found")
+    return payout
+
+
+@router.post("/supplier-payout-requests/{payout_id}/approve", response_model=SupplierPayoutRequestOut)
+def supplier_payout_request_approve(
+    payout_id: int,
+    payload: SupplierPayoutActionIn | None = None,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    payout = approve_supplier_payout_request(db, payout_id, payload.admin_note if payload else None)
+    add_audit_log(db, "supplier_payout.approve", "supplier_payout", str(payout.id), admin.id, (payload.model_dump() if payload else {}))
+    db.commit()
+    db.refresh(payout)
+    return payout
+
+
+@router.post("/supplier-payout-requests/{payout_id}/reject", response_model=SupplierPayoutRequestOut)
+def supplier_payout_request_reject(
+    payout_id: int,
+    payload: SupplierPayoutActionIn | None = None,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    payout = reject_supplier_payout_request(
+        db,
+        payout_id,
+        admin_note=payload.admin_note if payload else None,
+        failure_reason=payload.reason if payload else None,
+    )
+    add_audit_log(db, "supplier_payout.reject", "supplier_payout", str(payout.id), admin.id, (payload.model_dump() if payload else {}))
+    db.commit()
+    db.refresh(payout)
+    return payout
+
+
+@router.post("/supplier-payout-requests/{payout_id}/mark-paid", response_model=SupplierPayoutRequestOut)
+def supplier_payout_request_mark_paid(
+    payout_id: int,
+    payload: SupplierPayoutActionIn | None = None,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    payout = mark_supplier_payout_paid(db, payout_id, payload.admin_note if payload else None)
+    add_audit_log(db, "supplier_payout.mark_paid", "supplier_payout", str(payout.id), admin.id, (payload.model_dump() if payload else {}))
+    db.commit()
+    db.refresh(payout)
+    return payout
 
 
 @router.post("/suppliers/{supplier_id}/adjustment", response_model=SupplierOut)

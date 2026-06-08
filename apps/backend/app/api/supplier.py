@@ -6,16 +6,18 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_supplier, require_active_supplier
 from app.db.session import get_db
-from app.models import Supplier, SupplierInventory
+from app.models import Supplier, SupplierInventory, SupplierPayoutRequest
 from app.schemas.supplier import (
     SupplierInventoryOut,
     SupplierInventoryUpdateIn,
     SupplierInventoryUpdateOut,
     SupplierMeOut,
+    SupplierPayoutRequestCreateIn,
+    SupplierPayoutRequestOut,
     SupplierSmsIn,
     SupplierSmsPushOut,
 )
-from app.services.suppliers import push_sms, upsert_inventory
+from app.services.suppliers import create_supplier_payout_request, push_sms, upsert_inventory
 
 router = APIRouter(prefix="/supplier/v1", tags=["supplier-api"])
 
@@ -45,6 +47,36 @@ def inventory_update(
     updated = upsert_inventory(db, supplier, payload.items)
     db.commit()
     return SupplierInventoryUpdateOut(updated=updated)
+
+
+@router.post("/payout-requests", response_model=SupplierPayoutRequestOut)
+def create_payout_request(
+    payload: SupplierPayoutRequestCreateIn,
+    db: Session = Depends(get_db),
+    supplier: Supplier = Depends(require_active_supplier),
+):
+    payout = create_supplier_payout_request(
+        db,
+        supplier_id=supplier.id,
+        amount=payload.amount,
+        payout_method=payload.payout_method,
+        payout_address=payload.payout_address,
+    )
+    db.commit()
+    db.refresh(payout)
+    return payout
+
+
+@router.get("/payout-requests", response_model=list[SupplierPayoutRequestOut])
+def payout_requests(db: Session = Depends(get_db), supplier: Supplier = Depends(get_current_supplier)):
+    return list(
+        db.scalars(
+            select(SupplierPayoutRequest)
+            .where(SupplierPayoutRequest.supplier_id == supplier.id)
+            .order_by(SupplierPayoutRequest.created_at.desc(), SupplierPayoutRequest.id.desc())
+            .limit(200)
+        )
+    )
 
 
 @router.post("/sms", response_model=SupplierSmsPushOut)

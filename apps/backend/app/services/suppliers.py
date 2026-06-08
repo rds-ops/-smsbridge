@@ -20,6 +20,7 @@ from app.models import (
     Supplier,
     SupplierActivation,
     SupplierInventory,
+    SupplierPayoutRequest,
     SupplierSms,
     SupplierTransaction,
 )
@@ -568,3 +569,170 @@ def supplier_adjustment(
         )
     )
     return supplier
+
+
+PAYOUT_TERMINAL_STATUSES = {"rejected", "cancelled", "paid", "failed"}
+
+
+def _supplier_payout_tx_exists(db: Session, payout: SupplierPayoutRequest, tx_type: str, status: str = "completed") -> bool:
+    return (
+        db.scalar(
+            select(SupplierTransaction.id).where(
+                SupplierTransaction.supplier_id == payout.supplier_id,
+                SupplierTransaction.type == tx_type,
+                SupplierTransaction.status == status,
+                SupplierTransaction.reference == f"payout:{payout.public_id}",
+            )
+        )
+        is not None
+    )
+
+
+def _add_supplier_payout_tx(
+    db: Session,
+    payout: SupplierPayoutRequest,
+    tx_type: str,
+    metadata: dict | None = None,
+) -> None:
+    if _supplier_payout_tx_exists(db, payout, tx_type):
+        return
+    db.add(
+        SupplierTransaction(
+            supplier_id=payout.supplier_id,
+            type=tx_type,
+            amount=payout.amount,
+            status="completed",
+            reference=f"payout:{payout.public_id}",
+            tx_metadata=metadata or {},
+        )
+    )
+
+
+def create_supplier_payout_request(
+    db: Session,
+    supplier_id: int,
+    amount: Decimal,
+    payout_method: str | None = None,
+    payout_address: str | None = None,
+) -> SupplierPayoutRequest:
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    amount = Decimal(str(amount)).quantize(Decimal("0.0001"))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Payout amount must be positive")
+    if supplier.balance < amount:
+        raise HTTPException(status_code=400, detail="Insufficient supplier balance")
+
+    supplier.balance -= amount
+    supplier.held_balance += amount
+    payout = SupplierPayoutRequest(
+        supplier_id=supplier.id,
+        amount=amount,
+        currency=supplier.currency,
+        status="requested",
+        payout_method=payout_method,
+        payout_address=payout_address,
+    )
+    db.add(payout)
+    db.flush()
+    _add_supplier_payout_tx(
+        db,
+        payout,
+        "payout_hold",
+        {"payout_method": payout_method},
+    )
+    db.flush()
+    return payout
+
+
+def approve_supplier_payout_request(db: Session, payout_id: int, admin_note: str | None = None) -> SupplierPayoutRequest:
+    payout = db.scalar(select(SupplierPayoutRequest).where(SupplierPayoutRequest.id == payout_id).with_for_update())
+    if not payout:
+        raise HTTPException(status_code=404, detail="Supplier payout request not found")
+    if payout.status == "approved":
+        return payout
+    if payout.status != "requested":
+        raise HTTPException(status_code=409, detail="Supplier payout request cannot be approved")
+    payout.status = "approved"
+    payout.approved_at = datetime.now(timezone.utc)
+    payout.admin_note = admin_note
+    db.flush()
+    return payout
+
+
+def reject_supplier_payout_request(
+    db: Session,
+    payout_id: int,
+    admin_note: str | None = None,
+    failure_reason: str | None = None,
+) -> SupplierPayoutRequest:
+    payout = db.scalar(select(SupplierPayoutRequest).where(SupplierPayoutRequest.id == payout_id).with_for_update())
+    if not payout:
+        raise HTTPException(status_code=404, detail="Supplier payout request not found")
+    if payout.status == "rejected":
+        return payout
+    if payout.status in PAYOUT_TERMINAL_STATUSES:
+        raise HTTPException(status_code=409, detail="Supplier payout request is terminal")
+    supplier = db.scalar(select(Supplier).where(Supplier.id == payout.supplier_id).with_for_update())
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    if supplier.held_balance < payout.amount:
+        raise HTTPException(status_code=400, detail="Supplier held balance cannot become negative")
+    supplier.held_balance -= payout.amount
+    supplier.balance += payout.amount
+    payout.status = "rejected"
+    payout.rejected_at = datetime.now(timezone.utc)
+    payout.admin_note = admin_note
+    payout.failure_reason = failure_reason
+    _add_supplier_payout_tx(db, payout, "payout_release", {"reason": failure_reason or admin_note})
+    db.flush()
+    return payout
+
+
+def cancel_supplier_payout_request(db: Session, supplier_id: int, payout_id: int) -> SupplierPayoutRequest:
+    payout = db.scalar(
+        select(SupplierPayoutRequest)
+        .where(SupplierPayoutRequest.id == payout_id, SupplierPayoutRequest.supplier_id == supplier_id)
+        .with_for_update()
+    )
+    if not payout:
+        raise HTTPException(status_code=404, detail="Supplier payout request not found")
+    if payout.status == "cancelled":
+        return payout
+    if payout.status != "requested":
+        raise HTTPException(status_code=409, detail="Supplier payout request cannot be cancelled")
+    supplier = db.scalar(select(Supplier).where(Supplier.id == payout.supplier_id).with_for_update())
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    if supplier.held_balance < payout.amount:
+        raise HTTPException(status_code=400, detail="Supplier held balance cannot become negative")
+    supplier.held_balance -= payout.amount
+    supplier.balance += payout.amount
+    payout.status = "cancelled"
+    payout.cancelled_at = datetime.now(timezone.utc)
+    _add_supplier_payout_tx(db, payout, "payout_cancel")
+    db.flush()
+    return payout
+
+
+def mark_supplier_payout_paid(db: Session, payout_id: int, admin_note: str | None = None) -> SupplierPayoutRequest:
+    payout = db.scalar(select(SupplierPayoutRequest).where(SupplierPayoutRequest.id == payout_id).with_for_update())
+    if not payout:
+        raise HTTPException(status_code=404, detail="Supplier payout request not found")
+    if payout.status == "paid":
+        return payout
+    if payout.status not in {"requested", "approved"}:
+        raise HTTPException(status_code=409, detail="Supplier payout request cannot be marked paid")
+    supplier = db.scalar(select(Supplier).where(Supplier.id == payout.supplier_id).with_for_update())
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    if supplier.held_balance < payout.amount:
+        raise HTTPException(status_code=400, detail="Supplier held balance cannot become negative")
+    supplier.held_balance -= payout.amount
+    payout.status = "paid"
+    payout.paid_at = datetime.now(timezone.utc)
+    payout.admin_note = admin_note
+    _add_supplier_payout_tx(db, payout, "payout_paid")
+    db.flush()
+    return payout

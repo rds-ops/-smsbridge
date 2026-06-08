@@ -236,6 +236,21 @@ curl -X POST http://localhost:8000/supplier/v1/sms \
 
 Duplicate `supplier_sms_id` values return success with `duplicate: true`, so suppliers can safely retry webhook delivery.
 
+Create a payout request:
+
+```bash
+curl -X POST http://localhost:8000/supplier/v1/payout-requests \
+  -H "Authorization: Bearer $SUPPLIER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": "25.0000",
+    "payout_method": "manual_test",
+    "payout_address": "local-test-address"
+  }'
+```
+
+Supplier payout requests are an accounting skeleton. Creating a request moves supplier funds from `balance` to `held_balance` and writes a supplier ledger transaction. Admin can approve, reject, or mark paid, but no external payout provider is integrated yet.
+
 ## Supplier Pool Provider
 
 `supplier_pool` is a provider type that lets the existing order router use active supplier inventory. In development mode it safely simulates number issuing from supplier inventory:

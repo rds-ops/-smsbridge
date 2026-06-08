@@ -123,6 +123,47 @@ curl -sS -X POST "$BASE_URL/supplier/v1/sms" \
   -d '{"supplier_sms_id":"msg-1","phone_number":"+628123456789","text":"Your code is 12345","supplier_activation_id":"act-1"}'
 ```
 
+### Create payout request
+
+`POST /supplier/v1/payout-requests`
+
+Auth:
+- Supplier must be active.
+
+Body:
+```json
+{
+  "amount": "25.0000",
+  "payout_method": "manual_test",
+  "payout_address": "local-test-address"
+}
+```
+
+Current behavior:
+- This is an internal accounting skeleton only. No external money is sent.
+- The backend locks the supplier row, requires sufficient available balance, moves the amount from `balance` to `held_balance`, creates a `SupplierTransaction(type="payout_hold")`, and creates a payout request with `status="requested"`.
+- Admin can later approve, reject, or mark the request paid.
+
+Example:
+```bash
+curl -sS -X POST "$BASE_URL/supplier/v1/payout-requests" \
+  -H "Authorization: Bearer $SUPPLIER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":"25.0000","payout_method":"manual_test","payout_address":"local-test-address"}'
+```
+
+### List payout requests
+
+`GET /supplier/v1/payout-requests`
+
+Returns newest payout requests for the authenticated supplier only.
+
+Example:
+```bash
+curl -sS "$BASE_URL/supplier/v1/payout-requests" \
+  -H "Authorization: Bearer $SUPPLIER_API_KEY"
+```
+
 ## Supplier Reservation / Release Callbacks (Supplier-side expectations)
 
 These are outbound calls from smsbridge to the supplier (supplier must host the endpoints). The detailed contract is documented in `docs/API_CALLBACKS.md`.

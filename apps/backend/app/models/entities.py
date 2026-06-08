@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -466,6 +466,36 @@ class SupplierReleaseRetry(Base, TimestampMixin):
         UniqueConstraint("supplier_activation_id", "retry_type", name="uq_supplier_release_retry_activation_type"),
         CheckConstraint("attempt_count >= 0", name="ck_supplier_release_retries_attempt_count_non_negative"),
         Index("ix_supplier_release_retries_status_next_retry_at", "status", "next_retry_at"),
+    )
+
+
+SUPPLIER_PAYOUT_REQUEST_STATUSES = ("requested", "approved", "rejected", "cancelled", "paid", "failed")
+
+
+class SupplierPayoutRequest(Base, TimestampMixin):
+    __tablename__ = "supplier_payout_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid4()), nullable=False)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="requested", index=True, nullable=False)
+    payout_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    payout_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    admin_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    supplier: Mapped[Supplier] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_supplier_payout_requests_amount_positive"),
+        CheckConstraint(f"status in {SUPPLIER_PAYOUT_REQUEST_STATUSES}", name="ck_supplier_payout_requests_status_allowed"),
     )
 
 
