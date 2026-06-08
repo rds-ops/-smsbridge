@@ -146,7 +146,7 @@ What is mixed:
 | GET | `/api/v1/orders/{public_id}` | `app/api/api_v1.py` | buyer/API key | Fetch own order | Ownership enforced. |
 | POST | `/api/v1/orders/{public_id}/cancel` | `app/api/api_v1.py` | buyer/API key | Cancel order and refund hold | Idempotent for cancelled/expired/refunded. |
 | POST | `/api/v1/orders/{public_id}/finish` | `app/api/api_v1.py` | buyer/API key | Finish after SMS and capture hold | Idempotent for completed. |
-| POST | `/api/v1/api-keys` | `app/api/api_v1.py` | buyer JWT | Create managed buyer API key | Returns raw key once; stores hash/prefix/scopes. Scope enforcement not implemented yet. |
+| POST | `/api/v1/api-keys` | `app/api/api_v1.py` | buyer JWT | Create managed buyer API key | Returns raw key once; stores hash/prefix/scopes. Minimal managed-key scope enforcement exists. |
 | GET | `/api/v1/api-keys` | `app/api/api_v1.py` | buyer JWT | List managed buyer API keys | Does not expose raw keys or hashes. |
 | POST | `/api/v1/api-keys/{public_id}/revoke` | `app/api/api_v1.py` | buyer JWT | Revoke managed buyer API key | Idempotent; revoked keys no longer authenticate. |
 | GET | `/api/v1/api-keys/{public_id}/usage` | `app/api/api_v1.py` | buyer JWT | Managed API key usage visibility | Owner-only totals and grouped endpoint/method/status counts. No raw keys/hashes/IPs. |
@@ -203,7 +203,7 @@ Dangerous or wrongly exposed endpoints/fields:
 | Model/Table | Purpose | Key Fields | Relations | Issues |
 |---|---|---|---|---|
 | `User` / `users` | Buyer/admin accounts | `email`, `password_hash`, `role`, `status`, `tier`, legacy `api_key_hash`, `locale` | One-to-one `UserLimit`, `Wallet`; referenced by `Order`, `WalletTransaction`, `AuditLog`, `ApiRequestLog`, `BuyerApiKey` | `role`/`status` are strings, no enum/check constraint. No failed login/session/revoked token table. |
-| `BuyerApiKey` / `buyer_api_keys` | Managed buyer API keys | `public_id`, `user_id`, `name`, `key_hash`, `key_prefix`, `status`, `scopes`, `last_used_at`, `created_at`, `revoked_at` | FK user | Multiple keys, labels/scopes storage, revoke and last-used foundation exist. Scope enforcement and analytics beyond last-used are not implemented. |
+| `BuyerApiKey` / `buyer_api_keys` | Managed buyer API keys | `public_id`, `user_id`, `name`, `key_hash`, `key_prefix`, `status`, `scopes`, `last_used_at`, `created_at`, `revoked_at` | FK user | Multiple keys, labels, basic scope enforcement, revoke, last-used, and usage visibility exist. Scope model is intentionally minimal. |
 | `UserLimit` / `user_limits` | Per-user order/spend limits | `max_orders_per_minute`, `max_orders_per_day`, `max_active_orders`, `max_daily_spend` | FK `user_id` unique | Good MVP table. Limits are enforced by DB counts, not Redis counters. |
 | `Wallet` / `wallets` | User available and held balance | `balance`, `held_balance`, `currency` | FK `user_id` unique | Non-negative balance/held balance DB checks exist. |
 | `WalletTransaction` / `wallet_transactions` | Wallet ledger | `user_id`, `order_id`, `payment_intent_id`, `type`, `amount`, `status`, `reference`, `metadata`, `created_at` | FK user/order/payment intent | Good ledger base. Unique `(order_id,type,status)` makes hold/capture/refund idempotent; unique non-null `payment_intent_id` makes payment intent deposits idempotent. Manual deposit/adjustment with no order/payment intent are not idempotent. No enum/check constraints. |
@@ -526,7 +526,7 @@ Problems and recommendations:
 | Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job | NOT DONE |
 | Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas | NOT DONE |
 | User wallet transaction history | P1 | Buyers need account transparency | `/buyer/wallet/transactions` or `/api/v1/wallet/transactions` | NOT DONE |
-| API key management with multiple keys | P1 | Safe rotation without downtime | `buyer_api_keys` table with labels/scopes/last_used_at | PARTIAL (create/list/revoke/auth/last-used and basic usage visibility; scope enforcement and heavy analytics not implemented) |
+| API key management with multiple keys | P1 | Safe rotation without downtime | `buyer_api_keys` table with labels/scopes/last_used_at | PARTIAL (create/list/revoke/auth/last-used, basic usage visibility, and minimal managed-key scope enforcement; heavy analytics not implemented) |
 | Refresh token/session revocation | P1 | Logout and compromised token handling | `sessions`/`refresh_tokens` table | NOT DONE |
 | Operator catalog | P1 | Normalize operator names and availability | `operators` table | NOT DONE |
 | Provider secret encryption | P1 | Required before real provider credentials | `core/secrets.py`, KMS/Fernet integration | NOT DONE |

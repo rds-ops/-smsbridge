@@ -9,9 +9,31 @@ from sqlalchemy.orm import Session
 from app.core.security import generate_api_key, hash_api_key
 from app.models import ApiRequestLog, BuyerApiKey, User
 
+DEFAULT_BUYER_API_KEY_SCOPES = [
+    "read",
+    "wallet:read",
+    "orders:create",
+    "orders:read",
+    "orders:cancel",
+    "orders:finish",
+    "payments:create",
+    "payments:read",
+]
+
 
 def key_prefix(raw_key: str) -> str:
     return raw_key[:16]
+
+
+def normalize_scopes(scopes: list[str] | None) -> list[str]:
+    if not scopes:
+        return list(DEFAULT_BUYER_API_KEY_SCOPES)
+    normalized: list[str] = []
+    for scope in scopes:
+        scope_value = str(scope).strip()
+        if scope_value and scope_value not in normalized:
+            normalized.append(scope_value)
+    return normalized or list(DEFAULT_BUYER_API_KEY_SCOPES)
 
 
 def create_buyer_api_key(
@@ -19,7 +41,7 @@ def create_buyer_api_key(
     user: User,
     *,
     name: str | None = None,
-    scopes: dict | None = None,
+    scopes: list[str] | None = None,
 ) -> tuple[BuyerApiKey, str]:
     raw = generate_api_key()
     api_key = BuyerApiKey(
@@ -28,7 +50,7 @@ def create_buyer_api_key(
         key_hash=hash_api_key(raw),
         key_prefix=key_prefix(raw),
         status="active",
-        scopes=scopes,
+        scopes=normalize_scopes(scopes),
     )
     db.add(api_key)
     db.flush()

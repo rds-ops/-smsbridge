@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, get_current_user_or_api_key
+from app.core.deps import get_current_user, get_current_user_or_api_key, require_buyer_scope
 from app.core.security import generate_api_key, hash_api_key
 from app.db.session import get_db
 from app.models import Country, Order, Price, Service, User, WalletTransaction
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/v1", tags=["user-api"])
 
 
 @router.get("/balance", response_model=WalletOut)
-def balance(user: User = Depends(get_current_user_or_api_key)):
+def balance(user: User = Depends(require_buyer_scope("wallet:read"))):
     return user.wallet
 
 
@@ -67,7 +67,7 @@ def create_order(
     payload: OrderCreate,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user_or_api_key),
+    user: User = Depends(require_buyer_scope("orders:create")),
 ):
     return order_service.create_order_idempotent_transactional(
         db,
@@ -85,7 +85,7 @@ def list_orders(
     service: str | None = None,
     country: str | None = None,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_buyer_scope("orders:read")),
 ):
     stmt = select(Order).where(Order.user_id == user.id)
     if status:
@@ -98,12 +98,12 @@ def list_orders(
 
 
 @router.get("/orders/{public_id}", response_model=OrderOut)
-def get_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user_or_api_key)):
+def get_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(require_buyer_scope("orders:read"))):
     return order_service.get_user_order(db, user, public_id)
 
 
 @router.post("/orders/{public_id}/cancel", response_model=OrderOut)
-def cancel_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user_or_api_key)):
+def cancel_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(require_buyer_scope("orders:cancel"))):
     order = order_service.get_user_order(db, user, public_id)
     order = order_service.cancel_order(db, order, actor_user_id=user.id)
     db.commit()
@@ -112,7 +112,7 @@ def cancel_order(public_id: str, db: Session = Depends(get_db), user: User = Dep
 
 
 @router.post("/orders/{public_id}/finish", response_model=OrderOut)
-def finish_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user_or_api_key)):
+def finish_order(public_id: str, db: Session = Depends(get_db), user: User = Depends(require_buyer_scope("orders:finish"))):
     order = order_service.get_user_order(db, user, public_id)
     order = order_service.finish_order(db, order, actor_user_id=user.id)
     db.commit()
@@ -186,7 +186,7 @@ def wallet_transactions(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user_or_api_key),
+    user: User = Depends(require_buyer_scope("wallet:read")),
 ):
     stmt = (
         select(WalletTransaction, Order.public_id)
@@ -216,7 +216,7 @@ def create_payment_intent(
     payload: PaymentIntentCreateIn,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user_or_api_key),
+    user: User = Depends(require_buyer_scope("payments:create")),
 ):
     intent = payment_intent_service.create_payment_intent(
         db,
@@ -235,7 +235,7 @@ def create_payment_intent(
 def get_payment_intent(
     public_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user_or_api_key),
+    user: User = Depends(require_buyer_scope("payments:read")),
 ):
     return payment_intent_service.get_user_payment_intent(db, user=user, public_id=public_id)
 

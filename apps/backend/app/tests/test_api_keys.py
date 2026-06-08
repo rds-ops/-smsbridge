@@ -6,11 +6,14 @@ from app.db.session import SessionLocal
 from app.models import ApiRequestLog, BuyerApiKey
 
 
-def _create_api_key(client, user_token: str, name: str = "local test") -> dict:
+def _create_api_key(client, user_token: str, name: str = "local test", scopes: list[str] | None = None) -> dict:
+    payload = {"name": name}
+    if scopes is not None:
+        payload["scopes"] = scopes
     response = client.post(
         "/api/v1/api-keys",
         headers={"Authorization": f"Bearer {user_token}"},
-        json={"name": name, "scopes": {"orders": "read_write"}},
+        json=payload,
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -31,7 +34,8 @@ def test_create_api_key_returns_raw_key_once(client, user_token):
     assert created["key_prefix"] == created["api_key"][:16]
     assert created["name"] == "local test"
     assert created["status"] == "active"
-    assert created["scopes"] == {"orders": "read_write"}
+    assert "wallet:read" in created["scopes"]
+    assert "orders:create" in created["scopes"]
     assert "key_hash" not in created
 
     listed = client.get("/api/v1/api-keys", headers={"Authorization": f"Bearer {user_token}"})
@@ -44,7 +48,7 @@ def test_create_api_key_returns_raw_key_once(client, user_token):
 
 
 def test_new_api_key_authenticates_buyer_endpoint_and_updates_last_used(client, user_token):
-    created = _create_api_key(client, user_token)
+    created = _create_api_key(client, user_token, scopes=["wallet:read"])
 
     before = client.get("/api/v1/api-keys", headers={"Authorization": f"Bearer {user_token}"}).json()[0]
     assert before["last_used_at"] is None
@@ -116,7 +120,7 @@ def test_api_key_hash_is_stored_without_raw_key(client, user_token):
 
 
 def test_managed_api_key_request_logs_buyer_api_key_id(client, user_token):
-    created = _create_api_key(client, user_token)
+    created = _create_api_key(client, user_token, scopes=["wallet:read"])
 
     response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"})
     assert response.status_code == 200, response.text
@@ -153,7 +157,7 @@ def test_legacy_api_key_request_logs_without_buyer_api_key_id(client, user_token
 
 
 def test_buyer_can_view_own_api_key_usage_without_raw_secret(client, user_token):
-    created = _create_api_key(client, user_token)
+    created = _create_api_key(client, user_token, scopes=["wallet:read"])
     assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"}).status_code == 200
     assert client.get("/api/v1/limits", headers={"Authorization": f"Bearer {created['api_key']}"}).status_code == 200
 
@@ -186,7 +190,7 @@ def test_buyer_cannot_view_another_users_api_key_usage(client, user_token):
 
 
 def test_revoked_key_usage_visible_but_revoked_key_cannot_authenticate(client, user_token):
-    created = _create_api_key(client, user_token)
+    created = _create_api_key(client, user_token, scopes=["wallet:read"])
     assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"}).status_code == 200
     revoked = client.post(
         f"/api/v1/api-keys/{created['public_id']}/revoke",
@@ -204,3 +208,42 @@ def test_revoked_key_usage_visible_but_revoked_key_cannot_authenticate(client, u
     assert usage.status_code == 200, usage.text
     assert usage.json()["status"] == "revoked"
     assert usage.json()["total_requests"] == 1
+
+
+def test_jwt_buyer_access_still_works_without_api_key_scopes(client, user_token):
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"})
+    assert response.status_code == 200, response.text
+
+
+def test_managed_key_without_wallet_read_cannot_read_balance(client, user_token):
+    created = _create_api_key(client, user_token, scopes=["orders:create"])
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "API key scope is not allowed"
+
+
+def test_managed_key_with_orders_create_can_create_order(client, user_token):
+    created = _create_api_key(client, user_token, scopes=["orders:create"])
+    response = client.post(
+        "/api/v1/orders",
+        headers={"Authorization": f"Bearer {created['api_key']}"},
+        json={"service_code": "telegram", "country_iso2": "ID"},
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_managed_key_without_orders_create_cannot_create_order(client, user_token):
+    created = _create_api_key(client, user_token, scopes=["wallet:read"])
+    response = client.post(
+        "/api/v1/orders",
+        headers={"Authorization": f"Bearer {created['api_key']}"},
+        json={"service_code": "telegram", "country_iso2": "ID"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "API key scope is not allowed"
+
+
+def test_api_key_management_endpoints_remain_jwt_only(client, user_token):
+    created = _create_api_key(client, user_token)
+    response = client.get("/api/v1/api-keys", headers={"Authorization": f"Bearer {created['api_key']}"})
+    assert response.status_code == 401

@@ -41,9 +41,7 @@ Body:
 ```json
 {
   "name": "local dev key",
-  "scopes": {
-    "orders": "read_write"
-  }
+  "scopes": ["wallet:read", "orders:create", "orders:read"]
 }
 ```
 
@@ -70,7 +68,17 @@ curl -sS -X POST "$BASE_URL/api/v1/api-keys" \
 - Includes total request count, `last_used_at`, and grouped recent counts by endpoint/method/status.
 - Does not expose raw keys, key hashes, or request IP addresses.
 
-Scopes are stored for future enforcement but are not enforced yet.
+If `scopes` is omitted or empty, the backend creates the key with the default buyer scopes:
+- `read`
+- `wallet:read`
+- `orders:create`
+- `orders:read`
+- `orders:cancel`
+- `orders:finish`
+- `payments:create`
+- `payments:read`
+
+Scope enforcement applies to managed API keys only. JWT auth keeps full access to the current user's buyer endpoints, and the legacy single API key keeps its existing compatibility behavior.
 
 ### Legacy API key
 

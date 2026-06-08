@@ -119,7 +119,7 @@ class BuyerWalletTransactionOut(ORMModel):
 
 class BuyerApiKeyCreateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    scopes: dict[str, Any] | None = None
+    scopes: list[str] | None = None
 
 
 class BuyerApiKeyOut(ORMModel):
@@ -128,7 +128,7 @@ class BuyerApiKeyOut(ORMModel):
     name: str | None = None
     key_prefix: str
     status: str
-    scopes: dict[str, Any] | None = None
+    scopes: list[str] | None = None
     last_used_at: datetime | None = None
     created_at: datetime
     revoked_at: datetime | None = None
