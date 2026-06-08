@@ -35,6 +35,7 @@ from app.schemas.admin import (
     PaymentCreditReconciliationOut,
     ProviderIn,
     ProviderOut,
+    SupplierPayoutReconciliationOut,
     UserDetail,
     UserLimitsPatch,
     UserStatusPatch,
@@ -60,6 +61,7 @@ from app.services.limits import apply_tier_limits
 from app.services.orders import refund_order
 from app.services.payment_intents import manual_complete_payment_intent
 from app.services.payment_reconciliation import reconcile_payment_credits
+from app.services.supplier_payout_reconciliation import reconcile_supplier_payouts
 from app.services.suppliers import (
     approve_supplier_payout_request,
     mark_supplier_payout_paid,
@@ -346,6 +348,15 @@ def supplier_payout_requests(
             .offset(max(0, offset))
         )
     )
+
+
+@router.get("/supplier-payout-requests/reconciliation", response_model=SupplierPayoutReconciliationOut)
+def supplier_payout_requests_reconciliation(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    return reconcile_supplier_payouts(db, limit=limit)
 
 
 @router.get("/supplier-payout-requests/{payout_id}", response_model=SupplierPayoutRequestOut)

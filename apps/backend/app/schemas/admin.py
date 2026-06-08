@@ -131,3 +131,19 @@ class PaymentCreditIssueOut(ORMModel):
 class PaymentCreditReconciliationOut(ORMModel):
     counts: dict[str, int]
     issues: list[PaymentCreditIssueOut]
+
+
+class SupplierPayoutReconciliationIssueOut(ORMModel):
+    issue_type: str
+    payout_id: int | None = None
+    payout_public_id: str | None = None
+    supplier_id: int
+    status: str | None = None
+    amount: Decimal | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class SupplierPayoutReconciliationOut(ORMModel):
+    counts: dict[str, int]
+    issues: list[SupplierPayoutReconciliationIssueOut]

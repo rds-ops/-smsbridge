@@ -172,6 +172,7 @@ What is mixed:
 | POST | `/admin/supplier-payout-requests/{id}/approve` | `app/api/admin.py` | admin | Approve supplier payout request | Status-only approval; held funds remain held. |
 | POST | `/admin/supplier-payout-requests/{id}/reject` | `app/api/admin.py` | admin | Reject supplier payout request | Releases held funds back to supplier balance and writes ledger. |
 | POST | `/admin/supplier-payout-requests/{id}/mark-paid` | `app/api/admin.py` | admin | Mark supplier payout paid | Decreases supplier held balance and writes ledger; no external money sent. |
+| GET | `/admin/supplier-payout-requests/reconciliation` | `app/api/admin.py` | admin | Supplier payout accounting consistency visibility | Read-only checks for missing/duplicate payout ledger rows; no auto-repair or external provider reconciliation. |
 | POST | `/admin/wallets/deposit` | `app/api/admin.py` | admin | Manual user deposit | Creates wallet transaction. No payment provider integration. |
 | POST | `/admin/wallets/adjustment` | `app/api/admin.py` | admin | Manual user wallet adjustment | Creates wallet transaction, prevents negative balance. |
 | POST | `/admin/orders/{order_id}/refund` | `app/api/admin.py` | admin | Refund order | Idempotent for refunded/expired/cancelled. Can attempt refund after completed and fail in wallet if captured. |
@@ -516,7 +517,7 @@ Problems and recommendations:
 | Generic SMS message table | P0 | External provider SMS should be stored consistently | `sms_messages` + idempotent inserts | DONE |
 | Internal webhook namespace | P0 | Providers/payment callbacks need isolated auth | `/internal/provider-webhooks/{provider_code}` | PARTIAL (skeleton only) |
 | Supplier release retry queue | P0 | Failed supplier release callbacks can leave numbers reserved | `supplier_release_retries`, Celery retry task | DONE |
-| Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payout_requests`, `/supplier/v1/payout-requests`, `/admin/supplier-payout-requests` | PARTIAL (request/hold/admin approve/reject/mark-paid ledger skeleton; no external payout provider) |
+| Supplier payout lifecycle | P1 | Suppliers need withdrawals and accounting | `supplier_payout_requests`, `/supplier/v1/payout-requests`, `/admin/supplier-payout-requests` | PARTIAL (request/hold/admin approve/reject/mark-paid ledger skeleton + read-only reconciliation visibility; no external payout provider) |
 | Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job | NOT DONE |
 | Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas | NOT DONE |
 | User wallet transaction history | P1 | Buyers need account transparency | `/buyer/wallet/transactions` or `/api/v1/wallet/transactions` | NOT DONE |
@@ -613,6 +614,7 @@ Keep `/api/v1` if external developers already use it, but internally map it as b
 - `POST /admin/supplier-payout-requests/{id}/approve`
 - `POST /admin/supplier-payout-requests/{id}/reject`
 - `POST /admin/supplier-payout-requests/{id}/mark-paid`
+- `GET /admin/supplier-payout-requests/reconciliation`
 - `GET /admin/audit-logs`
 - `GET /admin/api-request-logs`
 
@@ -750,7 +752,7 @@ Recommended 1-2 week plan:
    - Add internal webhook namespace and signature validation plan. PARTIAL (namespace exists with shared-secret auth; no provider-specific payload validation/processing yet)
 
 6. P1 marketplace accounting:
-   - Add supplier payout/withdrawal model. PARTIAL (request/hold/admin approve/reject/mark-paid skeleton; no external payout provider)
+   - Add supplier payout/withdrawal model. PARTIAL (request/hold/admin approve/reject/mark-paid skeleton + read-only reconciliation visibility; no external payout provider)
    - Add wallet transaction history endpoint for buyers.
    - Add supplier transaction/payout endpoints for suppliers. PARTIAL (payout request list/create exists; transaction list is admin-only)
 

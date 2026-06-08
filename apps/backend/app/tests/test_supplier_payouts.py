@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db.session import SessionLocal
 from app.models import Supplier, SupplierPayoutRequest, SupplierTransaction
@@ -240,3 +240,118 @@ def test_paid_payout_cannot_be_rejected_or_double_mutated(client, admin_token):
         assert payout_row.status == "paid"
         assert supplier_row.balance == Decimal("6.0000")
         assert supplier_row.held_balance == Decimal("0.0000")
+
+
+def test_supplier_payout_reconciliation_clean_flow_reports_no_issues(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+    _create_payout(client, api_key, "4.0000")
+
+    response = client.get(
+        "/admin/supplier-payout-requests/reconciliation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["counts"]["missing_payout_hold"] == 0
+    assert body["counts"]["missing_payout_release"] == 0
+    assert body["counts"]["missing_payout_paid"] == 0
+    assert body["counts"]["duplicate_payout_transaction"] == 0
+    assert body["counts"]["supplier_held_balance_mismatch"] == 0
+    assert body["issues"] == []
+
+
+def test_supplier_payout_reconciliation_reports_requested_missing_hold(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+    payout = _create_payout(client, api_key, "4.0000").json()
+
+    with SessionLocal() as db:
+        db.execute(
+            delete(SupplierTransaction).where(
+                SupplierTransaction.reference == f"payout:{payout['public_id']}",
+                SupplierTransaction.type == "payout_hold",
+            )
+        )
+        db.commit()
+
+    response = client.get(
+        "/admin/supplier-payout-requests/reconciliation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["counts"]["missing_payout_hold"] == 1
+    assert any(issue["issue_type"] == "missing_payout_hold" and issue["payout_id"] == payout["id"] for issue in body["issues"])
+
+
+def test_supplier_payout_reconciliation_reports_rejected_missing_release(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+    payout = _create_payout(client, api_key, "4.0000").json()
+    rejected = client.post(
+        f"/admin/supplier-payout-requests/{payout['id']}/reject",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": "test"},
+    )
+    assert rejected.status_code == 200, rejected.text
+
+    with SessionLocal() as db:
+        db.execute(
+            delete(SupplierTransaction).where(
+                SupplierTransaction.reference == f"payout:{payout['public_id']}",
+                SupplierTransaction.type == "payout_release",
+            )
+        )
+        db.commit()
+
+    response = client.get(
+        "/admin/supplier-payout-requests/reconciliation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["counts"]["missing_payout_release"] == 1
+    assert any(issue["issue_type"] == "missing_payout_release" and issue["payout_id"] == payout["id"] for issue in body["issues"])
+
+
+def test_supplier_payout_reconciliation_reports_paid_missing_paid_transaction(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+    payout = _create_payout(client, api_key, "4.0000").json()
+    paid = client.post(
+        f"/admin/supplier-payout-requests/{payout['id']}/mark-paid",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={},
+    )
+    assert paid.status_code == 200, paid.text
+
+    with SessionLocal() as db:
+        db.execute(
+            delete(SupplierTransaction).where(
+                SupplierTransaction.reference == f"payout:{payout['public_id']}",
+                SupplierTransaction.type == "payout_paid",
+            )
+        )
+        db.commit()
+
+    response = client.get(
+        "/admin/supplier-payout-requests/reconciliation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["counts"]["missing_payout_paid"] == 1
+    assert any(issue["issue_type"] == "missing_payout_paid" and issue["payout_id"] == payout["id"] for issue in body["issues"])
+
+
+def test_supplier_payout_reconciliation_endpoint_is_admin_only(client, user_token):
+    response = client.get(
+        "/admin/supplier-payout-requests/reconciliation",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert response.status_code == 403
