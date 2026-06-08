@@ -149,6 +149,7 @@ What is mixed:
 | POST | `/api/v1/api-keys` | `app/api/api_v1.py` | buyer JWT | Create managed buyer API key | Returns raw key once; stores hash/prefix/scopes. Scope enforcement not implemented yet. |
 | GET | `/api/v1/api-keys` | `app/api/api_v1.py` | buyer JWT | List managed buyer API keys | Does not expose raw keys or hashes. |
 | POST | `/api/v1/api-keys/{public_id}/revoke` | `app/api/api_v1.py` | buyer JWT | Revoke managed buyer API key | Idempotent; revoked keys no longer authenticate. |
+| GET | `/api/v1/api-keys/{public_id}/usage` | `app/api/api_v1.py` | buyer JWT | Managed API key usage visibility | Owner-only totals and grouped endpoint/method/status counts. No raw keys/hashes/IPs. |
 | POST | `/api/v1/api-key/regenerate` | `app/api/api_v1.py` | buyer JWT | Regenerate legacy single buyer API key | Legacy compatibility; old key invalidated. Prefer managed API keys. |
 | GET | `/api/v1/limits` | `app/api/api_v1.py` | buyer/API key | Return user limits | OK. |
 | GET | `/admin/users` | `app/api/admin.py` | admin | List users | Limit 200 only; no pagination/filtering. |
@@ -212,7 +213,7 @@ Dangerous or wrongly exposed endpoints/fields:
 | `Price` / `prices` | Provider price and available count by service/country/operator | `provider_id`, `service_code`, `country_iso2`, `operator`, `provider_cost`, `final_price`, `available_count`, `delivery_rate` | FK provider | Nullable `operator` uniqueness is normalized by `operator_key`. No FK to service/country. Buyer schema hides provider cost. |
 | `Order` / `orders` | Buyer activation order | `public_id`, `user_id`, `provider_id`, `provider_order_id`, `service_code`, `country_iso2`, `operator`, `phone_number`, `status`, `price`, `provider_cost`, `sms_code`, `sms_text`, `expires_at` | FK user/provider; one supplier activation optional | State transitions are centralized and logged in `order_events`. No `completed_at`, `cancelled_at`, `refunded_at`, `sms_received_at`, `last_polled_at`, `error_code`. |
 | `AuditLog` / `audit_logs` | Admin/system audit events | `actor_user_id`, `action`, `entity_type`, `entity_id`, `metadata` | FK user nullable | OK base. No actor supplier id. |
-| `ApiRequestLog` / `api_request_logs` | API request logs | `user_id`, `supplier_id`, `endpoint`, `method`, `ip_address`, `status_code` | FK user/supplier nullable | Supplier endpoints are logged. No duration/user agent. |
+| `ApiRequestLog` / `api_request_logs` | API request logs | `user_id`, `supplier_id`, `buyer_api_key_id`, `endpoint`, `method`, `ip_address`, `status_code` | FK user/supplier/buyer API key nullable | Supplier endpoints and managed buyer API key usage are logged. No duration/user agent. |
 | `SystemSetting` / `system_settings` | JSON settings | `key`, `value` | None | OK for small settings. |
 | `Supplier` / `suppliers` | Supplier account/entity | `name`, `email`, `status`, `api_key_hash`, `reward_percent`, `balance`, `held_balance`, `currency` | Referenced by supplier inventory/activation/sms/transactions/payout requests | No user linkage. No supplier wallet transaction check constraint. No KYC/moderation fields. |
 | `SupplierInventory` / `supplier_inventory` | Count-based supplier stock by service/country/operator | `supplier_id`, `service_code`, `country_iso2`, `operator`, `available_count`, visibility fields, `status`, `last_sync_at` | FK supplier | No exact real number pool. Nullable `operator` uniqueness is normalized by `operator_key`. No FK to service/country. |
@@ -525,7 +526,7 @@ Problems and recommendations:
 | Supplier/provider stats | P1 | Needed for routing quality and marketplace health | `supplier_stats`, `provider_stats`, stats job | NOT DONE |
 | Pagination/filtering | P1 | Admin and order lists cap at fixed 100/200/500 | Cursor pagination schemas | NOT DONE |
 | User wallet transaction history | P1 | Buyers need account transparency | `/buyer/wallet/transactions` or `/api/v1/wallet/transactions` | NOT DONE |
-| API key management with multiple keys | P1 | Safe rotation without downtime | `buyer_api_keys` table with labels/scopes/last_used_at | PARTIAL (create/list/revoke/auth/last-used foundation; scope enforcement and analytics not implemented) |
+| API key management with multiple keys | P1 | Safe rotation without downtime | `buyer_api_keys` table with labels/scopes/last_used_at | PARTIAL (create/list/revoke/auth/last-used and basic usage visibility; scope enforcement and heavy analytics not implemented) |
 | Refresh token/session revocation | P1 | Logout and compromised token handling | `sessions`/`refresh_tokens` table | NOT DONE |
 | Operator catalog | P1 | Normalize operator names and availability | `operators` table | NOT DONE |
 | Provider secret encryption | P1 | Required before real provider credentials | `core/secrets.py`, KMS/Fernet integration | NOT DONE |
@@ -572,6 +573,7 @@ Keep `/api/v1` if external developers already use it, but internally map it as b
 - `POST /api/v1/api-keys`
 - `GET /api/v1/api-keys`
 - `POST /api/v1/api-keys/{public_id}/revoke`
+- `GET /api/v1/api-keys/{public_id}/usage`
 - `POST /api/v1/payments/deposit`
 - `GET /api/v1/payments`
 

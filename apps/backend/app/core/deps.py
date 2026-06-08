@@ -61,6 +61,7 @@ def get_current_user_or_api_key(
         db.commit()
         user = db.get(User, managed_key.user_id)
         if user:
+            request.state.buyer_api_key_id = managed_key.id
             return _remember_user(request, user)
 
     user = db.scalar(select(User).where(User.api_key_hash == token_hash))

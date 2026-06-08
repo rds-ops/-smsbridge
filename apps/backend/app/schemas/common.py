@@ -99,6 +99,7 @@ class ApiRequestLogOut(ORMModel):
     id: int
     user_id: int | None
     supplier_id: int | None = None
+    buyer_api_key_id: int | None = None
     endpoint: str
     method: str
     ip_address: str | None
@@ -136,6 +137,22 @@ class BuyerApiKeyOut(ORMModel):
 class BuyerApiKeyCreateOut(BuyerApiKeyOut):
     api_key: str
     message: str = "Store this key now. It will not be shown again."
+
+
+class BuyerApiKeyUsageRowOut(BaseModel):
+    endpoint: str
+    method: str
+    status_code: int
+    count: int
+
+
+class BuyerApiKeyUsageOut(BaseModel):
+    public_id: str
+    key_prefix: str
+    status: str
+    total_requests: int
+    last_used_at: datetime | None = None
+    recent: list[BuyerApiKeyUsageRowOut]
 
 
 class PaymentIntentCreateIn(BaseModel):

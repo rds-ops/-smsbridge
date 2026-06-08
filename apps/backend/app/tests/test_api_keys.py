@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models import BuyerApiKey
+from app.models import ApiRequestLog, BuyerApiKey
 
 
 def _create_api_key(client, user_token: str, name: str = "local test") -> dict:
@@ -113,3 +113,94 @@ def test_api_key_hash_is_stored_without_raw_key(client, user_token):
         assert api_key is not None
         assert api_key.key_hash != created["api_key"]
         assert created["api_key"] not in api_key.key_hash
+
+
+def test_managed_api_key_request_logs_buyer_api_key_id(client, user_token):
+    created = _create_api_key(client, user_token)
+
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"})
+    assert response.status_code == 200, response.text
+
+    with SessionLocal() as db:
+        api_key = db.scalar(select(BuyerApiKey).where(BuyerApiKey.public_id == created["public_id"]))
+        log = db.scalar(
+            select(ApiRequestLog)
+            .where(ApiRequestLog.endpoint == "/api/v1/balance", ApiRequestLog.status_code == 200)
+            .order_by(ApiRequestLog.created_at.desc(), ApiRequestLog.id.desc())
+        )
+        assert log is not None
+        assert log.user_id == api_key.user_id
+        assert log.buyer_api_key_id == api_key.id
+        assert log.supplier_id is None
+
+
+def test_legacy_api_key_request_logs_without_buyer_api_key_id(client, user_token):
+    legacy = client.post("/api/v1/api-key/regenerate", headers={"Authorization": f"Bearer {user_token}"})
+    assert legacy.status_code == 200, legacy.text
+
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {legacy.json()['api_key']}"})
+    assert response.status_code == 200, response.text
+
+    with SessionLocal() as db:
+        log = db.scalar(
+            select(ApiRequestLog)
+            .where(ApiRequestLog.endpoint == "/api/v1/balance", ApiRequestLog.status_code == 200)
+            .order_by(ApiRequestLog.created_at.desc(), ApiRequestLog.id.desc())
+        )
+        assert log is not None
+        assert log.user_id == 2
+        assert log.buyer_api_key_id is None
+
+
+def test_buyer_can_view_own_api_key_usage_without_raw_secret(client, user_token):
+    created = _create_api_key(client, user_token)
+    assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"}).status_code == 200
+    assert client.get("/api/v1/limits", headers={"Authorization": f"Bearer {created['api_key']}"}).status_code == 200
+
+    response = client.get(
+        f"/api/v1/api-keys/{created['public_id']}/usage",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["public_id"] == created["public_id"]
+    assert body["key_prefix"] == created["key_prefix"]
+    assert body["total_requests"] == 2
+    assert body["last_used_at"] is not None
+    assert {"endpoint": "/api/v1/balance", "method": "GET", "status_code": 200, "count": 1} in body["recent"]
+    assert {"endpoint": "/api/v1/limits", "method": "GET", "status_code": 200, "count": 1} in body["recent"]
+    assert "api_key" not in body
+    assert "key_hash" not in body
+    assert created["api_key"] not in str(body)
+
+
+def test_buyer_cannot_view_another_users_api_key_usage(client, user_token):
+    other_token = _register_and_login(client, "usage-other@example.com")
+    other_key = _create_api_key(client, other_token, "other usage")
+
+    response = client.get(
+        f"/api/v1/api-keys/{other_key['public_id']}/usage",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert response.status_code == 404
+
+
+def test_revoked_key_usage_visible_but_revoked_key_cannot_authenticate(client, user_token):
+    created = _create_api_key(client, user_token)
+    assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"}).status_code == 200
+    revoked = client.post(
+        f"/api/v1/api-keys/{created['public_id']}/revoke",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert revoked.status_code == 200, revoked.text
+
+    rejected = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created['api_key']}"})
+    assert rejected.status_code == 401
+
+    usage = client.get(
+        f"/api/v1/api-keys/{created['public_id']}/usage",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert usage.status_code == 200, usage.text
+    assert usage.json()["status"] == "revoked"
+    assert usage.json()["total_requests"] == 1

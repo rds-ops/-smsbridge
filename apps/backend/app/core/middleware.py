@@ -31,6 +31,7 @@ class ApiRequestLogMiddleware(BaseHTTPMiddleware):
                     ApiRequestLog(
                         user_id=getattr(request.state, "user_id", None),
                         supplier_id=getattr(request.state, "supplier_id", None),
+                        buyer_api_key_id=getattr(request.state, "buyer_api_key_id", None),
                         endpoint=request.url.path,
                         method=request.method,
                         ip_address=request.client.host if request.client else None,

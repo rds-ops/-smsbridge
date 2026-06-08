@@ -13,6 +13,7 @@ from app.schemas.common import (
     BuyerApiKeyCreateIn,
     BuyerApiKeyCreateOut,
     BuyerApiKeyOut,
+    BuyerApiKeyUsageOut,
     CountryOut,
     MessageOut,
     OrderCreate,
@@ -166,6 +167,11 @@ def revoke_api_key(public_id: str, db: Session = Depends(get_db), user: User = D
     db.commit()
     db.refresh(api_key)
     return api_key
+
+
+@router.get("/api-keys/{public_id}/usage", response_model=BuyerApiKeyUsageOut)
+def api_key_usage(public_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return buyer_api_key_service.get_buyer_api_key_usage(db, user, public_id)
 
 
 @router.get("/limits", response_model=UserLimitOut)

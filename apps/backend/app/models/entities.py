@@ -358,6 +358,7 @@ class ApiRequestLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), index=True, nullable=True)
+    buyer_api_key_id: Mapped[Optional[int]] = mapped_column(ForeignKey("buyer_api_keys.id"), index=True, nullable=True)
     endpoint: Mapped[str] = mapped_column(String(500), nullable=False)
     method: Mapped[str] = mapped_column(String(10), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)

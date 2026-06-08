@@ -476,9 +476,9 @@ Codex не должен напрямую делать крупный refactor б
 
 - wallet transaction history. DONE
 - payment history
-- API key management. PARTIAL (buyer create/list/revoke foundation)
+- API key management. PARTIAL (buyer create/list/revoke/usage foundation)
 - multiple API keys. DONE
-- scopes and labels. PARTIAL (stored, not enforced)
+- scopes and labels. PARTIAL (stored and visible, not enforced)
 
 ---
 

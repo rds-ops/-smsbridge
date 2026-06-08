@@ -64,6 +64,12 @@ curl -sS -X POST "$BASE_URL/api/v1/api-keys" \
 - Requires JWT auth.
 - Idempotently revokes one of the current user's keys.
 
+`GET /api/v1/api-keys/{public_id}/usage`
+- Requires JWT auth.
+- Returns usage visibility for one of the current user's managed API keys.
+- Includes total request count, `last_used_at`, and grouped recent counts by endpoint/method/status.
+- Does not expose raw keys, key hashes, or request IP addresses.
+
 Scopes are stored for future enforcement but are not enforced yet.
 
 ### Legacy API key
