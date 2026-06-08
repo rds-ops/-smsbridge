@@ -38,6 +38,7 @@ from app.schemas.admin import (
     SupplierPayoutReconciliationOut,
     UserDetail,
     UserLimitsPatch,
+    UserRiskSummaryOut,
     UserStatusPatch,
 )
 from app.schemas.common import ApiRequestLogOut, AuditLogOut, OrderOut, WalletOut
@@ -61,6 +62,7 @@ from app.services.limits import apply_tier_limits
 from app.services.orders import refund_order
 from app.services.payment_intents import manual_complete_payment_intent
 from app.services.payment_reconciliation import reconcile_payment_credits
+from app.services.risk import get_user_risk_summary, list_user_risk_summaries
 from app.services.supplier_payout_reconciliation import reconcile_supplier_payouts
 from app.services.suppliers import (
     approve_supplier_payout_request,
@@ -543,3 +545,25 @@ def metrics(db: Session = Depends(get_db), admin: User = Depends(require_admin))
         "top_services": [{"service_code": row[0], "orders": row[1]} for row in top_services],
         "top_countries": [{"country_iso2": row[0], "orders": row[1]} for row in top_countries],
     }
+
+
+@router.get("/risk/users", response_model=list[UserRiskSummaryOut])
+def risk_users(
+    risk_level: str | None = None,
+    user_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    if risk_level and risk_level not in {"low", "medium", "high"}:
+        raise HTTPException(status_code=400, detail="Invalid risk level")
+    return list_user_risk_summaries(db, risk_level=risk_level, user_id=user_id, limit=limit, offset=offset)
+
+
+@router.get("/risk/users/{user_id}", response_model=UserRiskSummaryOut)
+def risk_user_detail(user_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return get_user_risk_summary(db, user)

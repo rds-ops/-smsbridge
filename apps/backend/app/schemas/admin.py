@@ -147,3 +147,28 @@ class SupplierPayoutReconciliationIssueOut(ORMModel):
 class SupplierPayoutReconciliationOut(ORMModel):
     counts: dict[str, int]
     issues: list[SupplierPayoutReconciliationIssueOut]
+
+
+class UserRiskSummaryOut(ORMModel):
+    user_id: int
+    email: str
+    status: str
+    tier: str
+    risk_level: str
+    risk_score: int
+    total_orders: int
+    active_orders: int
+    cancelled_orders: int
+    expired_orders: int
+    failed_orders: int
+    completed_orders: int
+    cancellation_rate: float
+    expiration_rate: float
+    failed_rate: float
+    orders_last_1h: int
+    orders_last_24h: int
+    api_requests_last_1h: int
+    managed_api_key_count: int
+    revoked_api_key_count: int
+    last_order_at: datetime | None = None
+    last_api_request_at: datetime | None = None

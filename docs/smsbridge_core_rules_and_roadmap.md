@@ -520,8 +520,8 @@ Codex не должен напрямую делать крупный refactor б
 - structured logging
 - caching strategy
 - background reconciliation jobs
-- abuse prevention
-- fraud/risk controls
+- abuse prevention. PARTIAL (admin-only user risk visibility foundation; no automatic blocking yet)
+- fraud/risk controls. PARTIAL (basic transparent risk scoring from orders/API usage; no ML or auto-ban)
 
 ---
 
