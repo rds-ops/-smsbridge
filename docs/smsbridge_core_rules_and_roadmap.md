@@ -420,6 +420,7 @@ Codex не должен напрямую делать крупный refactor б
 - replace in-memory rate limiting. DONE 
 - move rate limit to Redis. DONE
 - make rate limiting API key/user aware. DONE
+- add configurable rate limit policy by identity type and user tier. DONE
 - add distributed throttling
 - improve Celery polling locks. DONE
 

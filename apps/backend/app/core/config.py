@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     mock_sms_delay_seconds: int = 10
     mock_order_timeout_seconds: int = 120
     rate_limit_per_minute: int = 120
+    rate_limit_anonymous_per_minute: int | None = None
+    rate_limit_user_default_per_minute: int | None = None
+    rate_limit_user_verified_per_minute: int | None = None
+    rate_limit_user_wholesale_per_minute: int | None = None
+    rate_limit_user_partner_per_minute: int | None = None
+    rate_limit_supplier_per_minute: int | None = None
+    rate_limit_admin_per_minute: int | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

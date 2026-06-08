@@ -182,10 +182,10 @@ def test_health_endpoints_bypass_rate_limit(monkeypatch):
 
 
 def test_rate_limit_uses_managed_api_key_bucket(client, user_token, monkeypatch):
-    seen_keys: list[str] = []
+    seen: list[tuple[str, int]] = []
 
     def capture(key, limit, window_seconds):
-        seen_keys.append(key)
+        seen.append((key, limit))
         return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
 
     monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
@@ -196,7 +196,7 @@ def test_rate_limit_uses_managed_api_key_bucket(client, user_token, monkeypatch)
     )
     assert created.status_code == 200, created.text
 
-    seen_keys.clear()
+    seen.clear()
     response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {created.json()['api_key']}"})
     assert response.status_code == 200, response.text
 
@@ -206,7 +206,7 @@ def test_rate_limit_uses_managed_api_key_bucket(client, user_token, monkeypatch)
 
     with SessionLocal() as db:
         key_id = db.scalar(select(BuyerApiKey.id).where(BuyerApiKey.public_id == created.json()["public_id"]))
-    assert seen_keys[-1] == RedisRateLimiter.buyer_api_key_key(key_id)
+    assert seen[-1] == (RedisRateLimiter.buyer_api_key_key(key_id), rate_limit.settings.rate_limit_per_minute)
 
 
 def test_different_managed_api_keys_have_separate_rate_buckets(client, user_token, monkeypatch):
@@ -240,10 +240,10 @@ def test_different_managed_api_keys_have_separate_rate_buckets(client, user_toke
 
 
 def test_rate_limit_uses_jwt_user_bucket(client, user_token, monkeypatch):
-    seen_keys: list[str] = []
+    seen: list[tuple[str, int]] = []
 
     def capture(key, limit, window_seconds):
-        seen_keys.append(key)
+        seen.append((key, limit))
         return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
 
     monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
@@ -251,14 +251,14 @@ def test_rate_limit_uses_jwt_user_bucket(client, user_token, monkeypatch):
     response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"})
 
     assert response.status_code == 200, response.text
-    assert seen_keys[-1] == RedisRateLimiter.user_key(2)
+    assert seen[-1] == (RedisRateLimiter.user_key(2), rate_limit.settings.rate_limit_per_minute)
 
 
 def test_rate_limit_uses_ip_bucket_for_unauthenticated_requests(client, monkeypatch):
-    seen_keys: list[str] = []
+    seen: list[tuple[str, int]] = []
 
     def capture(key, limit, window_seconds):
-        seen_keys.append(key)
+        seen.append((key, limit))
         return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
 
     monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
@@ -266,4 +266,98 @@ def test_rate_limit_uses_ip_bucket_for_unauthenticated_requests(client, monkeypa
     response = client.post("/auth/login", json={"email": "missing@example.com", "password": "bad"})
 
     assert response.status_code == 401
-    assert seen_keys[-1].startswith("rate_limit:ip:")
+    key, limit = seen[-1]
+    assert key.startswith("rate_limit:ip:")
+    assert limit == rate_limit.settings.rate_limit_per_minute
+
+
+def test_anonymous_uses_configured_anonymous_limit(client, monkeypatch):
+    seen: list[tuple[str, int]] = []
+
+    def capture(key, limit, window_seconds):
+        seen.append((key, limit))
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+    monkeypatch.setattr("app.core.middleware.settings.rate_limit_anonymous_per_minute", 7)
+
+    response = client.post("/auth/login", json={"email": "missing@example.com", "password": "bad"})
+
+    assert response.status_code == 401
+    assert seen[-1][1] == 7
+
+
+def test_default_user_uses_configured_default_user_limit(client, user_token, monkeypatch):
+    seen: list[tuple[str, int]] = []
+
+    def capture(key, limit, window_seconds):
+        seen.append((key, limit))
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+    monkeypatch.setattr("app.core.middleware.settings.rate_limit_user_default_per_minute", 11)
+
+    response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert response.status_code == 200, response.text
+    assert seen[-1] == (RedisRateLimiter.user_key(2), 11)
+
+
+def test_wholesale_and_partner_users_use_higher_tier_limits(client, admin_token, user_token, monkeypatch):
+    seen: list[tuple[str, int]] = []
+
+    def capture(key, limit, window_seconds):
+        seen.append((key, limit))
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+    monkeypatch.setattr("app.core.middleware.settings.rate_limit_user_wholesale_per_minute", 55)
+    monkeypatch.setattr("app.core.middleware.settings.rate_limit_user_partner_per_minute", 77)
+
+    patched = client.patch(
+        "/admin/users/2/limits",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"tier": "wholesale"},
+    )
+    assert patched.status_code == 200, patched.text
+    seen.clear()
+    assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).status_code == 200
+    assert seen[-1] == (RedisRateLimiter.user_key(2), 55)
+
+    patched = client.patch(
+        "/admin/users/2/limits",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"tier": "partner"},
+    )
+    assert patched.status_code == 200, patched.text
+    seen.clear()
+    assert client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).status_code == 200
+    assert seen[-1] == (RedisRateLimiter.user_key(2), 77)
+
+
+def test_supplier_uses_configured_supplier_limit(client, admin_token, monkeypatch):
+    seen: list[tuple[str, int]] = []
+
+    def capture(key, limit, window_seconds):
+        seen.append((key, limit))
+        return rate_limit.RateLimitResult(allowed=True, count=1, limit=limit, key=key)
+
+    monkeypatch.setattr(rate_limit.rate_limiter, "check", capture)
+    monkeypatch.setattr("app.core.middleware.settings.rate_limit_supplier_per_minute", 33)
+    created = client.post(
+        "/admin/suppliers",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": "Rate Supplier", "email": "rate-supplier@example.com", "status": "active", "reward_percent": "70.00"},
+    )
+    assert created.status_code == 200, created.text
+    key_response = client.post(
+        f"/admin/suppliers/{created.json()['id']}/api-key/regenerate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert key_response.status_code == 200, key_response.text
+
+    seen.clear()
+    response = client.get("/supplier/v1/me", headers={"Authorization": f"Bearer {key_response.json()['api_key']}"})
+
+    assert response.status_code == 200, response.text
+    assert seen[-1] == (RedisRateLimiter.supplier_key(created.json()["id"]), 33)

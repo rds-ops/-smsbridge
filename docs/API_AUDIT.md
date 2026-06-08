@@ -13,7 +13,7 @@ Critical issues before launch:
 - Order creation with external providers reserves provider number before wallet hold. If wallet hold fails, provider number is not cancelled. DONE
 - Supplier pool uses generated fake phone numbers instead of supplier-provided real numbers; current inventory is count-only. PARTIAL (supplier reservation callback supported; fake phone legacy/dev-only and blocked in production-like env)
 - Supplier inventory decrement and wallet hold are transactional for supplier pool, but external provider stock is not decremented locally.
-- Rate limiting is Redis-backed and identity-aware for managed buyer API keys, users/JWT, legacy user API keys, suppliers, and IP fallback. DONE
+- Rate limiting is Redis-backed and identity-aware for managed buyer API keys, users/JWT, legacy user API keys, suppliers, and IP fallback, with simple configurable per-identity/tier limits. DONE
 - Admin seed uses known default credentials (`admin@smsbridge.local` / `change-me`) and Docker Compose uses `.env.example`. DONE (production safety guard blocks default secrets/passwords)
 - Status fields are strings, not enums, and lifecycle transitions are only partially enforced. PARTIAL (order state machine + order_events exist; provider type/status validation added in admin schemas; DB enums not added)
 - Payment intents, idempotent webhook wallet crediting, lifecycle visibility, and reconciliation visibility exist, but real payment provider verification/reconciliation is still missing. Supplier payout request accounting exists, but real external payout provider execution is not implemented. Formal stats/rate aggregation and provider webhook processing are still skeleton/incomplete.
@@ -515,7 +515,7 @@ Problems and recommendations:
 | Safe order purchase transaction/idempotency | P0 | Prevent double purchase and provider reservation leaks | `IdempotencyKey` model; transactional wrapper | DONE |
 | Real supplier number reservation | P0 | Current supplier pool generates fake phone numbers | Supplier reservation callback integration | PARTIAL (callback implemented; exact inventory not implemented) |
 | Explicit order state machine | P0 | Prevent invalid transitions and make lifecycle auditable | `services/order_state.py`, `order_events` model | DONE |
-| Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis with API key/user/supplier/IP buckets | DONE |
+| Redis/distributed rate limiting | P0 | In-memory limiter breaks under multiple workers | `services/rate_limit.py` using Redis with API key/user/supplier/IP buckets and simple per-tier policies | DONE |
 | DB money check constraints | P0 | Defense in depth for wallet/supplier balances | CHECK constraints for non-negative balances/held balances | DONE |
 | Payment/deposit model | P0 | Manual admin deposit is not enough for launch | `payment_intents`, `/internal/payment-webhooks/{provider}`, `/admin/payment-intents/{id}/manual-complete` | PARTIAL (intent model/API, idempotent webhook wallet crediting, admin manual_test completion, lifecycle/reconciliation visibility exist; real provider verification/reconciliation not implemented) |
 | Provider price/stock sync | P0 | Prices and counts must be fresh | Celery tasks, sync runs | NOT DONE |
@@ -750,7 +750,7 @@ Recommended 1-2 week plan:
 
 4. P0 Redis/rate limit:
    - Replace in-memory `RateLimitMiddleware` with Redis-backed limiter. DONE
-   - Use Redis counters for auth/login throttling and possibly order creation throttles. PARTIAL (global API rate limit uses Redis with identity-aware buckets; per-endpoint throttles not implemented)
+   - Use Redis counters for auth/login throttling and possibly order creation throttles. PARTIAL (global API rate limit uses Redis with identity-aware buckets and simple tier policies; per-endpoint throttles not implemented)
 
 5. P0 SMS/order processing:
    - Add generic SMS/message table. DONE
