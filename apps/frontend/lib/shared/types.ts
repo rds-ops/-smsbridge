@@ -155,3 +155,18 @@ export type SupplierTransaction = {
 };
 
 export type Metrics = Record<string, unknown>;
+
+export type AdminOpsSummary = {
+  status: string;
+  high_risk_users_count: number;
+  watchlisted_users_count: number;
+  pending_supplier_release_retries_count: number;
+  dead_supplier_release_retries_count: number;
+  payment_reconciliation_issue_counts: Record<string, number>;
+  supplier_payout_reconciliation_issue_counts: Record<string, number>;
+  pending_payment_intents_count: number;
+  pending_supplier_payout_requests_count: number;
+  active_waiting_sms_orders_count: number;
+  recent_5xx_request_count: number;
+  recent_rate_limit_429_count: number;
+};

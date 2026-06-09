@@ -1,5 +1,6 @@
 import {apiFetch} from "@/lib/shared/api";
 import type {
+  AdminOpsSummary,
   Metrics,
   Order,
   Provider,
@@ -11,6 +12,10 @@ import type {
   User,
   Wallet
 } from "@/lib/shared/types";
+
+export function getAdminOpsSummary() {
+  return apiFetch<AdminOpsSummary>("/admin/ops/summary");
+}
 
 export function getAdminMetrics() {
   return apiFetch<Metrics>("/admin/metrics");

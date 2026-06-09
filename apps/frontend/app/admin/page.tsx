@@ -8,6 +8,7 @@ import {
   createSupplier,
   getAdminMetrics,
   getAdminOrders,
+  getAdminOpsSummary,
   getAdminUsers,
   getApiRequestLogs,
   getAuditLogs,
@@ -24,6 +25,7 @@ import {
 import {orderProfit, userRow} from "@/lib/admin/format";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
 import type {
+  AdminOpsSummary,
   Metrics,
   Order,
   Provider,
@@ -37,9 +39,9 @@ import type {
 } from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type AdminTab = "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
+type AdminTab = "ops" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
 
-const tabs: AdminTab[] = ["metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
+const tabs: AdminTab[] = ["ops", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
 const supplierDetailTabs: AdminTab[] = ["supplier inventory", "supplier activations", "supplier sms", "supplier transactions"];
 
 export default function AdminPage() {
@@ -48,7 +50,8 @@ export default function AdminPage() {
 
 function AdminPanel() {
   const {t} = useTranslation();
-  const [tab, setTab] = useState<AdminTab>("metrics");
+  const [tab, setTab] = useState<AdminTab>("ops");
+  const [opsSummary, setOpsSummary] = useState<AdminOpsSummary | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -80,6 +83,7 @@ function AdminPanel() {
     setLoading(true);
     setError("");
     try {
+      if (selectedTab === "ops") setOpsSummary(await getAdminOpsSummary());
       if (selectedTab === "metrics") setMetrics(await getAdminMetrics());
       if (selectedTab === "users") setUsers(await getAdminUsers());
       if (selectedTab === "orders") setOrders(await getAdminOrders());
@@ -434,7 +438,7 @@ function AdminPanel() {
 
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
 
-      {tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
+      {tab === "ops" ? <OpsSummaryView summary={opsSummary} loading={loading} t={t} /> : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
           <input className="field mb-4 max-w-md" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
           <DataTable rows={filteredRows} columns={columns} emptyTitle={t("admin.noRows")} />
@@ -446,6 +450,7 @@ function AdminPanel() {
 
 function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string | number>) => string) {
   const labels: Record<AdminTab, string> = {
+    ops: t("admin.ops"),
     metrics: t("admin.metrics"),
     users: t("admin.users"),
     orders: t("admin.orders"),
@@ -459,6 +464,67 @@ function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string |
     "api logs": t("admin.apiLogs")
   };
   return labels[tab];
+}
+
+function OpsSummaryView({summary, loading, t}: {summary: AdminOpsSummary | null; loading: boolean; t: (key: string, vars?: Record<string, string | number>) => string}) {
+  if (!summary) {
+    return (
+      <Card className="mt-6" title={t("admin.ops")} description={t("admin.opsDesc")}>
+        <p className="text-sm text-neutral-600">{loading ? t("common.loading") : t("admin.noRows")}</p>
+      </Card>
+    );
+  }
+
+  const paymentIssues = countTotal(summary.payment_reconciliation_issue_counts);
+  const payoutIssues = countTotal(summary.supplier_payout_reconciliation_issue_counts);
+  const cards = [
+    [t("admin.highRiskUsers"), summary.high_risk_users_count, t("admin.riskWatchlist")],
+    [t("admin.watchlistedUsers"), summary.watchlisted_users_count, t("admin.riskWatchlist")],
+    [t("admin.pendingRetries"), summary.pending_supplier_release_retries_count, t("admin.releaseRetries")],
+    [t("admin.deadRetries"), summary.dead_supplier_release_retries_count, t("admin.releaseRetries")],
+    [t("admin.pendingPaymentIntents"), summary.pending_payment_intents_count, t("admin.paymentQueue")],
+    [t("admin.pendingSupplierPayouts"), summary.pending_supplier_payout_requests_count, t("admin.payoutQueue")],
+    [t("admin.waitingSmsOrders"), summary.active_waiting_sms_orders_count, t("admin.orderQueue")],
+    [t("admin.recent5xx"), summary.recent_5xx_request_count, t("admin.recentRequests")],
+    [t("admin.recent429"), summary.recent_rate_limit_429_count, t("admin.recentRequests")]
+  ];
+
+  return (
+    <section className="mt-6 grid gap-4">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {cards.map(([label, value, helper]) => (
+          <MetricCard key={String(label)} label={String(label)} value={String(value ?? 0)} helper={String(helper)} />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title={t("admin.paymentReconciliation")} description={t("admin.issueCount", {count: paymentIssues})}>
+          <IssueCounts counts={summary.payment_reconciliation_issue_counts} t={t} />
+        </Card>
+        <Card title={t("admin.payoutReconciliation")} description={t("admin.issueCount", {count: payoutIssues})}>
+          <IssueCounts counts={summary.supplier_payout_reconciliation_issue_counts} t={t} />
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function IssueCounts({counts, t}: {counts: Record<string, number>; t: (key: string, vars?: Record<string, string | number>) => string}) {
+  const entries = Object.entries(counts || {}).filter(([, value]) => Number(value) > 0);
+  if (!entries.length) return <p className="text-sm text-neutral-600">{t("admin.noIssues")}</p>;
+  return (
+    <div className="grid gap-2">
+      {entries.map(([key, value]) => (
+        <p className="flex justify-between border-b border-line py-2 text-sm last:border-0" key={key}>
+          <span>{key.replaceAll("_", " ")}</span>
+          <strong>{value}</strong>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function countTotal(counts: Record<string, number> = {}) {
+  return Object.values(counts).reduce((total, value) => total + Number(value || 0), 0);
 }
 
 function MetricsView({metrics, t}: {metrics: Metrics | null; t: (key: string, vars?: Record<string, string | number>) => string}) {
