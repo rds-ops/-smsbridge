@@ -1,14 +1,19 @@
 "use client";
 
 import {useEffect, useMemo, useState} from "react";
+import type {ReactNode} from "react";
 import {AdminGuard} from "@/components/admin/admin-guard";
 import {DataTable, type Column} from "@/components/shared/data-table";
 import {Alert, Card, CopyButton, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {
+  createAdminRiskAction,
   createSupplier,
   getAdminMetrics,
   getAdminOrders,
   getAdminOpsSummary,
+  getAdminRiskActions,
+  getAdminRiskUser,
+  getAdminRiskUsers,
   getAdminUsers,
   getApiRequestLogs,
   getAuditLogs,
@@ -26,6 +31,9 @@ import {orderProfit, userRow} from "@/lib/admin/format";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
 import type {
   AdminOpsSummary,
+  AdminRiskAction,
+  AdminRiskActionType,
+  AdminRiskUserSummary,
   Metrics,
   Order,
   Provider,
@@ -39,9 +47,9 @@ import type {
 } from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type AdminTab = "ops" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
+type AdminTab = "ops" | "risk users" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
 
-const tabs: AdminTab[] = ["ops", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
+const tabs: AdminTab[] = ["ops", "risk users", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
 const supplierDetailTabs: AdminTab[] = ["supplier inventory", "supplier activations", "supplier sms", "supplier transactions"];
 
 export default function AdminPage() {
@@ -52,6 +60,13 @@ function AdminPanel() {
   const {t} = useTranslation();
   const [tab, setTab] = useState<AdminTab>("ops");
   const [opsSummary, setOpsSummary] = useState<AdminOpsSummary | null>(null);
+  const [riskUsers, setRiskUsers] = useState<AdminRiskUserSummary[]>([]);
+  const [riskDetail, setRiskDetail] = useState<AdminRiskUserSummary | null>(null);
+  const [riskActions, setRiskActions] = useState<AdminRiskAction[]>([]);
+  const [riskFilter, setRiskFilter] = useState("");
+  const [riskActionType, setRiskActionType] = useState<AdminRiskActionType>("note");
+  const [riskNote, setRiskNote] = useState("");
+  const [riskActionLoading, setRiskActionLoading] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -84,6 +99,15 @@ function AdminPanel() {
     setError("");
     try {
       if (selectedTab === "ops") setOpsSummary(await getAdminOpsSummary());
+      if (selectedTab === "risk users") {
+        const rows = await getAdminRiskUsers(riskFilter ? {risk_level: riskFilter} : {});
+        setRiskUsers(rows);
+        if (rows[0]) await selectRiskUser(rows[0].user_id);
+        else {
+          setRiskDetail(null);
+          setRiskActions([]);
+        }
+      }
       if (selectedTab === "metrics") setMetrics(await getAdminMetrics());
       if (selectedTab === "users") setUsers(await getAdminUsers());
       if (selectedTab === "orders") setOrders(await getAdminOrders());
@@ -123,6 +147,45 @@ function AdminPanel() {
   useEffect(() => {
     if (supplierDetailTabs.includes(tab) && selectedSupplierId) load(tab);
   }, [selectedSupplierId]);
+
+  useEffect(() => {
+    if (tab === "risk users") load(tab);
+  }, [riskFilter]);
+
+  async function selectRiskUser(userId: number) {
+    const [detail, actions] = await Promise.all([getAdminRiskUser(userId), getAdminRiskActions(userId)]);
+    setRiskDetail(detail);
+    setRiskActions(actions);
+  }
+
+  async function submitRiskAction() {
+    if (!riskDetail) return;
+    const note = riskNote.trim();
+    if (note.length > 1000) {
+      setToast({type: "error", message: t("admin.riskNoteTooLong")});
+      return;
+    }
+    if (riskActionType === "note" && !note) {
+      setToast({type: "error", message: t("admin.riskNoteRequired")});
+      return;
+    }
+    setRiskActionLoading(true);
+    setToast({type: "success", message: ""});
+    try {
+      await createAdminRiskAction(riskDetail.user_id, {action: riskActionType, note: note || null});
+      setRiskNote("");
+      setToast({type: "success", message: t("admin.riskActionCreated")});
+      const [rows] = await Promise.all([
+        getAdminRiskUsers(riskFilter ? {risk_level: riskFilter} : {}).then(setRiskUsers),
+        selectRiskUser(riskDetail.user_id)
+      ]);
+      void rows;
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("admin.riskActionFailed")});
+    } finally {
+      setRiskActionLoading(false);
+    }
+  }
 
   async function deposit() {
     setError("");
@@ -438,7 +501,24 @@ function AdminPanel() {
 
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
 
-      {tab === "ops" ? <OpsSummaryView summary={opsSummary} loading={loading} t={t} /> : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
+      {tab === "ops" ? <OpsSummaryView summary={opsSummary} loading={loading} t={t} /> : tab === "risk users" ? (
+        <RiskUsersView
+          users={riskUsers}
+          detail={riskDetail}
+          actions={riskActions}
+          filter={riskFilter}
+          setFilter={setRiskFilter}
+          actionType={riskActionType}
+          setActionType={setRiskActionType}
+          note={riskNote}
+          setNote={setRiskNote}
+          loading={loading}
+          actionLoading={riskActionLoading}
+          onSelect={(userId) => selectRiskUser(userId).catch((err) => setToast({type: "error", message: err instanceof Error ? err.message : t("buy.loadFailed")}))}
+          onSubmit={submitRiskAction}
+          t={t}
+        />
+      ) : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
           <input className="field mb-4 max-w-md" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
           <DataTable rows={filteredRows} columns={columns} emptyTitle={t("admin.noRows")} />
@@ -451,6 +531,7 @@ function AdminPanel() {
 function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string | number>) => string) {
   const labels: Record<AdminTab, string> = {
     ops: t("admin.ops"),
+    "risk users": t("admin.riskUsers"),
     metrics: t("admin.metrics"),
     users: t("admin.users"),
     orders: t("admin.orders"),
@@ -464,6 +545,175 @@ function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string |
     "api logs": t("admin.apiLogs")
   };
   return labels[tab];
+}
+
+function RiskUsersView({
+  users,
+  detail,
+  actions,
+  filter,
+  setFilter,
+  actionType,
+  setActionType,
+  note,
+  setNote,
+  loading,
+  actionLoading,
+  onSelect,
+  onSubmit,
+  t
+}: {
+  users: AdminRiskUserSummary[];
+  detail: AdminRiskUserSummary | null;
+  actions: AdminRiskAction[];
+  filter: string;
+  setFilter: (value: string) => void;
+  actionType: AdminRiskActionType;
+  setActionType: (value: AdminRiskActionType) => void;
+  note: string;
+  setNote: (value: string) => void;
+  loading: boolean;
+  actionLoading: boolean;
+  onSelect: (userId: number) => void;
+  onSubmit: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  return (
+    <section className="mt-6 grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
+      <Card title={t("admin.riskUsers")} description={t("admin.riskUsersDesc")}>
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-sm">
+            {t("admin.riskLevel")}
+            <select className="field min-w-40" value={filter} onChange={(event) => setFilter(event.target.value)}>
+              <option value="">{t("admin.allRiskLevels")}</option>
+              <option value="low">{t("admin.riskLow")}</option>
+              <option value="medium">{t("admin.riskMedium")}</option>
+              <option value="high">{t("admin.riskHigh")}</option>
+            </select>
+          </label>
+        </div>
+        {!users.length ? (
+          <p className="text-sm text-neutral-600">{loading ? t("common.loading") : t("admin.noRows")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-line text-sm">
+              <thead className="bg-panel text-left text-xs uppercase tracking-wide text-neutral-500">
+                <tr>
+                  <th className="px-3 py-2">{t("common.user")}</th>
+                  <th className="px-3 py-2">{t("admin.riskLevel")}</th>
+                  <th className="px-3 py-2">{t("admin.orders")}</th>
+                  <th className="px-3 py-2">{t("admin.rates")}</th>
+                  <th className="px-3 py-2">{t("admin.recentOrders")}</th>
+                  <th className="px-3 py-2">{t("admin.watchlisted")}</th>
+                  <th className="px-3 py-2">{t("admin.latestNote")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {users.map((user) => (
+                  <tr
+                    className={`cursor-pointer hover:bg-panel ${detail?.user_id === user.user_id ? "bg-blue-50" : ""}`}
+                    key={user.user_id}
+                    onClick={() => onSelect(user.user_id)}
+                  >
+                    <td className="px-3 py-2">
+                      <div className="font-medium">#{user.user_id}</div>
+                      <div className="text-xs text-neutral-500">{user.email}</div>
+                    </td>
+                    <td className="px-3 py-2"><RiskBadge level={user.risk_level} t={t} /></td>
+                    <td className="px-3 py-2">{user.total_orders}</td>
+                    <td className="px-3 py-2 text-xs text-neutral-600">
+                      {t("admin.cancelShort")}: {formatRate(user.cancellation_rate)}<br />
+                      {t("admin.expireShort")}: {formatRate(user.expiration_rate)}<br />
+                      {t("admin.failShort")}: {formatRate(user.failed_rate)}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-neutral-600">1h: {user.orders_last_1h}<br />24h: {user.orders_last_24h}</td>
+                    <td className="px-3 py-2">{user.watchlisted ? t("common.yes") : t("common.no")}</td>
+                    <td className="max-w-xs px-3 py-2 text-xs text-neutral-600">{user.latest_note ? truncate(user.latest_note, 80) : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <div className="grid gap-4">
+        <Card title={detail ? `${t("admin.riskDetail")} #${detail.user_id}` : t("admin.riskDetail")} description={detail?.email || t("admin.selectRiskUser")}>
+          {detail ? (
+            <div className="grid gap-3 text-sm">
+              <div className="flex items-center justify-between"><span>{t("admin.riskLevel")}</span><RiskBadge level={detail.risk_level} t={t} /></div>
+              <RiskDetailRow label={t("admin.riskScore")} value={detail.risk_score} />
+              <RiskDetailRow label={t("admin.activeOrders")} value={detail.active_orders} />
+              <RiskDetailRow label={t("admin.completedOrders")} value={detail.completed_orders} />
+              <RiskDetailRow label={t("admin.apiRequestsLast1h")} value={detail.api_requests_last_1h} />
+              <RiskDetailRow label={t("admin.managedKeys")} value={detail.managed_api_key_count} />
+              <RiskDetailRow label={t("admin.revokedKeys")} value={detail.revoked_api_key_count} />
+              <RiskDetailRow label={t("admin.lastOrder")} value={dateTime(detail.last_order_at)} />
+              <RiskDetailRow label={t("admin.lastApiRequest")} value={dateTime(detail.last_api_request_at)} />
+              <RiskDetailRow label={t("admin.lastReviewed")} value={dateTime(detail.last_reviewed_at)} />
+            </div>
+          ) : <p className="text-sm text-neutral-600">{t("admin.selectRiskUser")}</p>}
+        </Card>
+
+        <Card title={t("admin.addRiskAction")} description={t("admin.riskActionDesc")}>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">
+              {t("common.actions")}
+              <select className="field" value={actionType} onChange={(event) => setActionType(event.target.value as AdminRiskActionType)} disabled={!detail}>
+                <option value="watch">{t("admin.actionWatch")}</option>
+                <option value="note">{t("admin.actionNote")}</option>
+                <option value="clear_watch">{t("admin.actionClearWatch")}</option>
+                <option value="mark_reviewed">{t("admin.actionMarkReviewed")}</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              {t("common.notes")} {t("common.optional")}
+              <textarea className="field min-h-24" value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} disabled={!detail} />
+            </label>
+            <button className="btn btn-primary" onClick={onSubmit} disabled={!detail || actionLoading}>{actionLoading ? t("common.saving") : t("admin.submitRiskAction")}</button>
+          </div>
+        </Card>
+
+        <Card title={t("admin.riskActionHistory")}>
+          {!actions.length ? <p className="text-sm text-neutral-600">{t("admin.noRiskActions")}</p> : (
+            <div className="grid gap-3">
+              {actions.map((action) => (
+                <div className="rounded-md border border-line bg-panel p-3 text-sm" key={action.id}>
+                  <div className="flex justify-between gap-3">
+                    <strong>{action.action}</strong>
+                    <span className="text-xs text-neutral-500">{dateTime(action.created_at)}</span>
+                  </div>
+                  {action.note && <p className="mt-2 text-neutral-700">{action.note}</p>}
+                  <p className="mt-2 text-xs text-neutral-500">{t("common.actor")}: {action.actor_user_id ?? "-"}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function RiskBadge({level, t}: {level: string; t: (key: string, vars?: Record<string, string | number>) => string}) {
+  const classes: Record<string, string> = {
+    low: "bg-green-50 text-green-700 ring-green-200",
+    medium: "bg-amber-50 text-amber-800 ring-amber-200",
+    high: "bg-red-50 text-red-700 ring-red-200"
+  };
+  return <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${classes[level] || "bg-slate-50 text-slate-700 ring-slate-200"}`}>{t(`admin.risk${capitalize(level)}`)}</span>;
+}
+
+function RiskDetailRow({label, value}: {label: string; value: ReactNode}) {
+  return <p className="flex justify-between gap-3 border-b border-line pb-2 last:border-0"><span className="text-neutral-600">{label}</span><strong>{value || "-"}</strong></p>;
+}
+
+function formatRate(value: number) {
+  return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function capitalize(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
 function OpsSummaryView({summary, loading, t}: {summary: AdminOpsSummary | null; loading: boolean; t: (key: string, vars?: Record<string, string | number>) => string}) {

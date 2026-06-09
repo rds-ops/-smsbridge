@@ -170,3 +170,49 @@ export type AdminOpsSummary = {
   recent_5xx_request_count: number;
   recent_rate_limit_429_count: number;
 };
+
+export type RiskLevel = "low" | "medium" | "high";
+
+export type AdminRiskUserSummary = {
+  user_id: number;
+  email: string;
+  status: string;
+  tier: string;
+  risk_level: RiskLevel;
+  risk_score: number;
+  total_orders: number;
+  active_orders: number;
+  cancelled_orders: number;
+  expired_orders: number;
+  failed_orders: number;
+  completed_orders: number;
+  cancellation_rate: number;
+  expiration_rate: number;
+  failed_rate: number;
+  orders_last_1h: number;
+  orders_last_24h: number;
+  api_requests_last_1h: number;
+  managed_api_key_count: number;
+  revoked_api_key_count: number;
+  last_order_at?: string | null;
+  last_api_request_at?: string | null;
+  watchlisted: boolean;
+  last_reviewed_at?: string | null;
+  latest_note?: string | null;
+};
+
+export type AdminRiskActionType = "watch" | "note" | "clear_watch" | "mark_reviewed";
+
+export type AdminRiskAction = {
+  id: number;
+  user_id: number;
+  actor_user_id?: number | null;
+  action: AdminRiskActionType;
+  note?: string | null;
+  created_at: string;
+};
+
+export type AdminRiskActionCreate = {
+  action: AdminRiskActionType;
+  note?: string | null;
+};

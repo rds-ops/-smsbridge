@@ -1,6 +1,9 @@
 import {apiFetch} from "@/lib/shared/api";
 import type {
   AdminOpsSummary,
+  AdminRiskAction,
+  AdminRiskActionCreate,
+  AdminRiskUserSummary,
   Metrics,
   Order,
   Provider,
@@ -15,6 +18,26 @@ import type {
 
 export function getAdminOpsSummary() {
   return apiFetch<AdminOpsSummary>("/admin/ops/summary");
+}
+
+export function getAdminRiskUsers(filters: {risk_level?: string; user_id?: number} = {}) {
+  const params = new URLSearchParams();
+  if (filters.risk_level) params.set("risk_level", filters.risk_level);
+  if (filters.user_id) params.set("user_id", String(filters.user_id));
+  const query = params.toString();
+  return apiFetch<AdminRiskUserSummary[]>(`/admin/risk/users${query ? `?${query}` : ""}`);
+}
+
+export function getAdminRiskUser(userId: number) {
+  return apiFetch<AdminRiskUserSummary>(`/admin/risk/users/${userId}`);
+}
+
+export function getAdminRiskActions(userId: number) {
+  return apiFetch<AdminRiskAction[]>(`/admin/risk/users/${userId}/actions`);
+}
+
+export function createAdminRiskAction(userId: number, body: AdminRiskActionCreate) {
+  return apiFetch<AdminRiskAction>(`/admin/risk/users/${userId}/actions`, {method: "POST", body: JSON.stringify(body)});
 }
 
 export function getAdminMetrics() {

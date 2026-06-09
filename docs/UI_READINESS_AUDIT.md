@@ -62,13 +62,13 @@ Implemented:
 - API request logs table.
 - Manual wallet deposit.
 - Ops summary dashboard from `GET /admin/ops/summary`.
+- Risk users/actions from `/admin/risk/users*`.
 
 Partially implemented:
 - API request logs are rendered generically but the explicit table columns omit newer fields such as `request_id`, `supplier_id`, and `buyer_api_key_id`.
 - Supplier inventory/activations/SMS/transactions are visible only via manually entering supplier ID.
 
 Missing:
-- Risk users/actions.
 - Payment intent admin list/detail/manual-complete.
 - Payment credit reconciliation.
 - Supplier payout requests/admin actions/reconciliation.
@@ -108,7 +108,6 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Risk users list/detail/actions | `GET /admin/risk/users`, `GET /admin/risk/users/{user_id}`, `POST /admin/risk/users/{user_id}/actions`, `GET /admin/risk/users/{user_id}/actions` | admin API/types/page tabs, risk action form | beta blocker | medium |
 | Payment intent admin visibility | `GET /admin/payment-intents`, `GET /admin/payment-intents/{id}` | admin API/types/page tabs | beta blocker | medium |
 | Admin manual payment completion | `POST /admin/payment-intents/{id}/manual-complete` | admin payment intent table action | beta blocker | small |
 | Payment credit reconciliation | `GET /admin/payment-intents/reconciliation` | admin reconciliation tab/cards | beta useful | small |
@@ -122,54 +121,54 @@ Missing:
 
 ## 3. Top 10 UI Tasks
 
-1. Admin risk users/actions.
-   - Endpoints: `/admin/risk/users*`
-   - Priority: beta blocker
-   - Complexity: medium
-
-2. Admin payment intent list/detail/manual-complete.
+1. Admin payment intent list/detail/manual-complete.
    - Endpoints: `/admin/payment-intents*`
    - Priority: beta blocker
    - Complexity: medium
 
-3. Admin supplier payout request list/detail/actions.
+2. Admin supplier payout request list/detail/actions.
    - Endpoints: `/admin/supplier-payout-requests*`
    - Priority: beta blocker
    - Complexity: medium
 
-4. Admin supplier release retry queue.
+3. Admin supplier release retry queue.
    - Endpoint: `GET /admin/supplier-release-retries`
    - Priority: beta blocker
    - Complexity: small
 
-5. Admin supplier reservation config in supplier create/update.
+4. Admin supplier reservation config in supplier create/update.
    - Endpoints: `POST /admin/suppliers`, `PATCH /admin/suppliers/{supplier_id}`
    - Priority: beta blocker
    - Complexity: medium
 
-6. Buyer wallet transaction history.
+5. Buyer wallet transaction history.
    - Endpoint: `GET /api/v1/wallet/transactions`
    - Priority: beta blocker
    - Complexity: small
 
-7. Managed buyer API keys with scopes.
+6. Managed buyer API keys with scopes.
    - Endpoints: `/api/v1/api-keys*`
    - Priority: beta useful
    - Complexity: medium
 
-8. Request log request ID visibility and filtering.
+7. Request log request ID visibility and filtering.
    - Endpoint: `GET /admin/api-request-logs`
    - Priority: beta useful
    - Complexity: small
 
-9. Payment/payout reconciliation cards.
+8. Payment/payout reconciliation cards.
    - Endpoints: `GET /admin/payment-intents/reconciliation`, `GET /admin/supplier-payout-requests/reconciliation`
    - Priority: beta useful
    - Complexity: small
 
-10. Operational cleanup dry-run.
+9. Operational cleanup dry-run.
     - Endpoint: `POST /admin/ops/cleanup/dry-run`
     - Priority: beta useful
+    - Complexity: small
+
+10. API key usage visibility.
+    - Endpoint: `GET /api/v1/api-keys/{public_id}/usage`
+    - Priority: later
     - Complexity: small
 
 ## 4. Beta Readiness
@@ -184,7 +183,6 @@ It is usable for the basic buyer flow and basic admin setup:
 - manual admin wallet deposit
 
 It is not ready for closed beta operations because major implemented backend controls are missing from UI:
-- no admin risk review workflow
 - no payment intent/manual completion UI
 - no payout operations UI
 - no release retry queue UI
