@@ -514,14 +514,14 @@ Codex не должен напрямую делать крупный refactor б
 - distributed workers
 - queue optimization
 - DB indexing audit
-- observability
+- observability. PARTIAL (request correlation and safe structured request completion logs; no dashboards/tracing backend yet)
 - metrics dashboards
 - tracing
-- structured logging
+- structured logging. PARTIAL (request_id correlation and JSON-safe request completion logs)
 - caching strategy
 - background reconciliation jobs
-- abuse prevention. PARTIAL (admin-only user risk visibility foundation; no automatic blocking yet)
-- fraud/risk controls. PARTIAL (basic transparent risk scoring from orders/API usage; no ML or auto-ban)
+- abuse prevention. PARTIAL (admin-only user risk visibility and manual review actions; no automatic blocking yet)
+- fraud/risk controls. PARTIAL (basic transparent risk scoring from orders/API usage plus watch/review notes; no ML or auto-ban)
 
 ---
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from uuid import uuid4
 from dataclasses import dataclass
 
 from fastapi import Request
@@ -8,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.logging import log_request_completion
 from app.core.security import decode_token, hash_api_key
 from app.db.session import SessionLocal
 from app.models import ApiRequestLog, BuyerApiKey, Supplier, User
@@ -18,6 +20,24 @@ from app.services.rate_limit import rate_limiter
 class RateLimitPolicy:
     key: str
     limit: int
+
+
+def _safe_request_id(value: str | None) -> str:
+    if not value:
+        return str(uuid4())
+    value = value.strip()
+    if 1 <= len(value) <= 128 and all(char.isalnum() or char in "._-" for char in value):
+        return value
+    return str(uuid4())
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = _safe_request_id(request.headers.get("x-request-id"))
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -106,24 +126,46 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 class ApiRequestLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            self._record_request(request, 500)
+            raise
+        self._record_request(request, response.status_code)
+        return response
+
+    @staticmethod
+    def _record_request(request: Request, status_code: int) -> None:
         if request.url.path.startswith(
             ("/api/", "/admin", "/auth", "/supplier/v1", "/internal/provider-webhooks", "/internal/payment-webhooks")
         ):
+            request_id = getattr(request.state, "request_id", None)
+            user_id = getattr(request.state, "user_id", None)
+            supplier_id = getattr(request.state, "supplier_id", None)
+            buyer_api_key_id = getattr(request.state, "buyer_api_key_id", None)
             db = SessionLocal()
             try:
                 db.add(
                     ApiRequestLog(
-                        user_id=getattr(request.state, "user_id", None),
-                        supplier_id=getattr(request.state, "supplier_id", None),
-                        buyer_api_key_id=getattr(request.state, "buyer_api_key_id", None),
+                        user_id=user_id,
+                        supplier_id=supplier_id,
+                        buyer_api_key_id=buyer_api_key_id,
                         endpoint=request.url.path,
                         method=request.method,
                         ip_address=request.client.host if request.client else None,
-                        status_code=response.status_code,
+                        status_code=status_code,
+                        request_id=request_id,
                     )
                 )
                 db.commit()
             finally:
                 db.close()
-        return response
+            log_request_completion(
+                request_id=request_id,
+                user_id=user_id,
+                supplier_id=supplier_id,
+                buyer_api_key_id=buyer_api_key_id,
+                endpoint=request.url.path,
+                method=request.method,
+                status_code=status_code,
+            )

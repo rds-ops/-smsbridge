@@ -11,7 +11,7 @@ from app.api.internal_payment_webhooks import router as internal_payment_webhook
 from app.api.internal_provider_webhooks import router as internal_provider_webhooks_router
 from app.api.supplier import router as supplier_router
 from app.core.config import settings, validate_production_safety
-from app.core.middleware import ApiRequestLogMiddleware, RateLimitMiddleware
+from app.core.middleware import ApiRequestLogMiddleware, RateLimitMiddleware, RequestIdMiddleware
 from app.db.session import engine
 
 validate_production_safety(settings)
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 app.add_middleware(ApiRequestLogMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(auth_router)
 app.include_router(api_v1_router)

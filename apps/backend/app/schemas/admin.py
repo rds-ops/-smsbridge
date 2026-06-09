@@ -172,3 +172,20 @@ class UserRiskSummaryOut(ORMModel):
     revoked_api_key_count: int
     last_order_at: datetime | None = None
     last_api_request_at: datetime | None = None
+    watchlisted: bool
+    last_reviewed_at: datetime | None = None
+    latest_note: str | None = None
+
+
+class UserRiskActionIn(BaseModel):
+    action: str = Field(pattern="^(watch|note|clear_watch|mark_reviewed)$")
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class UserRiskActionOut(ORMModel):
+    id: int
+    user_id: int
+    actor_user_id: int | None = None
+    action: str
+    note: str | None = None
+    created_at: datetime

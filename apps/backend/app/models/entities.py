@@ -43,6 +43,7 @@ class User(Base, TimestampMixin):
 
 
 BUYER_API_KEY_STATUSES = ("active", "revoked")
+RISK_ACTIONS = ("watch", "note", "clear_watch", "mark_reviewed")
 
 
 class BuyerApiKey(Base):
@@ -64,6 +65,24 @@ class BuyerApiKey(Base):
 
     __table_args__ = (
         CheckConstraint(f"status in {BUYER_API_KEY_STATUSES}", name="ck_buyer_api_keys_status_allowed"),
+    )
+
+
+class UserRiskAction(Base):
+    __tablename__ = "user_risk_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    actor_user: Mapped[Optional[User]] = relationship(foreign_keys=[actor_user_id])
+
+    __table_args__ = (
+        CheckConstraint(f"action in {RISK_ACTIONS}", name="ck_user_risk_actions_action_allowed"),
     )
 
 
@@ -363,6 +382,7 @@ class ApiRequestLog(Base):
     method: Mapped[str] = mapped_column(String(10), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[Optional[str]] = mapped_column(String(128), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

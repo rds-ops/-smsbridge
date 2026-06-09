@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ApiRequestLog, BuyerApiKey, Order, User
+from app.models import ApiRequestLog, BuyerApiKey, Order, User, UserRiskAction
 
 
 ACTIVE_ORDER_STATUSES = ("created", "waiting_sms", "sms_received")
@@ -48,6 +48,9 @@ class UserRiskSummary:
     revoked_api_key_count: int
     last_order_at: datetime | None
     last_api_request_at: datetime | None
+    watchlisted: bool
+    last_reviewed_at: datetime | None
+    latest_note: str | None
 
 
 def get_user_risk_summary(db: Session, user: User, *, now: datetime | None = None) -> UserRiskSummary:
@@ -96,6 +99,19 @@ def get_user_risk_summary(db: Session, user: User, *, now: datetime | None = Non
     )
     last_order_at = db.scalar(select(func.max(Order.created_at)).where(Order.user_id == user.id))
     last_api_request_at = db.scalar(select(func.max(ApiRequestLog.created_at)).where(ApiRequestLog.user_id == user.id))
+    watchlisted = _is_watchlisted(db, user.id)
+    last_reviewed_at = db.scalar(
+        select(func.max(UserRiskAction.created_at)).where(
+            UserRiskAction.user_id == user.id,
+            UserRiskAction.action == "mark_reviewed",
+        )
+    )
+    latest_note = db.scalar(
+        select(UserRiskAction.note)
+        .where(UserRiskAction.user_id == user.id, UserRiskAction.note.is_not(None))
+        .order_by(UserRiskAction.created_at.desc(), UserRiskAction.id.desc())
+        .limit(1)
+    )
 
     cancellation_rate = _rate(cancelled_orders, total_orders)
     expiration_rate = _rate(expired_orders, total_orders)
@@ -132,6 +148,9 @@ def get_user_risk_summary(db: Session, user: User, *, now: datetime | None = Non
         revoked_api_key_count=revoked_api_key_count,
         last_order_at=last_order_at,
         last_api_request_at=last_api_request_at,
+        watchlisted=watchlisted,
+        last_reviewed_at=last_reviewed_at,
+        latest_note=latest_note,
     )
 
 
@@ -169,6 +188,19 @@ def _rate(count: int, total: int) -> float:
     if total <= 0:
         return 0.0
     return round(count / total, 4)
+
+
+def _is_watchlisted(db: Session, user_id: int) -> bool:
+    latest_watch_action = db.scalar(
+        select(UserRiskAction.action)
+        .where(
+            UserRiskAction.user_id == user_id,
+            UserRiskAction.action.in_(["watch", "clear_watch"]),
+        )
+        .order_by(UserRiskAction.created_at.desc(), UserRiskAction.id.desc())
+        .limit(1)
+    )
+    return latest_watch_action == "watch"
 
 
 def _risk_level(

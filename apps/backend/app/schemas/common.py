@@ -104,6 +104,7 @@ class ApiRequestLogOut(ORMModel):
     method: str
     ip_address: str | None
     status_code: int
+    request_id: str | None = None
     created_at: datetime
 
 

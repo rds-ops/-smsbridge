@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models import ApiRequestLog, BuyerApiKey, Order, Provider
+from app.models import ApiRequestLog, BuyerApiKey, Order, Provider, UserRiskAction
 
 
 def _provider_id(db) -> int:
@@ -45,6 +45,9 @@ def test_low_risk_user_summary(client, admin_token):
     assert body["risk_level"] == "low"
     assert body["total_orders"] == 0
     assert body["managed_api_key_count"] == 0
+    assert body["watchlisted"] is False
+    assert body["last_reviewed_at"] is None
+    assert body["latest_note"] is None
     assert "api_key" not in body
     assert "key_hash" not in body
 
@@ -138,3 +141,89 @@ def test_admin_risk_endpoints_are_admin_only(client, user_token):
 
     assert user_response.status_code == 403
     assert missing_response.status_code == 401
+
+
+def test_admin_can_add_watch_note_and_clear_watch_actions(client, admin_token):
+    watch = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "watch", "note": "Burst ordering pattern needs manual review"},
+    )
+    assert watch.status_code == 200, watch.text
+    assert watch.json()["action"] == "watch"
+    assert watch.json()["actor_user_id"] == 1
+
+    summary = client.get("/admin/risk/users/2", headers={"Authorization": f"Bearer {admin_token}"})
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["watchlisted"] is True
+    assert summary.json()["latest_note"] == "Burst ordering pattern needs manual review"
+
+    note = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "note", "note": "Buyer replied to support"},
+    )
+    assert note.status_code == 200, note.text
+
+    reviewed = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "mark_reviewed"},
+    )
+    assert reviewed.status_code == 200, reviewed.text
+
+    clear = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "clear_watch", "note": "Manual review cleared"},
+    )
+    assert clear.status_code == 200, clear.text
+
+    actions = client.get("/admin/risk/users/2/actions", headers={"Authorization": f"Bearer {admin_token}"})
+    assert actions.status_code == 200, actions.text
+    assert [row["action"] for row in actions.json()] == ["clear_watch", "mark_reviewed", "note", "watch"]
+
+    summary_after_clear = client.get("/admin/risk/users/2", headers={"Authorization": f"Bearer {admin_token}"})
+    assert summary_after_clear.status_code == 200, summary_after_clear.text
+    assert summary_after_clear.json()["watchlisted"] is False
+    assert summary_after_clear.json()["last_reviewed_at"] is not None
+    assert summary_after_clear.json()["latest_note"] == "Manual review cleared"
+
+
+def test_risk_action_validation_and_note_safety(client, admin_token):
+    invalid_action = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "block", "note": "not supported"},
+    )
+    assert invalid_action.status_code == 422
+
+    too_long = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "note", "note": "x" * 1001},
+    )
+    assert too_long.status_code == 422
+
+    secret_note = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"action": "note", "note": "Authorization: Bearer sb_live_secret"},
+    )
+    assert secret_note.status_code == 400
+    assert secret_note.json()["detail"] == "Risk note must not contain secrets or API keys"
+
+    with SessionLocal() as db:
+        assert db.scalar(select(UserRiskAction).where(UserRiskAction.user_id == 2)) is None
+
+
+def test_risk_action_endpoints_are_admin_only(client, user_token):
+    user_post = client.post(
+        "/admin/risk/users/2/actions",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"action": "watch"},
+    )
+    user_get = client.get("/admin/risk/users/2/actions", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert user_post.status_code == 403
+    assert user_get.status_code == 403

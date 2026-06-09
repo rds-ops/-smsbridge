@@ -24,6 +24,7 @@ from app.models import (
     SupplierSms,
     SupplierTransaction,
     User,
+    UserRiskAction,
     WalletTransaction,
 )
 from app.schemas.admin import (
@@ -38,6 +39,8 @@ from app.schemas.admin import (
     SupplierPayoutReconciliationOut,
     UserDetail,
     UserLimitsPatch,
+    UserRiskActionIn,
+    UserRiskActionOut,
     UserRiskSummaryOut,
     UserStatusPatch,
 )
@@ -567,3 +570,57 @@ def risk_user_detail(user_id: int, db: Session = Depends(get_db), admin: User = 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return get_user_risk_summary(db, user)
+
+
+@router.post("/risk/users/{user_id}/actions", response_model=UserRiskActionOut)
+def create_risk_user_action(
+    user_id: int,
+    payload: UserRiskActionIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    note = _validate_risk_note(payload.note)
+    action = UserRiskAction(user_id=user.id, actor_user_id=admin.id, action=payload.action, note=note)
+    db.add(action)
+    add_audit_log(
+        db,
+        "risk.action.create",
+        "user",
+        str(user.id),
+        admin.id,
+        {"action": payload.action, "has_note": bool(note)},
+    )
+    db.commit()
+    db.refresh(action)
+    return action
+
+
+@router.get("/risk/users/{user_id}/actions", response_model=list[UserRiskActionOut])
+def risk_user_actions(user_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return list(
+        db.scalars(
+            select(UserRiskAction)
+            .where(UserRiskAction.user_id == user.id)
+            .order_by(UserRiskAction.created_at.desc(), UserRiskAction.id.desc())
+            .limit(200)
+        )
+    )
+
+
+def _validate_risk_note(note: str | None) -> str | None:
+    if note is None:
+        return None
+    note = note.strip()
+    if not note:
+        return None
+    lowered = note.lower()
+    blocked_markers = ("sb_live_", "sbsup_live_", "authorization:", "x-api-key", "bearer ")
+    if any(marker in lowered for marker in blocked_markers):
+        raise HTTPException(status_code=400, detail="Risk note must not contain secrets or API keys")
+    return note
