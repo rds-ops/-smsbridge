@@ -7,6 +7,7 @@ from app.db.session import SessionLocal
 from app.jobs.celery_app import celery_app
 from app.models import Order
 from app.services.orders import poll_order
+from app.services.ops_cleanup import cleanup_expired_operational_records
 from app.services.supplier_release_retries import process_due_release_retries
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,30 @@ def retry_supplier_releases() -> int:
     except Exception:
         db.rollback()
         logger.exception("Supplier release retry task failed")
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.jobs.tasks.cleanup_operational_records")
+def cleanup_operational_records() -> int:
+    logger.info("Cleaning up expired operational records")
+    db = SessionLocal()
+    try:
+        result = cleanup_expired_operational_records(db, dry_run=False)
+        db.commit()
+        logger.info(
+            "Finished operational cleanup. api_request_logs=%s payment_webhook_events=%s "
+            "supplier_release_retries=%s total=%s",
+            result.api_request_logs,
+            result.payment_webhook_events,
+            result.supplier_release_retries,
+            result.total,
+        )
+        return result.total
+    except Exception:
+        db.rollback()
+        logger.exception("Operational cleanup task failed")
         raise
     finally:
         db.close()

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     rate_limit_user_partner_per_minute: int | None = None
     rate_limit_supplier_per_minute: int | None = None
     rate_limit_admin_per_minute: int | None = None
+    api_request_log_retention_days: int = 90
+    payment_webhook_event_retention_days: int = 180
+    supplier_release_retry_retention_days: int = 180
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

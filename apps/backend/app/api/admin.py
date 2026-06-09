@@ -37,6 +37,7 @@ from app.schemas.admin import (
     PaymentCreditReconciliationOut,
     ProviderIn,
     ProviderOut,
+    OperationalCleanupOut,
     SupplierPayoutReconciliationOut,
     UserDetail,
     UserLimitsPatch,
@@ -64,6 +65,7 @@ from app.schemas.supplier import (
 from app.services.audit import add_audit_log
 from app.services.limits import apply_tier_limits
 from app.services.orders import refund_order
+from app.services.ops_cleanup import cleanup_expired_operational_records
 from app.services.payment_intents import manual_complete_payment_intent
 from app.services.payment_reconciliation import reconcile_payment_credits
 from app.services.risk import get_user_risk_summary, list_user_risk_summaries
@@ -601,6 +603,18 @@ def ops_summary(db: Session = Depends(get_db), admin: User = Depends(require_adm
 
 def _count_supplier_release_retries(db: Session, status: str) -> int:
     return int(db.scalar(select(func.count(SupplierReleaseRetry.id)).where(SupplierReleaseRetry.status == status)) or 0)
+
+
+@router.post("/ops/cleanup/dry-run", response_model=OperationalCleanupOut)
+def ops_cleanup_dry_run(db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    result = cleanup_expired_operational_records(db, dry_run=True)
+    return {
+        "api_request_logs": result.api_request_logs,
+        "payment_webhook_events": result.payment_webhook_events,
+        "supplier_release_retries": result.supplier_release_retries,
+        "total": result.total,
+        "dry_run": result.dry_run,
+    }
 
 
 @router.get("/risk/users", response_model=list[UserRiskSummaryOut])

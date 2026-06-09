@@ -204,3 +204,11 @@ class AdminOpsSummaryOut(BaseModel):
     active_waiting_sms_orders_count: int
     recent_5xx_request_count: int
     recent_rate_limit_429_count: int
+
+
+class OperationalCleanupOut(BaseModel):
+    api_request_logs: int
+    payment_webhook_events: int
+    supplier_release_retries: int
+    total: int
+    dry_run: bool

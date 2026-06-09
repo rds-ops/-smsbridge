@@ -24,6 +24,10 @@ celery_app.conf.beat_schedule = {
     "retry-supplier-releases": {
         "task": "app.jobs.tasks.retry_supplier_releases",
         "schedule": 30.0,
+    },
+    "cleanup-operational-records": {
+        "task": "app.jobs.tasks.cleanup_operational_records",
+        "schedule": 60.0 * 60.0 * 24.0,
     }
 }
 celery_app.conf.timezone = "UTC"

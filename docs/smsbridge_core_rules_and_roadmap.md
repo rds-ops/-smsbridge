@@ -519,6 +519,7 @@ Codex не должен напрямую делать крупный refactor б
 - tracing
 - structured logging. PARTIAL (request_id correlation and JSON-safe request completion logs)
 - caching strategy
+- operational cleanup/retention policy. PARTIAL (safe cleanup for non-financial operational tables; no external archive storage yet)
 - background reconciliation jobs
 - abuse prevention. PARTIAL (admin-only user risk visibility and manual review actions; no automatic blocking yet)
 - fraud/risk controls. PARTIAL (basic transparent risk scoring from orders/API usage plus watch/review notes; no ML or auto-ban)
