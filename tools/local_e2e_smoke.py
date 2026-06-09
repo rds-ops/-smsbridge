@@ -224,7 +224,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(main())ы
+        raise SystemExit(main())
     except SmokeError as exc:
         print(f"\nERROR: {exc}", file=sys.stderr)
         raise SystemExit(1)
