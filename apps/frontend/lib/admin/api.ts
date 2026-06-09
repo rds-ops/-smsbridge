@@ -1,6 +1,8 @@
 import {apiFetch} from "@/lib/shared/api";
 import type {
   AdminOpsSummary,
+  AdminPaymentIntent,
+  AdminPaymentIntentFilters,
   AdminRiskAction,
   AdminRiskActionCreate,
   AdminRiskUserSummary,
@@ -38,6 +40,23 @@ export function getAdminRiskActions(userId: number) {
 
 export function createAdminRiskAction(userId: number, body: AdminRiskActionCreate) {
   return apiFetch<AdminRiskAction>(`/admin/risk/users/${userId}/actions`, {method: "POST", body: JSON.stringify(body)});
+}
+
+export function getAdminPaymentIntents(filters: AdminPaymentIntentFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.provider) params.set("provider", filters.provider);
+  if (filters.user_id) params.set("user_id", String(filters.user_id));
+  const query = params.toString();
+  return apiFetch<AdminPaymentIntent[]>(`/admin/payment-intents${query ? `?${query}` : ""}`);
+}
+
+export function getAdminPaymentIntent(id: number) {
+  return apiFetch<AdminPaymentIntent>(`/admin/payment-intents/${id}`);
+}
+
+export function manualCompletePaymentIntent(id: number) {
+  return apiFetch<AdminPaymentIntent>(`/admin/payment-intents/${id}/manual-complete`, {method: "POST"});
 }
 
 export function getAdminMetrics() {

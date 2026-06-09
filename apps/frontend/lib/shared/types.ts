@@ -216,3 +216,33 @@ export type AdminRiskActionCreate = {
   action: AdminRiskActionType;
   note?: string | null;
 };
+
+export type AdminPaymentIntent = {
+  id: number;
+  public_id: string;
+  user_id: number;
+  provider: string;
+  currency: string;
+  amount: string;
+  status: string;
+  provider_reference?: string | null;
+  idempotency_key?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  expires_at?: string | null;
+  succeeded_at?: string | null;
+  failed_at?: string | null;
+  cancelled_at?: string | null;
+  last_webhook_at?: string | null;
+  last_webhook_event_id?: string | null;
+  last_webhook_status?: string | null;
+  last_webhook_error?: string | null;
+  failed_reason?: string | null;
+};
+
+export type AdminPaymentIntentFilters = {
+  status?: string;
+  provider?: string;
+  user_id?: number;
+};

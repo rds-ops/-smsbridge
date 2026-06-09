@@ -11,6 +11,8 @@ import {
   getAdminMetrics,
   getAdminOrders,
   getAdminOpsSummary,
+  getAdminPaymentIntent,
+  getAdminPaymentIntents,
   getAdminRiskActions,
   getAdminRiskUser,
   getAdminRiskUsers,
@@ -23,6 +25,7 @@ import {
   getSupplierSms,
   getSupplierTransactions,
   getSuppliers,
+  manualCompletePaymentIntent,
   manualDeposit,
   regenerateSupplierApiKey,
   updateSupplier
@@ -31,6 +34,7 @@ import {orderProfit, userRow} from "@/lib/admin/format";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
 import type {
   AdminOpsSummary,
+  AdminPaymentIntent,
   AdminRiskAction,
   AdminRiskActionType,
   AdminRiskUserSummary,
@@ -47,9 +51,9 @@ import type {
 } from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type AdminTab = "ops" | "risk users" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
+type AdminTab = "ops" | "risk users" | "payment intents" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
 
-const tabs: AdminTab[] = ["ops", "risk users", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
+const tabs: AdminTab[] = ["ops", "risk users", "payment intents", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
 const supplierDetailTabs: AdminTab[] = ["supplier inventory", "supplier activations", "supplier sms", "supplier transactions"];
 
 export default function AdminPage() {
@@ -67,6 +71,12 @@ function AdminPanel() {
   const [riskActionType, setRiskActionType] = useState<AdminRiskActionType>("note");
   const [riskNote, setRiskNote] = useState("");
   const [riskActionLoading, setRiskActionLoading] = useState(false);
+  const [paymentIntents, setPaymentIntents] = useState<AdminPaymentIntent[]>([]);
+  const [paymentIntentDetail, setPaymentIntentDetail] = useState<AdminPaymentIntent | null>(null);
+  const [paymentIntentStatusFilter, setPaymentIntentStatusFilter] = useState("");
+  const [paymentIntentProviderFilter, setPaymentIntentProviderFilter] = useState("");
+  const [paymentIntentUserFilter, setPaymentIntentUserFilter] = useState("");
+  const [manualCompleteLoading, setManualCompleteLoading] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -107,6 +117,12 @@ function AdminPanel() {
           setRiskDetail(null);
           setRiskActions([]);
         }
+      }
+      if (selectedTab === "payment intents") {
+        const rows = await getAdminPaymentIntents(paymentIntentFilters(paymentIntentStatusFilter, paymentIntentProviderFilter, paymentIntentUserFilter));
+        setPaymentIntents(rows);
+        if (rows[0]) await selectPaymentIntent(rows[0].id);
+        else setPaymentIntentDetail(null);
       }
       if (selectedTab === "metrics") setMetrics(await getAdminMetrics());
       if (selectedTab === "users") setUsers(await getAdminUsers());
@@ -152,6 +168,10 @@ function AdminPanel() {
     if (tab === "risk users") load(tab);
   }, [riskFilter]);
 
+  useEffect(() => {
+    if (tab === "payment intents") load(tab);
+  }, [paymentIntentStatusFilter, paymentIntentProviderFilter]);
+
   async function selectRiskUser(userId: number) {
     const [detail, actions] = await Promise.all([getAdminRiskUser(userId), getAdminRiskActions(userId)]);
     setRiskDetail(detail);
@@ -184,6 +204,29 @@ function AdminPanel() {
       setToast({type: "error", message: err instanceof Error ? err.message : t("admin.riskActionFailed")});
     } finally {
       setRiskActionLoading(false);
+    }
+  }
+
+  async function selectPaymentIntent(id: number) {
+    setPaymentIntentDetail(await getAdminPaymentIntent(id));
+  }
+
+  async function applyPaymentIntentFilters() {
+    if (tab === "payment intents") await load("payment intents");
+  }
+
+  async function completePaymentIntent(id: number) {
+    setManualCompleteLoading(true);
+    setToast({type: "success", message: ""});
+    try {
+      const updated = await manualCompletePaymentIntent(id);
+      setPaymentIntentDetail(updated);
+      setToast({type: "success", message: t("admin.paymentIntentCompleted")});
+      setPaymentIntents(await getAdminPaymentIntents(paymentIntentFilters(paymentIntentStatusFilter, paymentIntentProviderFilter, paymentIntentUserFilter)));
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("admin.paymentIntentCompleteFailed")});
+    } finally {
+      setManualCompleteLoading(false);
     }
   }
 
@@ -518,6 +561,23 @@ function AdminPanel() {
           onSubmit={submitRiskAction}
           t={t}
         />
+      ) : tab === "payment intents" ? (
+        <PaymentIntentsView
+          intents={paymentIntents}
+          detail={paymentIntentDetail}
+          statusFilter={paymentIntentStatusFilter}
+          setStatusFilter={setPaymentIntentStatusFilter}
+          providerFilter={paymentIntentProviderFilter}
+          setProviderFilter={setPaymentIntentProviderFilter}
+          userFilter={paymentIntentUserFilter}
+          setUserFilter={setPaymentIntentUserFilter}
+          loading={loading}
+          manualCompleteLoading={manualCompleteLoading}
+          onApplyFilters={applyPaymentIntentFilters}
+          onSelect={(id) => selectPaymentIntent(id).catch((err) => setToast({type: "error", message: err instanceof Error ? err.message : t("buy.loadFailed")}))}
+          onManualComplete={completePaymentIntent}
+          t={t}
+        />
       ) : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
           <input className="field mb-4 max-w-md" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
@@ -532,6 +592,7 @@ function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string |
   const labels: Record<AdminTab, string> = {
     ops: t("admin.ops"),
     "risk users": t("admin.riskUsers"),
+    "payment intents": t("admin.paymentIntents"),
     metrics: t("admin.metrics"),
     users: t("admin.users"),
     orders: t("admin.orders"),
@@ -627,7 +688,7 @@ function RiskUsersView({
                       {t("admin.failShort")}: {formatRate(user.failed_rate)}
                     </td>
                     <td className="px-3 py-2 text-xs text-neutral-600">1h: {user.orders_last_1h}<br />24h: {user.orders_last_24h}</td>
-                    <td className="px-3 py-2">{user.watchlisted ? t("common.yes") : t("common.no")}</td>
+                    <td className="px-3 py-2">{user.watchlisted ? t("admin.yes") : t("admin.no")}</td>
                     <td className="max-w-xs px-3 py-2 text-xs text-neutral-600">{user.latest_note ? truncate(user.latest_note, 80) : "-"}</td>
                   </tr>
                 ))}
@@ -670,7 +731,7 @@ function RiskUsersView({
               {t("common.notes")} {t("common.optional")}
               <textarea className="field min-h-24" value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} disabled={!detail} />
             </label>
-            <button className="btn btn-primary" onClick={onSubmit} disabled={!detail || actionLoading}>{actionLoading ? t("common.saving") : t("admin.submitRiskAction")}</button>
+            <button className="btn btn-primary" onClick={onSubmit} disabled={!detail || actionLoading}>{actionLoading ? t("admin.saving") : t("admin.submitRiskAction")}</button>
           </div>
         </Card>
 
@@ -695,6 +756,146 @@ function RiskUsersView({
   );
 }
 
+function PaymentIntentsView({
+  intents,
+  detail,
+  statusFilter,
+  setStatusFilter,
+  providerFilter,
+  setProviderFilter,
+  userFilter,
+  setUserFilter,
+  loading,
+  manualCompleteLoading,
+  onApplyFilters,
+  onSelect,
+  onManualComplete,
+  t
+}: {
+  intents: AdminPaymentIntent[];
+  detail: AdminPaymentIntent | null;
+  statusFilter: string;
+  setStatusFilter: (value: string) => void;
+  providerFilter: string;
+  setProviderFilter: (value: string) => void;
+  userFilter: string;
+  setUserFilter: (value: string) => void;
+  loading: boolean;
+  manualCompleteLoading: boolean;
+  onApplyFilters: () => void;
+  onSelect: (id: number) => void;
+  onManualComplete: (id: number) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const canManualComplete = detail?.provider === "manual_test" && ["created", "pending"].includes(detail.status);
+  return (
+    <section className="mt-6 grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
+      <Card title={t("admin.paymentIntents")} description={t("admin.paymentIntentsDesc")}>
+        <div className="mb-4 grid gap-3 md:grid-cols-[0.8fr_0.9fr_0.8fr_auto]">
+          <label className="grid gap-1 text-sm">
+            {t("common.status")}
+            <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="">{t("admin.allStatuses")}</option>
+              <option value="created">created</option>
+              <option value="pending">pending</option>
+              <option value="succeeded">succeeded</option>
+              <option value="failed">failed</option>
+              <option value="cancelled">cancelled</option>
+              <option value="expired">expired</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t("common.provider")}
+            <select className="field" value={providerFilter} onChange={(event) => setProviderFilter(event.target.value)}>
+              <option value="">{t("admin.allProviders")}</option>
+              <option value="manual_test">manual_test</option>
+              <option value="payme">payme</option>
+              <option value="click">click</option>
+              <option value="crypto_usdt">crypto_usdt</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            user_id
+            <input className="field" value={userFilter} onChange={(event) => setUserFilter(event.target.value)} inputMode="numeric" />
+          </label>
+          <button className="btn btn-secondary self-end" onClick={onApplyFilters}>{t("common.search")}</button>
+        </div>
+        {!intents.length ? (
+          <p className="text-sm text-neutral-600">{loading ? t("common.loading") : t("admin.noRows")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-line text-sm">
+              <thead className="bg-panel text-left text-xs uppercase tracking-wide text-neutral-500">
+                <tr>
+                  <th className="px-3 py-2">{t("common.id")}</th>
+                  <th className="px-3 py-2">public_id</th>
+                  <th className="px-3 py-2">{t("common.user")}</th>
+                  <th className="px-3 py-2">{t("common.provider")}</th>
+                  <th className="px-3 py-2">{t("common.amount")}</th>
+                  <th className="px-3 py-2">{t("common.status")}</th>
+                  <th className="px-3 py-2">{t("admin.providerReference")}</th>
+                  <th className="px-3 py-2">{t("common.created")}</th>
+                  <th className="px-3 py-2">{t("admin.webhook")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {intents.map((intent) => (
+                  <tr
+                    className={`cursor-pointer hover:bg-panel ${detail?.id === intent.id ? "bg-blue-50" : ""}`}
+                    key={intent.id}
+                    onClick={() => onSelect(intent.id)}
+                  >
+                    <td className="px-3 py-2">{intent.id}</td>
+                    <td className="px-3 py-2">{truncate(intent.public_id, 14)}</td>
+                    <td className="px-3 py-2">{intent.user_id}</td>
+                    <td className="px-3 py-2">{intent.provider}</td>
+                    <td className="px-3 py-2">{money(intent.amount, intent.currency)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={intent.status} /></td>
+                    <td className="px-3 py-2">{intent.provider_reference ? truncate(intent.provider_reference, 16) : "-"}</td>
+                    <td className="px-3 py-2">{dateTime(intent.created_at)}</td>
+                    <td className="px-3 py-2">{intent.last_webhook_status || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <div className="grid gap-4">
+        <Card title={detail ? `${t("admin.paymentIntentDetail")} #${detail.id}` : t("admin.paymentIntentDetail")} description={detail?.public_id || t("admin.selectPaymentIntent")}>
+          {detail ? (
+            <div className="grid gap-3 text-sm">
+              <RiskDetailRow label="public_id" value={detail.public_id} />
+              <RiskDetailRow label={t("common.user")} value={detail.user_id} />
+              <RiskDetailRow label={t("common.provider")} value={detail.provider} />
+              <RiskDetailRow label={t("common.amount")} value={money(detail.amount, detail.currency)} />
+              <div className="flex items-center justify-between"><span className="text-neutral-600">{t("common.status")}</span><StatusBadge status={detail.status} /></div>
+              <RiskDetailRow label={t("admin.providerReference")} value={detail.provider_reference || "-"} />
+              <RiskDetailRow label={t("admin.succeededAt")} value={dateTime(detail.succeeded_at)} />
+              <RiskDetailRow label={t("admin.failedAt")} value={dateTime(detail.failed_at)} />
+              <RiskDetailRow label={t("admin.cancelledAt")} value={dateTime(detail.cancelled_at)} />
+              <RiskDetailRow label={t("admin.lastWebhookStatus")} value={detail.last_webhook_status || "-"} />
+              <RiskDetailRow label={t("admin.lastWebhookAt")} value={dateTime(detail.last_webhook_at)} />
+              <RiskDetailRow label={t("admin.lastWebhookEvent")} value={detail.last_webhook_event_id ? truncate(detail.last_webhook_event_id, 28) : "-"} />
+              <RiskDetailRow label={t("admin.lastWebhookError")} value={detail.last_webhook_error || detail.failed_reason || "-"} />
+              <button className="btn btn-primary mt-2" onClick={() => onManualComplete(detail.id)} disabled={!canManualComplete || manualCompleteLoading}>
+                {manualCompleteLoading ? t("admin.saving") : t("admin.manualComplete")}
+              </button>
+              {!canManualComplete && <p className="text-xs text-neutral-500">{t("admin.manualCompleteUnavailable")}</p>}
+            </div>
+          ) : <p className="text-sm text-neutral-600">{t("admin.selectPaymentIntent")}</p>}
+        </Card>
+        {detail?.metadata && Object.keys(detail.metadata).length > 0 && (
+          <Card title={t("common.metadata")}>
+            <pre className="max-h-80 overflow-auto rounded-md bg-panel p-3 text-xs">{JSON.stringify(detail.metadata, null, 2)}</pre>
+          </Card>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function RiskBadge({level, t}: {level: string; t: (key: string, vars?: Record<string, string | number>) => string}) {
   const classes: Record<string, string> = {
     low: "bg-green-50 text-green-700 ring-green-200",
@@ -714,6 +915,15 @@ function formatRate(value: number) {
 
 function capitalize(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+function paymentIntentFilters(status: string, provider: string, userId: string) {
+  const parsedUserId = Number(userId);
+  return {
+    ...(status ? {status} : {}),
+    ...(provider ? {provider} : {}),
+    ...(Number.isInteger(parsedUserId) && parsedUserId > 0 ? {user_id: parsedUserId} : {})
+  };
 }
 
 function OpsSummaryView({summary, loading, t}: {summary: AdminOpsSummary | null; loading: boolean; t: (key: string, vars?: Record<string, string | number>) => string}) {
