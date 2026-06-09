@@ -768,6 +768,7 @@ Recommended 1-2 week plan:
    - Add audit logs for API key regeneration and supplier write actions.
    - Add admin-only abuse/risk monitoring visibility. PARTIAL (basic user risk summaries and manual watch/review action history; no auto-blocking)
    - Add request correlation and structured request completion logs. PARTIAL (safe request_id context only; no external observability backend)
+   - Add targeted DB indexes and admin ops summary. DONE for current audit scope; external dashboards/metrics backend still not implemented.
 
 What not to touch yet:
 

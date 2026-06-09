@@ -513,8 +513,8 @@ Codex не должен напрямую делать крупный refactor б
 
 - distributed workers
 - queue optimization
-- DB indexing audit
-- observability. PARTIAL (request correlation and safe structured request completion logs; no dashboards/tracing backend yet)
+- DB indexing audit. DONE (targeted composite indexes added for current high-traffic query patterns)
+- observability. PARTIAL (request correlation, safe structured request logs, and admin ops summary; no dashboards/tracing backend yet)
 - metrics dashboards
 - tracing
 - structured logging. PARTIAL (request_id correlation and JSON-safe request completion logs)

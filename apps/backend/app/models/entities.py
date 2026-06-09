@@ -83,6 +83,7 @@ class UserRiskAction(Base):
 
     __table_args__ = (
         CheckConstraint(f"action in {RISK_ACTIONS}", name="ck_user_risk_actions_action_allowed"),
+        Index("ix_user_risk_actions_user_created_at", "user_id", "created_at"),
     )
 
 
@@ -252,6 +253,12 @@ class Order(Base, TimestampMixin):
 
     provider: Mapped[Provider] = relationship()
 
+    __table_args__ = (
+        Index("ix_orders_user_created_at", "user_id", "created_at"),
+        Index("ix_orders_status_expires_at", "status", "expires_at"),
+        Index("ix_orders_status_created_at", "status", "created_at"),
+    )
+
 
 class OrderEvent(Base):
     __tablename__ = "order_events"
@@ -268,6 +275,10 @@ class OrderEvent(Base):
 
     order: Mapped[Order] = relationship()
     actor_user: Mapped[Optional[User]] = relationship()
+
+    __table_args__ = (
+        Index("ix_order_events_order_created_at", "order_id", "created_at"),
+    )
 
 
 class IdempotencyKey(Base, TimestampMixin):
@@ -320,6 +331,9 @@ class PaymentIntent(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_payment_intents_amount_positive"),
         CheckConstraint(f"status in {PAYMENT_INTENT_STATUSES}", name="ck_payment_intents_status_allowed"),
+        Index("ix_payment_intents_user_created_at", "user_id", "created_at"),
+        Index("ix_payment_intents_status_created_at", "status", "created_at"),
+        Index("ix_payment_intents_provider_created_at", "provider", "created_at"),
         Index(
             "uq_payment_intents_user_idempotency_key_not_null",
             "user_id",
@@ -385,6 +399,13 @@ class ApiRequestLog(Base):
     request_id: Mapped[Optional[str]] = mapped_column(String(128), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
+    __table_args__ = (
+        Index("ix_api_request_logs_user_created_at", "user_id", "created_at"),
+        Index("ix_api_request_logs_supplier_created_at", "supplier_id", "created_at"),
+        Index("ix_api_request_logs_buyer_key_created_at", "buyer_api_key_id", "created_at"),
+        Index("ix_api_request_logs_status_created_at", "status_code", "created_at"),
+    )
+
 
 class SystemSetting(Base, TimestampMixin):
     __tablename__ = "system_settings"
@@ -442,6 +463,14 @@ class SupplierInventory(Base, TimestampMixin):
     supplier: Mapped[Supplier] = relationship()
 
     __table_args__ = (
+        Index("ix_supplier_inventory_supplier_updated_at", "supplier_id", "updated_at"),
+        Index(
+            "ix_supplier_inventory_lookup_active",
+            "status",
+            "service_code",
+            "country_iso2",
+            "operator",
+        ),
         Index(
             "uq_supplier_inventory_supplier_service_country_operator_null",
             "supplier_id",
@@ -486,6 +515,8 @@ class SupplierActivation(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("supplier_id", "supplier_activation_id", name="uq_supplier_activation_external_id"),
+        Index("ix_supplier_activations_supplier_created_at", "supplier_id", "created_at"),
+        Index("ix_supplier_activations_supplier_phone_status", "supplier_id", "phone_number", "status"),
     )
 
 
@@ -542,6 +573,9 @@ class SupplierPayoutRequest(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_supplier_payout_requests_amount_positive"),
         CheckConstraint(f"status in {SUPPLIER_PAYOUT_REQUEST_STATUSES}", name="ck_supplier_payout_requests_status_allowed"),
+        Index("ix_supplier_payout_requests_supplier_created_at", "supplier_id", "created_at"),
+        Index("ix_supplier_payout_requests_status_created_at", "status", "created_at"),
+        Index("ix_supplier_payout_requests_status_updated_at", "status", "updated_at"),
     )
 
 
@@ -590,8 +624,10 @@ class SmsMessage(Base):
 
     __table_args__ = (
         Index("ix_sms_messages_order_id", "order_id"),
+        Index("ix_sms_messages_order_created_at", "order_id", "created_at"),
         Index("ix_sms_messages_supplier_id", "supplier_id"),
         Index("ix_sms_messages_provider_id", "provider_id"),
+        Index("ix_sms_messages_provider_created_at", "provider_id", "created_at"),
         Index("ix_sms_messages_created_at", "created_at"),
         UniqueConstraint("source", "supplier_id", "external_message_id", name="uq_sms_messages_source_supplier_external_id"),
     )
@@ -617,4 +653,6 @@ class SupplierTransaction(Base):
 
     __table_args__ = (
         UniqueConstraint("supplier_id", "order_id", "type", "status", name="uq_supplier_order_tx"),
+        Index("ix_supplier_transactions_supplier_created_at", "supplier_id", "created_at"),
+        Index("ix_supplier_transactions_reference_type_status", "reference", "type", "status"),
     )

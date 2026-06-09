@@ -189,3 +189,18 @@ class UserRiskActionOut(ORMModel):
     action: str
     note: str | None = None
     created_at: datetime
+
+
+class AdminOpsSummaryOut(BaseModel):
+    status: str
+    high_risk_users_count: int
+    watchlisted_users_count: int
+    pending_supplier_release_retries_count: int
+    dead_supplier_release_retries_count: int
+    payment_reconciliation_issue_counts: dict[str, int]
+    supplier_payout_reconciliation_issue_counts: dict[str, int]
+    pending_payment_intents_count: int
+    pending_supplier_payout_requests_count: int
+    active_waiting_sms_orders_count: int
+    recent_5xx_request_count: int
+    recent_rate_limit_429_count: int

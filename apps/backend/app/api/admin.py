@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.schemas.admin import (
     AdjustmentIn,
+    AdminOpsSummaryOut,
     AdminPaymentIntentOut,
     DepositIn,
     AdminOrderOut,
@@ -548,6 +549,58 @@ def metrics(db: Session = Depends(get_db), admin: User = Depends(require_admin))
         "top_services": [{"service_code": row[0], "orders": row[1]} for row in top_services],
         "top_countries": [{"country_iso2": row[0], "orders": row[1]} for row in top_countries],
     }
+
+
+@router.get("/ops/summary", response_model=AdminOpsSummaryOut)
+def ops_summary(db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    risk_summaries = list_user_risk_summaries(db, limit=500)
+    payment_reconciliation = reconcile_payment_credits(db, limit=1)
+    payout_reconciliation = reconcile_supplier_payouts(db, limit=1)
+
+    return {
+        "status": "ok",
+        "high_risk_users_count": sum(1 for summary in risk_summaries if summary.risk_level == "high"),
+        "watchlisted_users_count": sum(1 for summary in risk_summaries if summary.watchlisted),
+        "pending_supplier_release_retries_count": _count_supplier_release_retries(db, "pending"),
+        "dead_supplier_release_retries_count": _count_supplier_release_retries(db, "dead"),
+        "payment_reconciliation_issue_counts": payment_reconciliation.counts,
+        "supplier_payout_reconciliation_issue_counts": payout_reconciliation.counts,
+        "pending_payment_intents_count": int(
+            db.scalar(select(func.count(PaymentIntent.id)).where(PaymentIntent.status == "pending")) or 0
+        ),
+        "pending_supplier_payout_requests_count": int(
+            db.scalar(
+                select(func.count(SupplierPayoutRequest.id)).where(SupplierPayoutRequest.status == "requested")
+            )
+            or 0
+        ),
+        "active_waiting_sms_orders_count": int(
+            db.scalar(select(func.count(Order.id)).where(Order.status == "waiting_sms")) or 0
+        ),
+        "recent_5xx_request_count": int(
+            db.scalar(
+                select(func.count(ApiRequestLog.id)).where(
+                    ApiRequestLog.status_code >= 500,
+                    ApiRequestLog.created_at >= one_hour_ago,
+                )
+            )
+            or 0
+        ),
+        "recent_rate_limit_429_count": int(
+            db.scalar(
+                select(func.count(ApiRequestLog.id)).where(
+                    ApiRequestLog.status_code == 429,
+                    ApiRequestLog.created_at >= one_hour_ago,
+                )
+            )
+            or 0
+        ),
+    }
+
+
+def _count_supplier_release_retries(db: Session, status: str) -> int:
+    return int(db.scalar(select(func.count(SupplierReleaseRetry.id)).where(SupplierReleaseRetry.status == status)) or 0)
 
 
 @router.get("/risk/users", response_model=list[UserRiskSummaryOut])
