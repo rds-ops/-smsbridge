@@ -11,6 +11,7 @@ import {
   PlusCircle,
   Settings,
   ShieldCheck,
+  Truck,
   Wallet
 } from "lucide-react";
 import type {LucideIcon} from "lucide-react";
@@ -22,7 +23,7 @@ import {getBalance} from "@/lib/client/api";
 import type {User, Wallet as WalletType} from "@/lib/shared/types";
 import {money} from "@/lib/shared/format";
 
-const publicRoutes = new Set(["/", "/login", "/register", "/acceptable-use", "/terms", "/privacy", "/abuse", "/developer-commands"]);
+const publicRoutes = new Set(["/", "/login", "/register", "/acceptable-use", "/terms", "/privacy", "/abuse", "/developer-commands", "/supplier"]);
 
 type NavLink = {href: string; label: string; icon: LucideIcon};
 
@@ -124,6 +125,7 @@ function PublicHeader({signedIn, user}: {signedIn: boolean; user: User | null}) 
           ) : (
             <>
               <Link className="hidden rounded-md px-3 py-2 text-sm text-neutral-600 hover:bg-panel sm:inline-flex" href="/login">{t("nav.login")}</Link>
+              <Link className="hidden rounded-md px-3 py-2 text-sm text-neutral-600 hover:bg-panel sm:inline-flex" href="/supplier">{t("nav.supplier")}</Link>
               <Link className="btn btn-primary" href="/register">{t("nav.register")}</Link>
             </>
           )}
@@ -159,6 +161,7 @@ export function AppSidebar({
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
         {links.map((link) => <SidebarLink key={link.href} link={link} pathname={pathname} />)}
+        <SidebarLink link={{href: "/supplier", label: t("nav.supplier"), icon: Truck}} pathname={pathname} />
       </nav>
       <div className="border-t border-line p-4">
         <div className="rounded-lg border border-line bg-slate-50 p-3">

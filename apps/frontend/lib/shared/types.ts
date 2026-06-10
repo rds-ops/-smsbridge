@@ -322,6 +322,62 @@ export type AdminSupplierPayoutAction = {
   reason?: string | null;
 };
 
+export type SupplierProfile = {
+  id: number;
+  name: string;
+  email?: string | null;
+  status: string;
+  reward_percent: string;
+  balance: string;
+  held_balance: string;
+  currency: string;
+};
+
+export type SupplierInventoryRow = {
+  id: number;
+  supplier_id: number;
+  service_code: string;
+  country_iso2: string;
+  operator?: string | null;
+  available_count: number;
+  success_rate?: string | null;
+  avg_sms_time_seconds?: number | null;
+  status: string;
+  last_sync_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupplierInventoryUpdateItem = {
+  service_code: string;
+  country_iso2: string;
+  operator?: string | null;
+  available_count: number;
+  success_rate?: string | null;
+  avg_sms_time_seconds?: number | null;
+  status: string;
+};
+
+export type SupplierPayoutRequest = {
+  id: number;
+  public_id: string;
+  supplier_id: number;
+  amount: string;
+  currency: string;
+  status: string;
+  payout_method?: string | null;
+  payout_address?: string | null;
+  admin_note?: string | null;
+  failure_reason?: string | null;
+  requested_at: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  cancelled_at?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SupplierReleaseRetry = {
   id: number;
   supplier_activation_id: number;

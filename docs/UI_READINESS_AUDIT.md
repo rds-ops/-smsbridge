@@ -14,7 +14,7 @@ Scope inspected:
 - `docs/API_CALLBACKS.md`
 - `docs/API_AUDIT.md`
 
-Task 49 update: the admin ops summary dashboard is now implemented in the existing admin UI.
+Task 55 update: the supplier API-key cabinet MVP is now implemented at `/supplier`.
 
 ## 1. Current Frontend Coverage
 
@@ -38,7 +38,10 @@ Partially implemented:
 ### Supplier UI
 
 Implemented:
-- No supplier-facing cabinet/login UI exists.
+- Supplier API-key session screen at `/supplier`.
+- Supplier profile, balances, reward percent and status from `GET /supplier/v1/me`.
+- Supplier inventory list/update from `GET /supplier/v1/inventory` and `POST /supplier/v1/inventory/update`.
+- Supplier payout request create/list from `POST /supplier/v1/payout-requests` and `GET /supplier/v1/payout-requests`.
 
 Admin-only supplier views implemented:
 - Supplier create/update/status/reward/API key generation.
@@ -49,7 +52,8 @@ Admin-only supplier views implemented:
 
 Partially implemented:
 - Supplier reservation config fields and reservation visibility exist in backend, but frontend supplier create/update/types do not expose them.
-- Supplier inventory visibility fields are not typed/rendered.
+- Supplier SMS push helper is not implemented in the supplier cabinet yet.
+- Supplier activation/reward history remains admin-only because no supplier-facing endpoints exist yet.
 
 ### Admin UI
 
@@ -90,10 +94,6 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Supplier login/API key session | `GET /supplier/v1/me`, supplier bearer API key auth | new supplier auth/session helper, new `apps/frontend/app/supplier/*`, nav separation | beta useful | large |
-| Supplier profile and balances | `GET /supplier/v1/me` | supplier dashboard page/types | beta useful | medium |
-| Supplier inventory list/update | `GET /supplier/v1/inventory`, `POST /supplier/v1/inventory/update` | supplier dashboard/inventory page | beta useful | medium |
-| Supplier payout request create/list | `POST /supplier/v1/payout-requests`, `GET /supplier/v1/payout-requests` | supplier payout page/types | beta useful | medium |
 | Supplier SMS push helper | `POST /supplier/v1/sms` | supplier dev/testing page or local integration helper UI | later | medium |
 | Supplier activations view | No supplier-facing activation list endpoint currently; admin-only exists | requires backend endpoint before supplier UI | later | medium |
 | Supplier reward transaction history | No supplier-facing transaction endpoint currently; admin-only exists | requires backend endpoint before supplier UI | beta useful | medium |
@@ -124,23 +124,18 @@ Missing:
     - Priority: beta useful
     - Complexity: small
 
-4. Supplier payout request create/list.
-    - Endpoints: `POST /supplier/v1/payout-requests`, `GET /supplier/v1/payout-requests`
-    - Priority: beta useful
-    - Complexity: medium
-
-5. Payment intents and local `manual_test` deposit flow.
+4. Payment intents and local `manual_test` deposit flow.
     - Endpoints: `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`
     - Priority: beta useful
     - Complexity: medium
 
-6. Supplier login/API key session.
-    - Endpoint: `GET /supplier/v1/me`
-    - Priority: beta useful
-    - Complexity: large
+5. Supplier SMS push helper.
+    - Endpoint: `POST /supplier/v1/sms`
+    - Priority: later
+    - Complexity: medium
 
-7. Supplier inventory list/update.
-    - Endpoints: `GET /supplier/v1/inventory`, `POST /supplier/v1/inventory/update`
+6. Supplier reward transaction history.
+    - Endpoint: not implemented supplier-side yet
     - Priority: beta useful
     - Complexity: medium
 
@@ -155,8 +150,7 @@ It is usable for the basic buyer flow and basic admin setup:
 - basic admin metrics/users/orders/providers/suppliers
 - manual admin wallet deposit
 
-It is not ready for closed beta operations because major implemented backend controls are missing from UI:
-- no supplier cabinet
+It is closer to closed-beta readiness after the operations/admin and supplier cabinet work, but still has gaps in admin supplier reservation configuration, request-log filtering, and buyer payment intent UX.
 
 ## 5. Biggest Gaps
 
@@ -166,6 +160,6 @@ It is not ready for closed beta operations because major implemented backend con
 
 3. API key management now supports managed keys, scopes, revocation and usage, while the legacy regenerate endpoint remains for compatibility.
 
-4. Supplier UX is mostly absent. Supplier APIs exist for profile, inventory, SMS, and payout requests, but there is no supplier-facing frontend session or cabinet.
+4. Supplier UX now has an API-key cabinet for profile, inventory and payout requests. Supplier SMS helper, activation history and reward transaction history remain later.
 
 5. Local E2E flow is documented but not surfaced in UI. The app has a developer commands page and API docs page, but they do not reflect the current manual_test payment intent + fake supplier reservation flow.
