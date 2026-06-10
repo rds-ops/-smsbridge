@@ -1,6 +1,7 @@
 import {apiFetch} from "@/lib/shared/api";
 import type {
   AdminOpsSummary,
+  AdminApiRequestLog,
   AdminPaymentIntent,
   AdminPaymentIntentFilters,
   AdminRiskAction,
@@ -171,7 +172,7 @@ export function getAuditLogs() {
 }
 
 export function getApiRequestLogs() {
-  return apiFetch<Array<Record<string, unknown>>>("/admin/api-request-logs");
+  return apiFetch<AdminApiRequestLog[]>("/admin/api-request-logs");
 }
 
 export function manualDeposit(payload: {user_id: number; amount: string; reference?: string | null}) {

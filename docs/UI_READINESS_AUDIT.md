@@ -15,6 +15,7 @@ Scope inspected:
 - `docs/API_AUDIT.md`
 
 Task 55 update: the supplier API-key cabinet MVP is now implemented at `/supplier`.
+Task 56 update: admin API request logs now show explicit operational columns and frontend-side `request_id` filtering.
 
 ## 1. Current Frontend Coverage
 
@@ -73,11 +74,11 @@ Implemented:
 - Reliability Center with supplier release retries, payment reconciliation, supplier payout reconciliation, and cleanup dry-run visibility.
 
 Partially implemented:
-- API request logs are rendered generically but the explicit table columns omit newer fields such as `request_id`, `supplier_id`, and `buyer_api_key_id`.
+- API request logs show `request_id`, identity columns and frontend-side request ID filtering, but there is no backend request ID query/filter endpoint yet.
 - Supplier inventory/activations/SMS/transactions are visible only via manually entering supplier ID.
 
 Missing:
-- Admin request log filtering/search by request ID.
+- Backend-side admin request log filtering/search by request ID.
 
 ## 2. Missing UI Plan
 
@@ -103,7 +104,6 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Request logs with request ID | `GET /admin/api-request-logs` includes `request_id`, `supplier_id`, `buyer_api_key_id` | shared types/admin table columns/filter input | beta useful | small |
 | Supplier reservation config | `POST/PATCH /admin/suppliers`, `GET /admin/suppliers` fields | admin supplier form/types/table | beta blocker | medium |
 | Supplier reservation visibility fields | `GET /admin/suppliers/{id}/inventory` fields | supplier inventory type/table columns | beta useful | small |
 
@@ -114,15 +114,15 @@ Missing:
    - Priority: beta blocker
    - Complexity: medium
 
-2. Request log request ID visibility and filtering.
-   - Endpoint: `GET /admin/api-request-logs`
-   - Priority: beta useful
-   - Complexity: small
-
-3. Supplier reservation visibility fields.
+2. Supplier reservation visibility fields.
     - Endpoint: `GET /admin/suppliers/{id}/inventory`
     - Priority: beta useful
     - Complexity: small
+
+3. Backend-side request log request ID filtering.
+   - Endpoint: `GET /admin/api-request-logs`
+   - Priority: later
+   - Complexity: small
 
 4. Payment intents and local `manual_test` deposit flow.
     - Endpoints: `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`

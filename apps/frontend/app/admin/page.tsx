@@ -43,6 +43,7 @@ import {orderProfit, userRow} from "@/lib/admin/format";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
 import type {
   AdminOpsSummary,
+  AdminApiRequestLog,
   AdminPaymentIntent,
   AdminRiskAction,
   AdminRiskActionType,
@@ -110,8 +111,9 @@ function AdminPanel() {
   const [supplierSms, setSupplierSms] = useState<SupplierSms[]>([]);
   const [supplierTransactions, setSupplierTransactions] = useState<SupplierTransaction[]>([]);
   const [auditLogs, setAuditLogs] = useState<Array<Record<string, unknown>>>([]);
-  const [apiLogs, setApiLogs] = useState<Array<Record<string, unknown>>>([]);
+  const [apiLogs, setApiLogs] = useState<AdminApiRequestLog[]>([]);
   const [query, setQuery] = useState("");
+  const [requestIdFilter, setRequestIdFilter] = useState("");
   const [depositUserId, setDepositUserId] = useState("2");
   const [depositAmount, setDepositAmount] = useState("10.00");
   const [depositReference, setDepositReference] = useState("manual-frontend");
@@ -416,9 +418,15 @@ function AdminPanel() {
     if (tab === "supplier sms") return filter(supplierSms as unknown as Record<string, unknown>[]);
     if (tab === "supplier transactions") return filter(supplierTransactions as unknown as Record<string, unknown>[]);
     if (tab === "audit") return filter(auditLogs);
-    if (tab === "api logs") return filter(apiLogs);
+    if (tab === "api logs") {
+      const requestLower = requestIdFilter.trim().toLowerCase();
+      const rows = requestLower
+        ? apiLogs.filter((row) => String(row.request_id || "").toLowerCase().includes(requestLower))
+        : apiLogs;
+      return filter(rows as unknown as Record<string, unknown>[]);
+    }
     return [];
-  }, [tab, users, orders, providers, suppliers, supplierInventory, supplierActivations, supplierSms, supplierTransactions, auditLogs, apiLogs, query]);
+  }, [tab, users, orders, providers, suppliers, supplierInventory, supplierActivations, supplierSms, supplierTransactions, auditLogs, apiLogs, query, requestIdFilter]);
 
   const columns = useMemo<Column<Record<string, unknown>>[]>(() => {
     if (tab === "users") return [
@@ -524,6 +532,23 @@ function AdminPanel() {
       {key: "entity_id", header: t("common.entityId")},
       {key: "log_metadata", header: t("common.metadata"), render: (row) => <pre className="max-w-md whitespace-pre-wrap rounded-md bg-panel p-2 text-xs">{JSON.stringify(row.log_metadata || {}, null, 2)}</pre>},
       {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)}
+    ];
+    if (tab === "api logs") return [
+      {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)},
+      {key: "request_id", header: "request_id", render: (row) => (
+        <span className="flex max-w-[220px] items-center gap-2">
+          <code className="truncate rounded bg-panel px-1 py-0.5 text-xs">{row.request_id ? String(row.request_id) : "-"}</code>
+          {row.request_id ? <CopyButton value={String(row.request_id)} /> : null}
+        </span>
+      )},
+      {key: "method", header: t("common.method")},
+      {key: "endpoint", header: t("common.endpoint"), render: (row) => truncate(row.endpoint || row.path || "-", 48)},
+      {key: "status_code", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status_code)} />},
+      {key: "user_id", header: t("common.userId"), render: (row) => row.user_id ? String(row.user_id) : "-"},
+      {key: "supplier_id", header: "supplier_id", render: (row) => row.supplier_id ? String(row.supplier_id) : "-"},
+      {key: "buyer_api_key_id", header: "buyer_api_key_id", render: (row) => row.buyer_api_key_id ? String(row.buyer_api_key_id) : "-"},
+      {key: "duration_ms", header: "duration_ms", render: (row) => row.duration_ms ? String(row.duration_ms) : "-"},
+      {key: "ip_address", header: t("common.ipAddress"), render: (row) => row.ip_address || row.ip ? String(row.ip_address || row.ip) : "-"}
     ];
     return [
       {key: "user_id", header: t("common.user")},
@@ -686,7 +711,20 @@ function AdminPanel() {
         />
       ) : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
-          <input className="field mb-4 max-w-md" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
+          {tab === "api logs" ? (
+            <div className="mb-4 grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                request_id
+                <input className="field" value={requestIdFilter} onChange={(e) => setRequestIdFilter(e.target.value)} placeholder="request_id" />
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("common.search")}
+                <input className="field" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
+              </label>
+            </div>
+          ) : (
+            <input className="field mb-4 max-w-md" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
+          )}
           <DataTable rows={filteredRows} columns={columns} emptyTitle={t("admin.noRows")} />
         </Card>
       )}

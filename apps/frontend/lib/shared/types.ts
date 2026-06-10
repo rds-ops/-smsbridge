@@ -322,6 +322,22 @@ export type AdminSupplierPayoutAction = {
   reason?: string | null;
 };
 
+export type AdminApiRequestLog = {
+  id: number;
+  user_id?: number | null;
+  supplier_id?: number | null;
+  buyer_api_key_id?: number | null;
+  endpoint?: string | null;
+  path?: string | null;
+  method: string;
+  ip_address?: string | null;
+  ip?: string | null;
+  status_code: number;
+  request_id?: string | null;
+  duration_ms?: number | null;
+  created_at: string;
+};
+
 export type SupplierProfile = {
   id: number;
   name: string;
