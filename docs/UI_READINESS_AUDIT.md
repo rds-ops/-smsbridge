@@ -26,11 +26,12 @@ Implemented:
 - Buy flow using services, countries, prices, balance, and `POST /api/v1/orders`.
 - Order list with filters and cancel/finish actions.
 - Order detail with phone number, SMS code/text, balance refresh, cancel/finish actions.
+- Wallet transaction history on the dashboard from `GET /api/v1/wallet/transactions`.
+- Managed API key list/create/revoke/scopes/usage on `/api-docs`.
 - Legacy API key regeneration on `/api-docs` through `POST /api/v1/api-key/regenerate`.
 - Static API examples for balance/prices/orders.
 
 Partially implemented:
-- API key UX exists only for legacy single-key regeneration. Managed API keys/scopes/usage are not represented.
 - Order detail has a static four-step timeline, but it does not use durable `order_events`.
 - Payment/deposit UX still depends on admin manual deposit, not buyer payment intents/manual completion flow.
 
@@ -80,11 +81,7 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Wallet transaction history | `GET /api/v1/wallet/transactions` | `apps/frontend/lib/client/api.ts`, `apps/frontend/lib/shared/types.ts`, `apps/frontend/app/dashboard/page.tsx` or new `apps/frontend/app/wallet/page.tsx`, nav/translations | beta blocker | small |
 | Payment intents and local `manual_test` deposit flow | `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`, admin completion remains admin-only | client API/types, new buyer deposit page, admin payment intent page for manual completion, docs/API page | beta useful | medium |
-| Managed API keys list/create/revoke | `POST /api/v1/api-keys`, `GET /api/v1/api-keys`, `POST /api/v1/api-keys/{public_id}/revoke` | `apps/frontend/lib/client/api.ts`, shared types, `apps/frontend/app/settings/page.tsx` or new `apps/frontend/app/api-keys/page.tsx`, `apps/frontend/app/api-docs/page.tsx` | beta useful | medium |
-| API key usage visibility | `GET /api/v1/api-keys/{public_id}/usage` | same API key page/types | later | small |
-| API key scopes UX | managed API key create/list endpoints | API key page, scope selector constants/translations | beta useful | medium |
 | Payment intent status visibility | `GET /api/v1/payment-intents/{public_id}` | buyer deposit/payment intent detail/list page | later | small |
 | Order events/status details | No buyer endpoint currently; admin endpoint exists at `GET /admin/orders/{order_id}/events` only | no buyer UI until backend buyer-safe endpoint exists | later | medium |
 | Idempotency-Key support in buy flow | `POST /api/v1/orders` with `Idempotency-Key` header | `apps/frontend/lib/client/api.ts`, `apps/frontend/app/buy/page.tsx` | beta useful | small |
@@ -117,47 +114,32 @@ Missing:
    - Priority: beta blocker
    - Complexity: medium
 
-2. Buyer wallet transaction history.
-   - Endpoint: `GET /api/v1/wallet/transactions`
-   - Priority: beta blocker
-   - Complexity: small
-
-3. Managed buyer API keys with scopes.
-   - Endpoints: `/api/v1/api-keys*`
-   - Priority: beta useful
-   - Complexity: medium
-
-4. Request log request ID visibility and filtering.
+2. Request log request ID visibility and filtering.
    - Endpoint: `GET /admin/api-request-logs`
    - Priority: beta useful
    - Complexity: small
 
-5. Supplier reservation visibility fields.
+3. Supplier reservation visibility fields.
     - Endpoint: `GET /admin/suppliers/{id}/inventory`
     - Priority: beta useful
     - Complexity: small
 
-6. API key usage visibility.
-    - Endpoint: `GET /api/v1/api-keys/{public_id}/usage`
-    - Priority: later
-    - Complexity: small
-
-7. Supplier payout request create/list.
+4. Supplier payout request create/list.
     - Endpoints: `POST /supplier/v1/payout-requests`, `GET /supplier/v1/payout-requests`
     - Priority: beta useful
     - Complexity: medium
 
-8. Payment intents and local `manual_test` deposit flow.
+5. Payment intents and local `manual_test` deposit flow.
     - Endpoints: `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`
     - Priority: beta useful
     - Complexity: medium
 
-9. Supplier login/API key session.
+6. Supplier login/API key session.
     - Endpoint: `GET /supplier/v1/me`
     - Priority: beta useful
     - Complexity: large
 
-10. Supplier inventory list/update.
+7. Supplier inventory list/update.
     - Endpoints: `GET /supplier/v1/inventory`, `POST /supplier/v1/inventory/update`
     - Priority: beta useful
     - Complexity: medium
@@ -174,17 +156,15 @@ It is usable for the basic buyer flow and basic admin setup:
 - manual admin wallet deposit
 
 It is not ready for closed beta operations because major implemented backend controls are missing from UI:
-- no buyer wallet ledger UI
-- no managed API key UI
 - no supplier cabinet
 
 ## 5. Biggest Gaps
 
 1. Admin operations are still the largest gap. The admin UI now has ops summary, risk actions, payment intent manual completion, supplier payout operations, retries, reconciliation, and cleanup dry-run visibility, but request ID filtering and supplier reservation configuration are still missing.
 
-2. Buyer accounting transparency is incomplete. The backend exposes wallet transaction history and payment intents, but the frontend still shows only balances and manual admin-deposit assumptions.
+2. Buyer accounting transparency is improved with wallet transaction history, but payment intent/deposit UX is still incomplete and still depends on admin manual completion.
 
-3. API key management is outdated in UI. The frontend still centers the legacy regenerate endpoint, while the backend supports managed keys, scopes, revocation, and usage visibility.
+3. API key management now supports managed keys, scopes, revocation and usage, while the legacy regenerate endpoint remains for compatibility.
 
 4. Supplier UX is mostly absent. Supplier APIs exist for profile, inventory, SMS, and payout requests, but there is no supplier-facing frontend session or cabinet.
 

@@ -1,8 +1,12 @@
 import {apiFetch} from "@/lib/shared/api";
-import type {Country, Order, Price, Service, UserLimit, Wallet} from "@/lib/shared/types";
+import type {BuyerApiKey, BuyerApiKeyCreated, BuyerApiKeyUsage, Country, Order, Price, Service, UserLimit, Wallet, WalletTransaction} from "@/lib/shared/types";
 
 export function getBalance() {
   return apiFetch<Wallet>("/api/v1/balance");
+}
+
+export function getWalletTransactions(limit = 10, offset = 0) {
+  return apiFetch<WalletTransaction[]>(`/api/v1/wallet/transactions?limit=${limit}&offset=${offset}`);
 }
 
 export function getLimits() {
@@ -50,5 +54,21 @@ export function finishOrder(publicId: string) {
 
 export function regenerateApiKey() {
   return apiFetch<{api_key: string; message: string}>("/api/v1/api-key/regenerate", {method: "POST"});
+}
+
+export function createApiKey(payload: {name?: string | null; scopes?: string[] | null}) {
+  return apiFetch<BuyerApiKeyCreated>("/api/v1/api-keys", {method: "POST", body: JSON.stringify(payload)});
+}
+
+export function listApiKeys() {
+  return apiFetch<BuyerApiKey[]>("/api/v1/api-keys");
+}
+
+export function revokeApiKey(publicId: string) {
+  return apiFetch<BuyerApiKey>(`/api/v1/api-keys/${publicId}/revoke`, {method: "POST"});
+}
+
+export function getApiKeyUsage(publicId: string) {
+  return apiFetch<BuyerApiKeyUsage>(`/api/v1/api-keys/${publicId}/usage`);
 }
 

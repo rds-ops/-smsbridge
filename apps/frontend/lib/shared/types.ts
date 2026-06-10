@@ -17,6 +17,16 @@ export type Wallet = {
   currency: string;
 };
 
+export type WalletTransaction = {
+  id: number;
+  type: string;
+  amount: string;
+  status: string;
+  order_public_id?: string | null;
+  reference?: string | null;
+  created_at: string;
+};
+
 export type UserLimit = {
   max_orders_per_minute: number;
   max_orders_per_day: number;
@@ -245,6 +255,39 @@ export type AdminPaymentIntentFilters = {
   status?: string;
   provider?: string;
   user_id?: number;
+};
+
+export type BuyerApiKey = {
+  id: number;
+  public_id: string;
+  name?: string | null;
+  key_prefix: string;
+  status: string;
+  scopes?: string[] | null;
+  last_used_at?: string | null;
+  created_at: string;
+  revoked_at?: string | null;
+};
+
+export type BuyerApiKeyCreated = BuyerApiKey & {
+  api_key: string;
+  message: string;
+};
+
+export type BuyerApiKeyUsageRow = {
+  endpoint: string;
+  method: string;
+  status_code: number;
+  count: number;
+};
+
+export type BuyerApiKeyUsage = {
+  public_id: string;
+  key_prefix: string;
+  status: string;
+  total_requests: number;
+  last_used_at?: string | null;
+  recent: BuyerApiKeyUsageRow[];
 };
 
 export type SupplierPayoutStatus = "requested" | "approved" | "rejected" | "cancelled" | "paid" | "failed";

@@ -5,10 +5,10 @@ import {useEffect, useState} from "react";
 import {DataTable} from "@/components/shared/data-table";
 import {ActionLink, Alert, Card, MetricCard, PageHeader, PageShell, StatusBadge} from "@/components/shared/ui";
 import {OnboardingChecklist} from "@/components/client/onboarding-checklist";
-import {getBalance, getLimits, listOrders} from "@/lib/client/api";
+import {getBalance, getLimits, getWalletTransactions, listOrders} from "@/lib/client/api";
 import {currentUser} from "@/lib/shared/api";
-import {dateTime, money} from "@/lib/shared/format";
-import type {Order, User, UserLimit, Wallet} from "@/lib/shared/types";
+import {dateTime, money, truncate} from "@/lib/shared/format";
+import type {Order, User, UserLimit, Wallet, WalletTransaction} from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
 export default function DashboardPage() {
@@ -17,6 +17,8 @@ export default function DashboardPage() {
   const [balance, setBalance] = useState<Wallet | null>(null);
   const [limits, setLimits] = useState<UserLimit | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [transactionOffset, setTransactionOffset] = useState(0);
   const [error, setError] = useState("");
 
   async function load() {
@@ -25,15 +27,28 @@ export default function DashboardPage() {
       currentUser(),
       getBalance(),
       getLimits(),
-      listOrders()
+      listOrders(),
+      getWalletTransactions(10, 0)
     ])
-      .then(([userData, balanceData, limitsData, orderData]) => {
+      .then(([userData, balanceData, limitsData, orderData, transactionData]) => {
         setUser(userData);
         setBalance(balanceData);
         setLimits(limitsData);
         setOrders(orderData);
+        setTransactions(transactionData);
+        setTransactionOffset(transactionData.length);
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("buy.loadFailed")));
+  }
+
+  async function loadMoreTransactions() {
+    try {
+      const rows = await getWalletTransactions(10, transactionOffset);
+      setTransactions((current) => [...current, ...rows]);
+      setTransactionOffset((current) => current + rows.length);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("buy.loadFailed"));
+    }
   }
 
   useEffect(() => {
@@ -91,6 +106,26 @@ export default function DashboardPage() {
               {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)}
             ]}
           />
+        </Card>
+      </section>
+
+      <section className="mt-8">
+        <Card title={t("dashboard.walletTransactions")} description={t("dashboard.walletTransactionsDesc")}>
+          <DataTable
+            rows={transactions as unknown as Record<string, unknown>[]}
+            emptyTitle={t("dashboard.noTransactions")}
+            columns={[
+              {key: "type", header: t("common.type"), render: (row) => <StatusBadge status={String(row.type)} />},
+              {key: "amount", header: t("common.amount"), render: (row) => money(row.amount, balance?.currency)},
+              {key: "status", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status)} />},
+              {key: "order_public_id", header: t("common.order"), render: (row) => row.order_public_id ? <Link className="text-accent" href={`/orders/${row.order_public_id}`}>{truncate(row.order_public_id, 12)}</Link> : "-"},
+              {key: "reference", header: t("common.reference"), render: (row) => row.reference ? truncate(row.reference, 32) : "-"},
+              {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)}
+            ]}
+          />
+          {transactions.length >= 10 && (
+            <button className="btn btn-secondary mt-4" onClick={loadMoreTransactions}>{t("dashboard.loadMoreTransactions")}</button>
+          )}
         </Card>
       </section>
     </PageShell>
