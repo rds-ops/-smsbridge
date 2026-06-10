@@ -278,3 +278,60 @@ export type AdminSupplierPayoutAction = {
   admin_note?: string | null;
   reason?: string | null;
 };
+
+export type SupplierReleaseRetry = {
+  id: number;
+  supplier_activation_id: number;
+  supplier_id: number;
+  order_id: number;
+  retry_type: string;
+  status: string;
+  reason: string;
+  attempt_count: number;
+  next_retry_at: string;
+  last_error?: string | null;
+  last_attempt_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentCreditIssue = {
+  issue_type: string;
+  payment_intent_id?: number | null;
+  payment_intent_public_id?: string | null;
+  user_id?: number | null;
+  provider?: string | null;
+  amount?: string | null;
+  status?: string | null;
+  wallet_transaction_id?: number | null;
+  created_at?: string | null;
+};
+
+export type PaymentCreditReconciliation = {
+  counts: Record<string, number>;
+  issues: PaymentCreditIssue[];
+};
+
+export type SupplierPayoutReconciliationIssue = {
+  issue_type: string;
+  payout_id?: number | null;
+  payout_public_id?: string | null;
+  supplier_id: number;
+  status?: string | null;
+  amount?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type SupplierPayoutReconciliation = {
+  counts: Record<string, number>;
+  issues: SupplierPayoutReconciliationIssue[];
+};
+
+export type OperationalCleanupDryRun = {
+  api_request_logs: number;
+  payment_webhook_events: number;
+  supplier_release_retries: number;
+  total: number;
+  dry_run: boolean;
+};

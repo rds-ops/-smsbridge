@@ -65,16 +65,13 @@ Implemented:
 - Risk users/actions from `/admin/risk/users*`.
 - Payment intent admin list/detail/manual-complete from `/admin/payment-intents*`.
 - Supplier payout requests/admin actions from `/admin/supplier-payout-requests*`.
+- Reliability Center with supplier release retries, payment reconciliation, supplier payout reconciliation, and cleanup dry-run visibility.
 
 Partially implemented:
 - API request logs are rendered generically but the explicit table columns omit newer fields such as `request_id`, `supplier_id`, and `buyer_api_key_id`.
 - Supplier inventory/activations/SMS/transactions are visible only via manually entering supplier ID.
 
 Missing:
-- Payment credit reconciliation.
-- Supplier payout reconciliation.
-- Supplier release retry queue.
-- Operational cleanup dry-run.
 - Admin request log filtering/search by request ID.
 
 ## 2. Missing UI Plan
@@ -109,63 +106,59 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Payment credit reconciliation | `GET /admin/payment-intents/reconciliation` | admin reconciliation tab/cards | beta useful | small |
-| Supplier payout reconciliation | `GET /admin/supplier-payout-requests/reconciliation` | admin reconciliation tab/cards | beta useful | small |
-| Supplier release retries | `GET /admin/supplier-release-retries` | admin API/types/page tab | beta blocker | small |
-| Operational cleanup dry-run | `POST /admin/ops/cleanup/dry-run` | admin ops tab/action | beta useful | small |
 | Request logs with request ID | `GET /admin/api-request-logs` includes `request_id`, `supplier_id`, `buyer_api_key_id` | shared types/admin table columns/filter input | beta useful | small |
 | Supplier reservation config | `POST/PATCH /admin/suppliers`, `GET /admin/suppliers` fields | admin supplier form/types/table | beta blocker | medium |
 | Supplier reservation visibility fields | `GET /admin/suppliers/{id}/inventory` fields | supplier inventory type/table columns | beta useful | small |
 
 ## 3. Top 10 UI Tasks
 
-1. Admin supplier release retry queue.
-   - Endpoint: `GET /admin/supplier-release-retries`
-   - Priority: beta blocker
-   - Complexity: small
-
-2. Admin supplier reservation config in supplier create/update.
+1. Admin supplier reservation config in supplier create/update.
    - Endpoints: `POST /admin/suppliers`, `PATCH /admin/suppliers/{supplier_id}`
    - Priority: beta blocker
    - Complexity: medium
 
-3. Buyer wallet transaction history.
+2. Buyer wallet transaction history.
    - Endpoint: `GET /api/v1/wallet/transactions`
    - Priority: beta blocker
    - Complexity: small
 
-4. Managed buyer API keys with scopes.
+3. Managed buyer API keys with scopes.
    - Endpoints: `/api/v1/api-keys*`
    - Priority: beta useful
    - Complexity: medium
 
-5. Request log request ID visibility and filtering.
+4. Request log request ID visibility and filtering.
    - Endpoint: `GET /admin/api-request-logs`
    - Priority: beta useful
    - Complexity: small
 
-6. Payment/payout reconciliation cards.
-   - Endpoints: `GET /admin/payment-intents/reconciliation`, `GET /admin/supplier-payout-requests/reconciliation`
-   - Priority: beta useful
-   - Complexity: small
-
-7. Operational cleanup dry-run.
-    - Endpoint: `POST /admin/ops/cleanup/dry-run`
-    - Priority: beta useful
-    - Complexity: small
-
-8. Supplier reservation visibility fields.
+5. Supplier reservation visibility fields.
     - Endpoint: `GET /admin/suppliers/{id}/inventory`
     - Priority: beta useful
     - Complexity: small
 
-9. API key usage visibility.
+6. API key usage visibility.
     - Endpoint: `GET /api/v1/api-keys/{public_id}/usage`
     - Priority: later
     - Complexity: small
 
-10. Supplier payout request create/list.
+7. Supplier payout request create/list.
     - Endpoints: `POST /supplier/v1/payout-requests`, `GET /supplier/v1/payout-requests`
+    - Priority: beta useful
+    - Complexity: medium
+
+8. Payment intents and local `manual_test` deposit flow.
+    - Endpoints: `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`
+    - Priority: beta useful
+    - Complexity: medium
+
+9. Supplier login/API key session.
+    - Endpoint: `GET /supplier/v1/me`
+    - Priority: beta useful
+    - Complexity: large
+
+10. Supplier inventory list/update.
+    - Endpoints: `GET /supplier/v1/inventory`, `POST /supplier/v1/inventory/update`
     - Priority: beta useful
     - Complexity: medium
 
@@ -181,14 +174,13 @@ It is usable for the basic buyer flow and basic admin setup:
 - manual admin wallet deposit
 
 It is not ready for closed beta operations because major implemented backend controls are missing from UI:
-- no release retry queue UI
 - no buyer wallet ledger UI
 - no managed API key UI
 - no supplier cabinet
 
 ## 5. Biggest Gaps
 
-1. Admin operations are still the largest gap. The admin UI now has ops summary, risk actions, payment intent manual completion, and supplier payout operations, but reconciliation, retries, request ID filtering, and cleanup dry-run are still missing.
+1. Admin operations are still the largest gap. The admin UI now has ops summary, risk actions, payment intent manual completion, supplier payout operations, retries, reconciliation, and cleanup dry-run visibility, but request ID filtering and supplier reservation configuration are still missing.
 
 2. Buyer accounting transparency is incomplete. The backend exposes wallet transaction history and payment intents, but the frontend still shows only balances and manual admin-deposit assumptions.
 

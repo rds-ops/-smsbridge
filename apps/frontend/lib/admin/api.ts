@@ -11,10 +11,14 @@ import type {
   AdminSupplierPayoutRequestFilters,
   Metrics,
   Order,
+  OperationalCleanupDryRun,
+  PaymentCreditReconciliation,
   Provider,
   Supplier,
   SupplierActivation,
   SupplierInventory,
+  SupplierPayoutReconciliation,
+  SupplierReleaseRetry,
   SupplierSms,
   SupplierTransaction,
   User,
@@ -84,6 +88,22 @@ export function rejectSupplierPayoutRequest(id: number, body: AdminSupplierPayou
 
 export function markSupplierPayoutPaid(id: number, body: AdminSupplierPayoutAction = {}) {
   return apiFetch<AdminSupplierPayoutRequest>(`/admin/supplier-payout-requests/${id}/mark-paid`, {method: "POST", body: JSON.stringify(body)});
+}
+
+export function getSupplierReleaseRetries() {
+  return apiFetch<SupplierReleaseRetry[]>("/admin/supplier-release-retries");
+}
+
+export function getPaymentReconciliation() {
+  return apiFetch<PaymentCreditReconciliation>("/admin/payment-intents/reconciliation");
+}
+
+export function getSupplierPayoutReconciliation() {
+  return apiFetch<SupplierPayoutReconciliation>("/admin/supplier-payout-requests/reconciliation");
+}
+
+export function getOperationalCleanupDryRun() {
+  return apiFetch<OperationalCleanupDryRun>("/admin/ops/cleanup/dry-run", {method: "POST"});
 }
 
 export function getAdminMetrics() {

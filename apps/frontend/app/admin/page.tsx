@@ -25,6 +25,10 @@ import {
   getProviders,
   getSupplierActivations,
   getSupplierInventory,
+  getOperationalCleanupDryRun,
+  getPaymentReconciliation,
+  getSupplierPayoutReconciliation,
+  getSupplierReleaseRetries,
   getSupplierSms,
   getSupplierTransactions,
   getSuppliers,
@@ -45,11 +49,15 @@ import type {
   AdminRiskUserSummary,
   AdminSupplierPayoutRequest,
   Metrics,
+  OperationalCleanupDryRun,
   Order,
+  PaymentCreditReconciliation,
   Provider,
   Supplier,
   SupplierActivation,
   SupplierInventory,
+  SupplierPayoutReconciliation,
+  SupplierReleaseRetry,
   SupplierSms,
   SupplierTransaction,
   User,
@@ -57,9 +65,9 @@ import type {
 } from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type AdminTab = "ops" | "risk users" | "payment intents" | "supplier payouts" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
+type AdminTab = "ops" | "reliability" | "risk users" | "payment intents" | "supplier payouts" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
 
-const tabs: AdminTab[] = ["ops", "risk users", "payment intents", "supplier payouts", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
+const tabs: AdminTab[] = ["ops", "reliability", "risk users", "payment intents", "supplier payouts", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
 const supplierDetailTabs: AdminTab[] = ["supplier inventory", "supplier activations", "supplier sms", "supplier transactions"];
 
 export default function AdminPage() {
@@ -88,6 +96,10 @@ function AdminPanel() {
   const [supplierPayoutStatusFilter, setSupplierPayoutStatusFilter] = useState("");
   const [supplierPayoutSupplierFilter, setSupplierPayoutSupplierFilter] = useState("");
   const [supplierPayoutActionLoading, setSupplierPayoutActionLoading] = useState(false);
+  const [supplierReleaseRetries, setSupplierReleaseRetries] = useState<SupplierReleaseRetry[]>([]);
+  const [paymentReconciliation, setPaymentReconciliation] = useState<PaymentCreditReconciliation | null>(null);
+  const [supplierPayoutReconciliation, setSupplierPayoutReconciliation] = useState<SupplierPayoutReconciliation | null>(null);
+  const [cleanupDryRun, setCleanupDryRun] = useState<OperationalCleanupDryRun | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -120,6 +132,18 @@ function AdminPanel() {
     setError("");
     try {
       if (selectedTab === "ops") setOpsSummary(await getAdminOpsSummary());
+      if (selectedTab === "reliability") {
+        const [retries, payment, payout, cleanup] = await Promise.all([
+          getSupplierReleaseRetries(),
+          getPaymentReconciliation(),
+          getSupplierPayoutReconciliation(),
+          getOperationalCleanupDryRun()
+        ]);
+        setSupplierReleaseRetries(retries);
+        setPaymentReconciliation(payment);
+        setSupplierPayoutReconciliation(payout);
+        setCleanupDryRun(cleanup);
+      }
       if (selectedTab === "risk users") {
         const rows = await getAdminRiskUsers(riskFilter ? {risk_level: riskFilter} : {});
         setRiskUsers(rows);
@@ -601,7 +625,16 @@ function AdminPanel() {
 
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
 
-      {tab === "ops" ? <OpsSummaryView summary={opsSummary} loading={loading} t={t} /> : tab === "risk users" ? (
+      {tab === "ops" ? <OpsSummaryView summary={opsSummary} loading={loading} t={t} /> : tab === "reliability" ? (
+        <ReliabilityCenterView
+          retries={supplierReleaseRetries}
+          payment={paymentReconciliation}
+          payout={supplierPayoutReconciliation}
+          cleanup={cleanupDryRun}
+          loading={loading}
+          t={t}
+        />
+      ) : tab === "risk users" ? (
         <RiskUsersView
           users={riskUsers}
           detail={riskDetail}
@@ -664,6 +697,7 @@ function AdminPanel() {
 function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string | number>) => string) {
   const labels: Record<AdminTab, string> = {
     ops: t("admin.ops"),
+    reliability: t("admin.reliability"),
     "risk users": t("admin.riskUsers"),
     "payment intents": t("admin.paymentIntents"),
     "supplier payouts": t("admin.supplierPayouts"),
@@ -680,6 +714,134 @@ function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string |
     "api logs": t("admin.apiLogs")
   };
   return labels[tab];
+}
+
+function ReliabilityCenterView({
+  retries,
+  payment,
+  payout,
+  cleanup,
+  loading,
+  t
+}: {
+  retries: SupplierReleaseRetry[];
+  payment: PaymentCreditReconciliation | null;
+  payout: SupplierPayoutReconciliation | null;
+  cleanup: OperationalCleanupDryRun | null;
+  loading: boolean;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (loading && !payment && !payout && !cleanup && !retries.length) {
+    return (
+      <Card className="mt-6" title={t("admin.reliability")} description={t("admin.reliabilityDesc")}>
+        <p className="text-sm text-neutral-600">{t("common.loading")}</p>
+      </Card>
+    );
+  }
+  return (
+    <section className="mt-6 grid gap-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <MetricCard label={t("admin.deadRetries")} value={retries.filter((retry) => retry.status === "dead").length} helper={t("admin.releaseRetries")} />
+        <MetricCard label={t("admin.pendingRetries")} value={retries.filter((retry) => retry.status === "pending").length} helper={t("admin.releaseRetries")} />
+        <MetricCard label={t("admin.paymentIssues")} value={countTotal(payment?.counts || {})} helper={t("admin.paymentReconciliation")} />
+        <MetricCard label={t("admin.payoutIssues")} value={countTotal(payout?.counts || {})} helper={t("admin.payoutReconciliation")} />
+      </div>
+      <Card title={t("admin.supplierReleaseRetries")} description={t("admin.supplierReleaseRetriesDesc")}>
+        {!retries.length ? <p className="text-sm text-neutral-600">{t("admin.noIssues")}</p> : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-line text-sm">
+              <thead className="bg-panel text-left text-xs uppercase tracking-wide text-neutral-500">
+                <tr>
+                  <th className="px-3 py-2">{t("admin.supplier")}</th>
+                  <th className="px-3 py-2">{t("admin.activation")}</th>
+                  <th className="px-3 py-2">{t("common.status")}</th>
+                  <th className="px-3 py-2">{t("admin.attempts")}</th>
+                  <th className="px-3 py-2">{t("admin.nextRetry")}</th>
+                  <th className="px-3 py-2">{t("admin.lastError")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {retries.map((retry) => (
+                  <tr className={retry.status === "dead" || retry.attempt_count >= 3 ? "bg-red-50" : ""} key={retry.id}>
+                    <td className="px-3 py-2">#{retry.supplier_id}</td>
+                    <td className="px-3 py-2">#{retry.supplier_activation_id}</td>
+                    <td className="px-3 py-2"><StatusBadge status={retry.status} /></td>
+                    <td className="px-3 py-2">{retry.attempt_count}</td>
+                    <td className="px-3 py-2">{dateTime(retry.next_retry_at)}</td>
+                    <td className="max-w-md px-3 py-2 text-xs text-neutral-600">{retry.last_error ? truncate(retry.last_error, 100) : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReconciliationCard
+          title={t("admin.paymentReconciliation")}
+          counts={payment?.counts || {}}
+          issues={payment?.issues || []}
+          emptyText={t("admin.noIssues")}
+          renderIssue={(issue) => (
+            <p className="grid gap-1 border-b border-line py-2 text-sm last:border-0" key={`${issue.issue_type}-${issue.payment_intent_id || issue.payment_intent_public_id || issue.wallet_transaction_id}`}>
+              <span className="font-medium">{issue.issue_type}</span>
+              <span className="text-xs text-neutral-600">intent: {issue.payment_intent_public_id || issue.payment_intent_id || "-"} · user: {issue.user_id || "-"} · status: {issue.status || "-"}</span>
+            </p>
+          )}
+          t={t}
+        />
+        <ReconciliationCard
+          title={t("admin.payoutReconciliation")}
+          counts={payout?.counts || {}}
+          issues={payout?.issues || []}
+          emptyText={t("admin.noIssues")}
+          renderIssue={(issue) => (
+            <p className="grid gap-1 border-b border-line py-2 text-sm last:border-0" key={`${issue.issue_type}-${issue.payout_id || issue.payout_public_id}`}>
+              <span className="font-medium">{issue.issue_type}</span>
+              <span className="text-xs text-neutral-600">payout: {issue.payout_public_id || issue.payout_id || "-"} · supplier: {issue.supplier_id} · status: {issue.status || "-"}</span>
+            </p>
+          )}
+          t={t}
+        />
+      </div>
+      <Card title={t("admin.cleanupDryRun")} description={t("admin.cleanupDryRunDesc")}>
+        {cleanup ? (
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricCard label="api_request_logs" value={cleanup.api_request_logs} />
+            <MetricCard label="payment_webhook_events" value={cleanup.payment_webhook_events} />
+            <MetricCard label="supplier_release_retries" value={cleanup.supplier_release_retries} />
+            <MetricCard label={t("admin.total")} value={cleanup.total} helper={cleanup.dry_run ? t("admin.dryRunOnly") : ""} />
+          </div>
+        ) : <p className="text-sm text-neutral-600">{t("admin.noRows")}</p>}
+      </Card>
+    </section>
+  );
+}
+
+function ReconciliationCard<T>({
+  title,
+  counts,
+  issues,
+  emptyText,
+  renderIssue,
+  t
+}: {
+  title: string;
+  counts: Record<string, number>;
+  issues: T[];
+  emptyText: string;
+  renderIssue: (issue: T) => ReactNode;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  return (
+    <Card title={title} description={t("admin.issueCount", {count: countTotal(counts)})}>
+      <IssueCounts counts={counts} t={t} />
+      <div className="mt-4">
+        <h3 className="text-sm font-semibold">{t("admin.recentIssues")}</h3>
+        {!issues.length ? <p className="mt-2 text-sm text-neutral-600">{emptyText}</p> : <div className="mt-2">{issues.slice(0, 8).map(renderIssue)}</div>}
+      </div>
+    </Card>
+  );
 }
 
 function RiskUsersView({
