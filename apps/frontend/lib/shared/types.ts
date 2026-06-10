@@ -246,3 +246,35 @@ export type AdminPaymentIntentFilters = {
   provider?: string;
   user_id?: number;
 };
+
+export type SupplierPayoutStatus = "requested" | "approved" | "rejected" | "cancelled" | "paid" | "failed";
+
+export type AdminSupplierPayoutRequest = {
+  id: number;
+  public_id: string;
+  supplier_id: number;
+  amount: string;
+  currency: string;
+  status: SupplierPayoutStatus | string;
+  payout_method?: string | null;
+  payout_address?: string | null;
+  admin_note?: string | null;
+  failure_reason?: string | null;
+  requested_at: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  cancelled_at?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminSupplierPayoutRequestFilters = {
+  status?: string;
+  supplier_id?: number;
+};
+
+export type AdminSupplierPayoutAction = {
+  admin_note?: string | null;
+  reason?: string | null;
+};

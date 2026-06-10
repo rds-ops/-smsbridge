@@ -6,6 +6,7 @@ import {AdminGuard} from "@/components/admin/admin-guard";
 import {DataTable, type Column} from "@/components/shared/data-table";
 import {Alert, Card, CopyButton, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {
+  approveSupplierPayoutRequest,
   createAdminRiskAction,
   createSupplier,
   getAdminMetrics,
@@ -16,6 +17,8 @@ import {
   getAdminRiskActions,
   getAdminRiskUser,
   getAdminRiskUsers,
+  getAdminSupplierPayoutRequest,
+  getAdminSupplierPayoutRequests,
   getAdminUsers,
   getApiRequestLogs,
   getAuditLogs,
@@ -27,7 +30,9 @@ import {
   getSuppliers,
   manualCompletePaymentIntent,
   manualDeposit,
+  markSupplierPayoutPaid,
   regenerateSupplierApiKey,
+  rejectSupplierPayoutRequest,
   updateSupplier
 } from "@/lib/admin/api";
 import {orderProfit, userRow} from "@/lib/admin/format";
@@ -38,6 +43,7 @@ import type {
   AdminRiskAction,
   AdminRiskActionType,
   AdminRiskUserSummary,
+  AdminSupplierPayoutRequest,
   Metrics,
   Order,
   Provider,
@@ -51,9 +57,9 @@ import type {
 } from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type AdminTab = "ops" | "risk users" | "payment intents" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
+type AdminTab = "ops" | "risk users" | "payment intents" | "supplier payouts" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
 
-const tabs: AdminTab[] = ["ops", "risk users", "payment intents", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
+const tabs: AdminTab[] = ["ops", "risk users", "payment intents", "supplier payouts", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
 const supplierDetailTabs: AdminTab[] = ["supplier inventory", "supplier activations", "supplier sms", "supplier transactions"];
 
 export default function AdminPage() {
@@ -77,6 +83,11 @@ function AdminPanel() {
   const [paymentIntentProviderFilter, setPaymentIntentProviderFilter] = useState("");
   const [paymentIntentUserFilter, setPaymentIntentUserFilter] = useState("");
   const [manualCompleteLoading, setManualCompleteLoading] = useState(false);
+  const [supplierPayouts, setSupplierPayouts] = useState<AdminSupplierPayoutRequest[]>([]);
+  const [supplierPayoutDetail, setSupplierPayoutDetail] = useState<AdminSupplierPayoutRequest | null>(null);
+  const [supplierPayoutStatusFilter, setSupplierPayoutStatusFilter] = useState("");
+  const [supplierPayoutSupplierFilter, setSupplierPayoutSupplierFilter] = useState("");
+  const [supplierPayoutActionLoading, setSupplierPayoutActionLoading] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -123,6 +134,13 @@ function AdminPanel() {
         setPaymentIntents(rows);
         if (rows[0]) await selectPaymentIntent(rows[0].id);
         else setPaymentIntentDetail(null);
+      }
+      if (selectedTab === "supplier payouts") {
+        if (!suppliers.length) setSuppliers(await getSuppliers());
+        const rows = await getAdminSupplierPayoutRequests(supplierPayoutFilters(supplierPayoutStatusFilter, supplierPayoutSupplierFilter));
+        setSupplierPayouts(rows);
+        if (rows[0]) await selectSupplierPayout(rows[0].id);
+        else setSupplierPayoutDetail(null);
       }
       if (selectedTab === "metrics") setMetrics(await getAdminMetrics());
       if (selectedTab === "users") setUsers(await getAdminUsers());
@@ -171,6 +189,10 @@ function AdminPanel() {
   useEffect(() => {
     if (tab === "payment intents") load(tab);
   }, [paymentIntentStatusFilter, paymentIntentProviderFilter]);
+
+  useEffect(() => {
+    if (tab === "supplier payouts") load(tab);
+  }, [supplierPayoutStatusFilter]);
 
   async function selectRiskUser(userId: number) {
     const [detail, actions] = await Promise.all([getAdminRiskUser(userId), getAdminRiskActions(userId)]);
@@ -227,6 +249,41 @@ function AdminPanel() {
       setToast({type: "error", message: err instanceof Error ? err.message : t("admin.paymentIntentCompleteFailed")});
     } finally {
       setManualCompleteLoading(false);
+    }
+  }
+
+  async function selectSupplierPayout(id: number) {
+    setSupplierPayoutDetail(await getAdminSupplierPayoutRequest(id));
+  }
+
+  async function applySupplierPayoutFilters() {
+    if (tab === "supplier payouts") await load("supplier payouts");
+  }
+
+  async function runSupplierPayoutAction(action: "approve" | "reject" | "paid", payout: AdminSupplierPayoutRequest) {
+    const labels = {
+      approve: t("admin.approvePayout"),
+      reject: t("admin.rejectPayout"),
+      paid: t("admin.markPayoutPaid")
+    };
+    if (!window.confirm(t("admin.confirmPayoutAction", {action: labels[action], id: payout.public_id}))) return;
+    const note = window.prompt(t(action === "reject" ? "admin.payoutRejectReasonPrompt" : "admin.payoutAdminNotePrompt"), "") || "";
+    setSupplierPayoutActionLoading(true);
+    setToast({type: "success", message: ""});
+    try {
+      const body = action === "reject" ? {reason: note || null, admin_note: note || null} : {admin_note: note || null};
+      const updated = action === "approve"
+        ? await approveSupplierPayoutRequest(payout.id, body)
+        : action === "reject"
+          ? await rejectSupplierPayoutRequest(payout.id, body)
+          : await markSupplierPayoutPaid(payout.id, body);
+      setSupplierPayoutDetail(updated);
+      setSupplierPayouts(await getAdminSupplierPayoutRequests(supplierPayoutFilters(supplierPayoutStatusFilter, supplierPayoutSupplierFilter)));
+      setToast({type: "success", message: t("admin.supplierPayoutUpdated")});
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("admin.supplierPayoutUpdateFailed")});
+    } finally {
+      setSupplierPayoutActionLoading(false);
     }
   }
 
@@ -578,6 +635,22 @@ function AdminPanel() {
           onManualComplete={completePaymentIntent}
           t={t}
         />
+      ) : tab === "supplier payouts" ? (
+        <SupplierPayoutsView
+          payouts={supplierPayouts}
+          detail={supplierPayoutDetail}
+          suppliers={suppliers}
+          statusFilter={supplierPayoutStatusFilter}
+          setStatusFilter={setSupplierPayoutStatusFilter}
+          supplierFilter={supplierPayoutSupplierFilter}
+          setSupplierFilter={setSupplierPayoutSupplierFilter}
+          loading={loading}
+          actionLoading={supplierPayoutActionLoading}
+          onApplyFilters={applySupplierPayoutFilters}
+          onSelect={(id) => selectSupplierPayout(id).catch((err) => setToast({type: "error", message: err instanceof Error ? err.message : t("buy.loadFailed")}))}
+          onAction={runSupplierPayoutAction}
+          t={t}
+        />
       ) : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
           <input className="field mb-4 max-w-md" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("common.searchTable")} />
@@ -593,6 +666,7 @@ function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string |
     ops: t("admin.ops"),
     "risk users": t("admin.riskUsers"),
     "payment intents": t("admin.paymentIntents"),
+    "supplier payouts": t("admin.supplierPayouts"),
     metrics: t("admin.metrics"),
     users: t("admin.users"),
     orders: t("admin.orders"),
@@ -896,6 +970,130 @@ function PaymentIntentsView({
   );
 }
 
+function SupplierPayoutsView({
+  payouts,
+  detail,
+  suppliers,
+  statusFilter,
+  setStatusFilter,
+  supplierFilter,
+  setSupplierFilter,
+  loading,
+  actionLoading,
+  onApplyFilters,
+  onSelect,
+  onAction,
+  t
+}: {
+  payouts: AdminSupplierPayoutRequest[];
+  detail: AdminSupplierPayoutRequest | null;
+  suppliers: Supplier[];
+  statusFilter: string;
+  setStatusFilter: (value: string) => void;
+  supplierFilter: string;
+  setSupplierFilter: (value: string) => void;
+  loading: boolean;
+  actionLoading: boolean;
+  onApplyFilters: () => void;
+  onSelect: (id: number) => void;
+  onAction: (action: "approve" | "reject" | "paid", payout: AdminSupplierPayoutRequest) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const supplierName = (supplierId: number) => suppliers.find((supplier) => supplier.id === supplierId)?.name || "-";
+  return (
+    <section className="mt-6 grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
+      <Card title={t("admin.supplierPayouts")} description={t("admin.supplierPayoutsDesc")}>
+        <div className="mb-4 grid gap-3 md:grid-cols-[0.9fr_0.8fr_auto]">
+          <label className="grid gap-1 text-sm">
+            {t("common.status")}
+            <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="">{t("admin.allStatuses")}</option>
+              <option value="requested">requested</option>
+              <option value="approved">approved</option>
+              <option value="rejected">rejected</option>
+              <option value="cancelled">cancelled</option>
+              <option value="paid">paid</option>
+              <option value="failed">failed</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            supplier_id
+            <input className="field" value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)} inputMode="numeric" />
+          </label>
+          <button className="btn btn-secondary self-end" onClick={onApplyFilters}>{t("common.search")}</button>
+        </div>
+        {!payouts.length ? (
+          <p className="text-sm text-neutral-600">{loading ? t("common.loading") : t("admin.noRows")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-line text-sm">
+              <thead className="bg-panel text-left text-xs uppercase tracking-wide text-neutral-500">
+                <tr>
+                  <th className="px-3 py-2">public_id</th>
+                  <th className="px-3 py-2">{t("admin.supplier")}</th>
+                  <th className="px-3 py-2">{t("common.amount")}</th>
+                  <th className="px-3 py-2">{t("common.status")}</th>
+                  <th className="px-3 py-2">{t("common.created")}</th>
+                  <th className="px-3 py-2">{t("admin.updated")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {payouts.map((payout) => (
+                  <tr
+                    className={`cursor-pointer hover:bg-panel ${detail?.id === payout.id ? "bg-blue-50" : ""}`}
+                    key={payout.id}
+                    onClick={() => onSelect(payout.id)}
+                  >
+                    <td className="px-3 py-2">{truncate(payout.public_id, 16)}</td>
+                    <td className="px-3 py-2">
+                      <div>#{payout.supplier_id}</div>
+                      <div className="text-xs text-neutral-500">{supplierName(payout.supplier_id)}</div>
+                    </td>
+                    <td className="px-3 py-2">{money(payout.amount, payout.currency)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={payout.status} /></td>
+                    <td className="px-3 py-2">{dateTime(payout.created_at)}</td>
+                    <td className="px-3 py-2">{dateTime(payout.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card title={detail ? `${t("admin.supplierPayoutDetail")} #${detail.id}` : t("admin.supplierPayoutDetail")} description={detail?.public_id || t("admin.selectSupplierPayout")}>
+        {detail ? (
+          <div className="grid gap-3 text-sm">
+            <RiskDetailRow label="public_id" value={detail.public_id} />
+            <RiskDetailRow label={t("admin.supplier")} value={`#${detail.supplier_id} ${supplierName(detail.supplier_id)}`} />
+            <RiskDetailRow label={t("common.amount")} value={money(detail.amount, detail.currency)} />
+            <div className="flex items-center justify-between"><span className="text-neutral-600">{t("common.status")}</span><StatusBadge status={detail.status} /></div>
+            <RiskDetailRow label={t("admin.payoutMethod")} value={detail.payout_method || "-"} />
+            <RiskDetailRow label={t("admin.payoutAddress")} value={detail.payout_address ? truncate(detail.payout_address, 36) : "-"} />
+            <RiskDetailRow label={t("admin.requestedAt")} value={dateTime(detail.requested_at)} />
+            <RiskDetailRow label={t("admin.approvedAt")} value={dateTime(detail.approved_at)} />
+            <RiskDetailRow label={t("admin.rejectedAt")} value={dateTime(detail.rejected_at)} />
+            <RiskDetailRow label={t("admin.paidAt")} value={dateTime(detail.paid_at)} />
+            <RiskDetailRow label={t("admin.updated")} value={dateTime(detail.updated_at)} />
+            <RiskDetailRow label={t("admin.adminNote")} value={detail.admin_note || "-"} />
+            <RiskDetailRow label={t("admin.failureReason")} value={detail.failure_reason || "-"} />
+            {detail.status === "requested" && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button className="btn btn-primary" onClick={() => onAction("approve", detail)} disabled={actionLoading}>{actionLoading ? t("admin.saving") : t("admin.approvePayout")}</button>
+                <button className="btn btn-secondary" onClick={() => onAction("reject", detail)} disabled={actionLoading}>{t("admin.rejectPayout")}</button>
+              </div>
+            )}
+            {detail.status === "approved" && (
+              <button className="btn btn-primary mt-2" onClick={() => onAction("paid", detail)} disabled={actionLoading}>{actionLoading ? t("admin.saving") : t("admin.markPayoutPaid")}</button>
+            )}
+            {["paid", "rejected", "cancelled", "failed"].includes(detail.status) && <p className="text-xs text-neutral-500">{t("admin.supplierPayoutReadOnly")}</p>}
+          </div>
+        ) : <p className="text-sm text-neutral-600">{t("admin.selectSupplierPayout")}</p>}
+      </Card>
+    </section>
+  );
+}
+
 function RiskBadge({level, t}: {level: string; t: (key: string, vars?: Record<string, string | number>) => string}) {
   const classes: Record<string, string> = {
     low: "bg-green-50 text-green-700 ring-green-200",
@@ -923,6 +1121,14 @@ function paymentIntentFilters(status: string, provider: string, userId: string) 
     ...(status ? {status} : {}),
     ...(provider ? {provider} : {}),
     ...(Number.isInteger(parsedUserId) && parsedUserId > 0 ? {user_id: parsedUserId} : {})
+  };
+}
+
+function supplierPayoutFilters(status: string, supplierId: string) {
+  const parsedSupplierId = Number(supplierId);
+  return {
+    ...(status ? {status} : {}),
+    ...(Number.isInteger(parsedSupplierId) && parsedSupplierId > 0 ? {supplier_id: parsedSupplierId} : {})
   };
 }
 

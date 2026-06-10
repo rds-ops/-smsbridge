@@ -6,6 +6,9 @@ import type {
   AdminRiskAction,
   AdminRiskActionCreate,
   AdminRiskUserSummary,
+  AdminSupplierPayoutAction,
+  AdminSupplierPayoutRequest,
+  AdminSupplierPayoutRequestFilters,
   Metrics,
   Order,
   Provider,
@@ -57,6 +60,30 @@ export function getAdminPaymentIntent(id: number) {
 
 export function manualCompletePaymentIntent(id: number) {
   return apiFetch<AdminPaymentIntent>(`/admin/payment-intents/${id}/manual-complete`, {method: "POST"});
+}
+
+export function getAdminSupplierPayoutRequests(filters: AdminSupplierPayoutRequestFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.supplier_id) params.set("supplier_id", String(filters.supplier_id));
+  const query = params.toString();
+  return apiFetch<AdminSupplierPayoutRequest[]>(`/admin/supplier-payout-requests${query ? `?${query}` : ""}`);
+}
+
+export function getAdminSupplierPayoutRequest(id: number) {
+  return apiFetch<AdminSupplierPayoutRequest>(`/admin/supplier-payout-requests/${id}`);
+}
+
+export function approveSupplierPayoutRequest(id: number, body: AdminSupplierPayoutAction = {}) {
+  return apiFetch<AdminSupplierPayoutRequest>(`/admin/supplier-payout-requests/${id}/approve`, {method: "POST", body: JSON.stringify(body)});
+}
+
+export function rejectSupplierPayoutRequest(id: number, body: AdminSupplierPayoutAction = {}) {
+  return apiFetch<AdminSupplierPayoutRequest>(`/admin/supplier-payout-requests/${id}/reject`, {method: "POST", body: JSON.stringify(body)});
+}
+
+export function markSupplierPayoutPaid(id: number, body: AdminSupplierPayoutAction = {}) {
+  return apiFetch<AdminSupplierPayoutRequest>(`/admin/supplier-payout-requests/${id}/mark-paid`, {method: "POST", body: JSON.stringify(body)});
 }
 
 export function getAdminMetrics() {
