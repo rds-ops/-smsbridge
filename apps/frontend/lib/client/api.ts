@@ -1,5 +1,5 @@
 import {apiFetch} from "@/lib/shared/api";
-import type {BuyerApiKey, BuyerApiKeyCreated, BuyerApiKeyUsage, Country, Order, Price, Service, UserLimit, Wallet, WalletTransaction} from "@/lib/shared/types";
+import type {BuyerApiKey, BuyerApiKeyCreated, BuyerApiKeyUsage, Country, CreatePaymentIntentRequest, Order, PaymentIntent, Price, Service, UserLimit, Wallet, WalletTransaction} from "@/lib/shared/types";
 
 export function getBalance() {
   return apiFetch<Wallet>("/api/v1/balance");
@@ -7,6 +7,15 @@ export function getBalance() {
 
 export function getWalletTransactions(limit = 10, offset = 0) {
   return apiFetch<WalletTransaction[]>(`/api/v1/wallet/transactions?limit=${limit}&offset=${offset}`);
+}
+
+export function createPaymentIntent(payload: CreatePaymentIntentRequest, idempotencyKey?: string) {
+  const headers = idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined;
+  return apiFetch<PaymentIntent>("/api/v1/payment-intents", {method: "POST", body: JSON.stringify(payload), headers});
+}
+
+export function getPaymentIntent(publicId: string) {
+  return apiFetch<PaymentIntent>(`/api/v1/payment-intents/${publicId}`);
 }
 
 export function getLimits() {

@@ -257,6 +257,22 @@ export type AdminPaymentIntentFilters = {
   user_id?: number;
 };
 
+export type PaymentIntent = {
+  public_id: string;
+  provider: string;
+  currency: string;
+  amount: string;
+  status: string;
+  expires_at?: string | null;
+  created_at: string;
+};
+
+export type CreatePaymentIntentRequest = {
+  amount: string;
+  provider: string;
+  currency?: string | null;
+};
+
 export type BuyerApiKey = {
   id: number;
   public_id: string;

@@ -8,6 +8,7 @@ export const translations: Record<Locale, TranslationTree> = {
   en: {
     nav: {
       dashboard: "Dashboard",
+      deposit: "Deposit",
       buy: "Buy number",
       orders: "Orders",
       api: "API",
@@ -201,6 +202,7 @@ export const translations: Record<Locale, TranslationTree> = {
       title: "Dashboard",
       description: "Your control room for mock SMS verification testing. Start with balance, buy a test number, then watch the order move through the SMS flow.",
       buyNumber: "Buy number",
+      depositFunds: "Deposit funds",
       viewOrders: "View orders",
       availableHelper: "Funds you can spend on new orders.",
       heldHelper: "Funds temporarily reserved for active orders.",
@@ -246,6 +248,23 @@ export const translations: Record<Locale, TranslationTree> = {
       success: "Order created. Opening order details...",
       loadFailed: "Load failed",
       orderFailed: "Order failed"
+    },
+    deposit: {
+      title: "Deposit funds",
+      description: "Create a local manual_test payment intent for wallet funding. Real payment providers are deferred.",
+      createTitle: "Create payment intent",
+      createDesc: "For the MVP only manual_test is available. Creating an intent does not credit your wallet.",
+      createButton: "Create payment intent",
+      created: "Payment intent created.",
+      createFailed: "Could not create payment intent.",
+      invalidAmount: "Amount must be greater than 0.",
+      manualOnly: "manual_test is local/dev only. An admin must complete this intent from Admin Payment Intents before wallet credit is applied.",
+      intentTitle: "Payment intent status",
+      intentDesc: "Refresh the latest intent by public_id or create a new one.",
+      noIntent: "No payment intent selected yet.",
+      publicIdRequired: "Payment intent public_id is required.",
+      lookupFailed: "Could not load payment intent.",
+      adminCompleteHint: "Admin completion remains admin-only. Buyers cannot complete or credit payment intents from this page."
     },
     orders: {
       title: "Orders",
@@ -610,6 +629,7 @@ export const translations: Record<Locale, TranslationTree> = {
   ru: {
     nav: {
       dashboard: "Панель",
+      deposit: "Deposit",
       buy: "Купить номер",
       orders: "Заказы",
       api: "API",
@@ -1167,6 +1187,23 @@ export const translations: Record<Locale, TranslationTree> = {
       invalidAmount: "Amount must be greater than 0.",
       invalidInventory: "Service, 2-letter country and non-negative available count are required.",
       sessionWarning: "For the MVP this page uses a pasted Supplier API key. The key is not shown after saving."
+    },
+    deposit: {
+      title: "Deposit funds",
+      description: "Create a local manual_test payment intent for wallet funding. Real payment providers are deferred.",
+      createTitle: "Create payment intent",
+      createDesc: "For the MVP only manual_test is available. Creating an intent does not credit your wallet.",
+      createButton: "Create payment intent",
+      created: "Payment intent created.",
+      createFailed: "Could not create payment intent.",
+      invalidAmount: "Amount must be greater than 0.",
+      manualOnly: "manual_test is local/dev only. An admin must complete this intent from Admin Payment Intents before wallet credit is applied.",
+      intentTitle: "Payment intent status",
+      intentDesc: "Refresh the latest intent by public_id or create a new one.",
+      noIntent: "No payment intent selected yet.",
+      publicIdRequired: "Payment intent public_id is required.",
+      lookupFailed: "Could not load payment intent.",
+      adminCompleteHint: "Admin completion remains admin-only. Buyers cannot complete or credit payment intents from this page."
     }
   }
 };

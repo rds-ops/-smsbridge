@@ -81,6 +81,7 @@ export function Nav({children}: {children?: React.ReactNode}) {
   const links = useMemo(() => {
     const base = [
       {href: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard},
+      {href: "/deposit", label: t("nav.deposit"), icon: Wallet},
       {href: "/buy", label: t("nav.buy"), icon: PlusCircle},
       {href: "/orders", label: t("nav.orders"), icon: ClipboardList},
       {href: "/api-docs", label: t("nav.api"), icon: BookOpen},

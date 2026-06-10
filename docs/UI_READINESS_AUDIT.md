@@ -16,6 +16,7 @@ Scope inspected:
 
 Task 55 update: the supplier API-key cabinet MVP is now implemented at `/supplier`.
 Task 56 update: admin API request logs now show explicit operational columns and frontend-side `request_id` filtering.
+Task 57 update: buyer manual_test deposit/payment intent creation and status visibility are now implemented at `/deposit`.
 
 ## 1. Current Frontend Coverage
 
@@ -28,13 +29,14 @@ Implemented:
 - Order list with filters and cancel/finish actions.
 - Order detail with phone number, SMS code/text, balance refresh, cancel/finish actions.
 - Wallet transaction history on the dashboard from `GET /api/v1/wallet/transactions`.
+- Buyer manual_test deposit/payment intent creation and status visibility at `/deposit`.
 - Managed API key list/create/revoke/scopes/usage on `/api-docs`.
 - Legacy API key regeneration on `/api-docs` through `POST /api/v1/api-key/regenerate`.
 - Static API examples for balance/prices/orders.
 
 Partially implemented:
 - Order detail has a static four-step timeline, but it does not use durable `order_events`.
-- Payment/deposit UX still depends on admin manual deposit, not buyer payment intents/manual completion flow.
+- Payment/deposit UX supports local `manual_test` payment intent creation, but real payment provider UX is still deferred and completion remains admin-only.
 
 ### Supplier UI
 
@@ -86,8 +88,7 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Payment intents and local `manual_test` deposit flow | `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`, admin completion remains admin-only | client API/types, new buyer deposit page, admin payment intent page for manual completion, docs/API page | beta useful | medium |
-| Payment intent status visibility | `GET /api/v1/payment-intents/{public_id}` | buyer deposit/payment intent detail/list page | later | small |
+| Real payment provider deposit UX | Future provider-backed payment intent flow | buyer deposit page/provider selection | later | large |
 | Order events/status details | No buyer endpoint currently; admin endpoint exists at `GET /admin/orders/{order_id}/events` only | no buyer UI until backend buyer-safe endpoint exists | later | medium |
 | Idempotency-Key support in buy flow | `POST /api/v1/orders` with `Idempotency-Key` header | `apps/frontend/lib/client/api.ts`, `apps/frontend/app/buy/page.tsx` | beta useful | small |
 
@@ -124,20 +125,20 @@ Missing:
    - Priority: later
    - Complexity: small
 
-4. Payment intents and local `manual_test` deposit flow.
-    - Endpoints: `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents/{public_id}`
-    - Priority: beta useful
-    - Complexity: medium
-
-5. Supplier SMS push helper.
+4. Supplier SMS push helper.
     - Endpoint: `POST /supplier/v1/sms`
     - Priority: later
     - Complexity: medium
 
-6. Supplier reward transaction history.
+5. Supplier reward transaction history.
     - Endpoint: not implemented supplier-side yet
     - Priority: beta useful
     - Complexity: medium
+
+6. Real payment provider deposit UX.
+    - Endpoint: future provider-specific payment integration
+    - Priority: later
+    - Complexity: large
 
 ## 4. Beta Readiness
 
@@ -156,7 +157,7 @@ It is closer to closed-beta readiness after the operations/admin and supplier ca
 
 1. Admin operations are still the largest gap. The admin UI now has ops summary, risk actions, payment intent manual completion, supplier payout operations, retries, reconciliation, and cleanup dry-run visibility, but request ID filtering and supplier reservation configuration are still missing.
 
-2. Buyer accounting transparency is improved with wallet transaction history, but payment intent/deposit UX is still incomplete and still depends on admin manual completion.
+2. Buyer accounting transparency is improved with wallet transaction history and manual_test payment intent creation/status visibility. Real payment provider UX is still deferred, and manual completion remains admin-only.
 
 3. API key management now supports managed keys, scopes, revocation and usage, while the legacy regenerate endpoint remains for compatibility.
 

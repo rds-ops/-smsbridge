@@ -65,7 +65,7 @@ export default function DashboardPage() {
       <PageHeader
         title={t("dashboard.title")}
         description={t("dashboard.description")}
-        actions={<><Link className="btn btn-primary" href="/buy">{t("dashboard.buyNumber")}</Link><ActionLink href="/orders">{t("dashboard.viewOrders")}</ActionLink></>}
+        actions={<><Link className="btn btn-primary" href="/buy">{t("dashboard.buyNumber")}</Link><ActionLink href="/deposit">{t("deposit.title")}</ActionLink><ActionLink href="/orders">{t("dashboard.viewOrders")}</ActionLink></>}
       />
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
       <section className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -84,6 +84,7 @@ export default function DashboardPage() {
         <Card title={t("dashboard.quickActions")} description={t("dashboard.quickActionsDesc")}>
           <div className="flex flex-wrap gap-2">
             <Link className="btn btn-primary" href="/buy">{t("dashboard.buyNumber")}</Link>
+            <Link className="btn btn-secondary" href="/deposit">{t("deposit.title")}</Link>
             <Link className="btn btn-secondary" href="/orders">{t("dashboard.viewOrders")}</Link>
             <Link className="btn btn-secondary" href="/api-docs">{t("nav.api")}</Link>
             <Link className="btn btn-secondary" href="/settings">{t("nav.settings")}</Link>
