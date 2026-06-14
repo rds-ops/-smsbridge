@@ -556,7 +556,13 @@ function AdminPanel() {
       {key: "success_rate", header: t("common.successRate"), render: (row) => row.success_rate ? percent(row.success_rate) : "-"},
       {key: "avg_sms_time_seconds", header: t("common.avgSmsTime")},
       {key: "status", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status)} />},
-      {key: "last_sync_at", header: t("common.lastSync"), render: (row) => dateTime(row.last_sync_at)}
+      {key: "last_sync_at", header: t("common.lastSync"), render: (row) => dateTime(row.last_sync_at)},
+      {key: "last_reservation_at", header: t("common.lastReservation"), render: (row) => dateTime(row.last_reservation_at)},
+      {key: "failed_reservation_count", header: t("common.reservationErrors"), render: (row) => String(row.failed_reservation_count ?? 0)},
+      {key: "last_reservation_error", header: t("common.lastReservationError"), render: (row) => truncate(row.last_reservation_error, 48)},
+      {key: "last_release_at", header: t("common.lastRelease"), render: (row) => dateTime(row.last_release_at)},
+      {key: "failed_release_count", header: t("common.releaseErrors"), render: (row) => String(row.failed_release_count ?? 0)},
+      {key: "last_release_error", header: t("common.lastReleaseError"), render: (row) => truncate(row.last_release_error, 48)}
     ];
     if (tab === "supplier activations") return [
       {key: "supplier_activation_id", header: t("common.supplierActivationId"), render: (row) => truncate(row.supplier_activation_id, 16)},

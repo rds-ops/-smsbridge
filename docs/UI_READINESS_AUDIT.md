@@ -106,7 +106,7 @@ Missing:
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
 | Supplier reservation config | `POST/PATCH /admin/suppliers`, `GET /admin/suppliers` fields | implemented in admin supplier create/update UI | implemented | medium |
-| Supplier reservation visibility fields | `GET /admin/suppliers/{id}/inventory` fields | supplier inventory type/table columns | beta useful | small |
+| Supplier reservation visibility fields | `GET /admin/suppliers/{id}/inventory` fields | implemented in admin supplier inventory table | implemented | small |
 
 ## 3. Top 10 UI Tasks
 
@@ -116,9 +116,9 @@ Missing:
    - Notes: UI exposes reservation enabled, URL, auth type, write-only auth secret and timeout. Stored secrets are not shown.
 
 2. Supplier reservation visibility fields.
+    - Status: implemented.
     - Endpoint: `GET /admin/suppliers/{id}/inventory`
-    - Priority: beta useful
-    - Complexity: small
+    - Notes: UI exposes last reservation/release timestamps, last errors and failed attempt counts.
 
 3. Backend-side request log request ID filtering.
    - Endpoint: `GET /admin/api-request-logs`

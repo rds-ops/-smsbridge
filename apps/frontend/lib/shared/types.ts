@@ -120,6 +120,12 @@ export type SupplierInventory = {
   avg_sms_time_seconds?: number | null;
   status: string;
   last_sync_at: string;
+  last_reservation_at?: string | null;
+  last_reservation_error?: string | null;
+  failed_reservation_count?: number;
+  last_release_at?: string | null;
+  last_release_error?: string | null;
+  failed_release_count?: number;
   created_at: string;
   updated_at: string;
 };
