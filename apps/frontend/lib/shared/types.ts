@@ -100,6 +100,10 @@ export type Supplier = {
   held_balance: string;
   currency: string;
   notes?: string | null;
+  reservation_url?: string | null;
+  reservation_auth_type?: string | null;
+  reservation_timeout_seconds?: number | null;
+  reservation_enabled?: boolean;
   inventory_count?: number;
   created_at: string;
   updated_at: string;

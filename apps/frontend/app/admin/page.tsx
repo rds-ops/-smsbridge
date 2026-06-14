@@ -39,6 +39,7 @@ import {
   rejectSupplierPayoutRequest,
   updateSupplier
 } from "@/lib/admin/api";
+import type {SupplierReservationPayload} from "@/lib/admin/api";
 import {orderProfit, userRow} from "@/lib/admin/format";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
 import type {
@@ -123,6 +124,11 @@ function AdminPanel() {
   const [supplierStatus, setSupplierStatus] = useState("pending");
   const [supplierReward, setSupplierReward] = useState("70.00");
   const [supplierNotes, setSupplierNotes] = useState("");
+  const [supplierReservationEnabled, setSupplierReservationEnabled] = useState(false);
+  const [supplierReservationUrl, setSupplierReservationUrl] = useState("");
+  const [supplierReservationAuthType, setSupplierReservationAuthType] = useState("none");
+  const [supplierReservationAuthSecret, setSupplierReservationAuthSecret] = useState("");
+  const [supplierReservationTimeout, setSupplierReservationTimeout] = useState("5");
   const [supplierApiKey, setSupplierApiKey] = useState("");
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [toast, setToast] = useState<{type: "success" | "error"; message: string}>({type: "success", message: ""});
@@ -207,6 +213,16 @@ function AdminPanel() {
   useEffect(() => {
     if (supplierDetailTabs.includes(tab) && selectedSupplierId) load(tab);
   }, [selectedSupplierId]);
+
+  useEffect(() => {
+    const selected = suppliers.find((supplier) => String(supplier.id) === selectedSupplierId);
+    if (!selected) return;
+    setSupplierReservationEnabled(Boolean(selected.reservation_enabled));
+    setSupplierReservationUrl(selected.reservation_url || "");
+    setSupplierReservationAuthType(selected.reservation_auth_type || "none");
+    setSupplierReservationAuthSecret("");
+    setSupplierReservationTimeout(String(selected.reservation_timeout_seconds || 5));
+  }, [selectedSupplierId, suppliers]);
 
   useEffect(() => {
     if (tab === "risk users") load(tab);
@@ -352,19 +368,62 @@ function AdminPanel() {
       setToast({type: "error", message: t("admin.rewardInvalid")});
       return;
     }
+    const reservationPayload = buildReservationPayload();
+    if (!reservationPayload) return;
     try {
       const supplier = await createSupplier({
         name: supplierName.trim(),
         email: supplierEmail.trim() || null,
         status: supplierStatus,
         reward_percent: reward.toFixed(2),
-        notes: supplierNotes.trim() || null
+        notes: supplierNotes.trim() || null,
+        ...reservationPayload
       });
       setSelectedSupplierId(String(supplier.id));
+      setSupplierReservationAuthSecret("");
       setToast({type: "success", message: t("admin.supplierCreated")});
       await load("suppliers");
     } catch (err) {
       setToast({type: "error", message: err instanceof Error ? err.message : t("admin.supplierCreateFailed")});
+    }
+  }
+
+  function buildReservationPayload(): SupplierReservationPayload | null {
+    const url = supplierReservationUrl.trim();
+    const authSecret = supplierReservationAuthSecret.trim();
+    const timeout = Number(supplierReservationTimeout);
+    if (supplierReservationEnabled && !url) {
+      setToast({type: "error", message: t("admin.reservationUrlRequired")});
+      return null;
+    }
+    if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120) {
+      setToast({type: "error", message: t("admin.reservationTimeoutInvalid")});
+      return null;
+    }
+    return {
+      reservation_enabled: supplierReservationEnabled,
+      reservation_url: url || null,
+      reservation_auth_type: supplierReservationAuthType || "none",
+      reservation_timeout_seconds: timeout,
+      ...(authSecret ? {reservation_auth_secret_encrypted: authSecret} : {})
+    };
+  }
+
+  async function saveSupplierReservation() {
+    const supplierId = Number(selectedSupplierId);
+    if (!Number.isInteger(supplierId) || supplierId <= 0) {
+      setToast({type: "error", message: t("admin.selectSupplierFirst")});
+      return;
+    }
+    const reservationPayload = buildReservationPayload();
+    if (!reservationPayload) return;
+    try {
+      await updateSupplier(supplierId, reservationPayload);
+      setSupplierReservationAuthSecret("");
+      setToast({type: "success", message: t("admin.reservationSaved")});
+      await load("suppliers");
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("admin.supplierUpdateFailed")});
     }
   }
 
@@ -472,6 +531,10 @@ function AdminPanel() {
       {key: "name", header: t("common.name")},
       {key: "status", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status)} />},
       {key: "reward_percent", header: t("common.rewardPercent"), render: (row) => percent(row.reward_percent)},
+      {key: "reservation_enabled", header: t("admin.reservationEnabled"), render: (row) => row.reservation_enabled ? t("common.yes") : t("common.no")},
+      {key: "reservation_auth_type", header: t("admin.reservationAuthType"), render: (row) => String(row.reservation_auth_type || "none")},
+      {key: "reservation_timeout_seconds", header: t("admin.reservationTimeoutSeconds"), render: (row) => row.reservation_timeout_seconds ? `${row.reservation_timeout_seconds}s` : "-"},
+      {key: "reservation_url", header: t("admin.reservationUrl"), render: (row) => truncate(row.reservation_url, 32)},
       {key: "balance", header: t("common.balance"), render: (row) => money(row.balance, String(row.currency || "USD"))},
       {key: "held_balance", header: t("common.heldBalance"), render: (row) => money(row.held_balance, String(row.currency || "USD"))},
       {key: "inventory_count", header: t("common.inventoryCount")},
@@ -627,6 +690,54 @@ function AdminPanel() {
                 <textarea className="field min-h-20" value={supplierNotes} onChange={(event) => setSupplierNotes(event.target.value)} />
               </label>
             </div>
+            <div className="mt-5 rounded-xl border border-line bg-panel p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-slate-950">{t("admin.reservationConfig")}</h3>
+                  <p className="mt-1 text-sm text-neutral-600">{t("admin.reservationConfigHelp")}</p>
+                </div>
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={supplierReservationEnabled}
+                    onChange={(event) => setSupplierReservationEnabled(event.target.checked)}
+                  />
+                  {t("admin.reservationEnabled")}
+                </label>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm md:col-span-2">
+                  {t("admin.reservationUrl")}
+                  <input
+                    className="field"
+                    value={supplierReservationUrl}
+                    onChange={(event) => setSupplierReservationUrl(event.target.value)}
+                    placeholder="http://fake-supplier:8010/v1/reservations"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {t("admin.reservationAuthType")}
+                  <select className="field" value={supplierReservationAuthType} onChange={(event) => setSupplierReservationAuthType(event.target.value)}>
+                    <option value="none">none</option>
+                    <option value="bearer">bearer</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {t("admin.reservationTimeoutSeconds")}
+                  <input className="field" value={supplierReservationTimeout} onChange={(event) => setSupplierReservationTimeout(event.target.value)} inputMode="numeric" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">
+                  {t("admin.reservationAuthSecret")} {t("common.optional")}
+                  <input
+                    className="field"
+                    type="password"
+                    value={supplierReservationAuthSecret}
+                    onChange={(event) => setSupplierReservationAuthSecret(event.target.value)}
+                    placeholder={t("admin.reservationAuthSecretPlaceholder")}
+                  />
+                </label>
+              </div>
+            </div>
             <button className="btn btn-primary mt-4" onClick={addSupplier}>{t("admin.createSupplierButton")}</button>
           </Card>
           <Card title={t("admin.selectSupplier")} description={t("admin.selectSupplierDesc")}>
@@ -634,7 +745,11 @@ function AdminPanel() {
               supplier_id
               <input className="field" value={selectedSupplierId} onChange={(event) => setSelectedSupplierId(event.target.value)} placeholder="1" inputMode="numeric" />
             </label>
-            <button className="btn btn-secondary mt-4" onClick={() => load(tab)}>{t("common.refresh")}</button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="btn btn-secondary" onClick={() => load(tab)}>{t("common.refresh")}</button>
+              <button className="btn btn-primary" onClick={saveSupplierReservation}>{t("admin.saveReservationConfig")}</button>
+            </div>
+            <p className="mt-3 text-sm text-neutral-600">{t("admin.reservationSecretHelp")}</p>
             {supplierApiKey && (
               <Alert type="success">
                 <div className="grid gap-2">

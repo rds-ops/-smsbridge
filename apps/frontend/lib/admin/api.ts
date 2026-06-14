@@ -26,6 +26,22 @@ import type {
   Wallet
 } from "@/lib/shared/types";
 
+export type SupplierReservationPayload = {
+  reservation_enabled?: boolean;
+  reservation_url?: string | null;
+  reservation_auth_type?: string | null;
+  reservation_auth_secret_encrypted?: string | null;
+  reservation_timeout_seconds?: number | null;
+};
+
+export type SupplierCreatePayload = SupplierReservationPayload & {
+  name: string;
+  email?: string | null;
+  status: string;
+  reward_percent: string;
+  notes?: string | null;
+};
+
 export function getAdminOpsSummary() {
   return apiFetch<AdminOpsSummary>("/admin/ops/summary");
 }
@@ -127,17 +143,11 @@ export function getSuppliers() {
   return apiFetch<Supplier[]>("/admin/suppliers");
 }
 
-export function createSupplier(payload: {
-  name: string;
-  email?: string | null;
-  status: string;
-  reward_percent: string;
-  notes?: string | null;
-}) {
+export function createSupplier(payload: SupplierCreatePayload) {
   return apiFetch<Supplier>("/admin/suppliers", {method: "POST", body: JSON.stringify(payload)});
 }
 
-export function updateSupplier(supplierId: number, payload: Partial<{
+export function updateSupplier(supplierId: number, payload: Partial<SupplierCreatePayload & {
   name: string;
   email: string | null;
   status: string;
