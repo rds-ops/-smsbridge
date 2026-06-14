@@ -89,8 +89,8 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
   const signedIn = Boolean(user);
   const linkClass = (href: string) => {
     const active = pathname === href || (href !== "/" && pathname.startsWith(href));
-    return `inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
-      active ? "bg-blue-50 text-accent" : "text-neutral-600 hover:bg-slate-50 hover:text-slate-950"
+    return `inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
+      active ? "bg-cyan-50 text-accent shadow-sm ring-1 ring-cyan-100" : "text-neutral-600 hover:-translate-y-px hover:bg-slate-50 hover:text-slate-950 hover:shadow-sm"
     }`;
   };
 
@@ -113,7 +113,7 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
         <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">
           {signedIn ? (
             <>
-              <div className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs sm:flex sm:text-sm">
+              <div className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-cyan-200 hover:bg-white hover:shadow-md sm:flex sm:text-sm">
                 <Wallet size={15} className="text-accent" />
                 <strong>{money(balance?.balance, balance?.currency)}</strong>
               </div>

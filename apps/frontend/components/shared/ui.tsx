@@ -42,7 +42,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-white p-5 shadow-sm ${className}`}>
+    <section className={`rounded-lg border border-line bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70 ${className}`}>
       {(title || description) && (
         <div className="mb-4">
           {title && <h2 className="text-base font-semibold">{title}</h2>}
@@ -84,6 +84,7 @@ export function Toast({type = "success", message}: {type?: "success" | "error"; 
 
 export function StatusBadge({status}: {status: string}) {
   const {t} = useTranslation();
+  const pending = ["created", "reserved", "waiting_sms"].includes(status);
   const map: Record<string, string> = {
     active: "bg-green-50 text-green-700 ring-green-200",
     completed: "bg-green-50 text-green-700 ring-green-200",
@@ -100,7 +101,7 @@ export function StatusBadge({status}: {status: string}) {
     inactive: "bg-neutral-100 text-neutral-700 ring-neutral-200"
   };
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${map[status] || "bg-slate-50 text-slate-700 ring-slate-200"}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset transition-all duration-200 ${pending ? "pending-glow" : ""} ${map[status] || "bg-slate-50 text-slate-700 ring-slate-200"}`}>
       {t(`status.${status}`)}
     </span>
   );

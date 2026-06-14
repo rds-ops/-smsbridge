@@ -13,12 +13,12 @@
   --muted-foreground: 215 16% 47%;
   --border: 214 32% 89%;
   --input: 214 32% 89%;
-  --ring: 217 91% 60%;
-  --primary: 217 91% 54%;
+  --ring: 199 89% 48%;
+  --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
   --secondary: 214 32% 94%;
   --secondary-foreground: 222 47% 11%;
-  --accent: 217 91% 54%;
+  --accent: 199 89% 48%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -30,7 +30,9 @@
 
 body {
   margin: 0;
-  background: hsl(var(--background));
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 32rem),
+    linear-gradient(180deg, hsl(var(--background)), #f8fafc 42rem);
   color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -44,21 +46,45 @@ textarea {
 }
 
 .field {
-  @apply w-full rounded-xl border border-input bg-white px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-blue-100;
+  @apply w-full rounded-xl border border-input bg-white px-3 py-2 text-sm outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-all duration-200 placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-cyan-100;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-medium shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-sm;
 }
 
 .btn-primary {
-  @apply bg-primary text-primary-foreground shadow-sm shadow-blue-100 hover:bg-blue-700;
+  @apply bg-primary text-primary-foreground shadow-blue-100 hover:-translate-y-px hover:bg-blue-700 hover:shadow-md hover:shadow-blue-200 active:translate-y-0;
 }
 
 .btn-secondary {
-  @apply border-border bg-white text-foreground hover:bg-muted;
+  @apply border-border bg-white text-foreground hover:-translate-y-px hover:bg-muted hover:shadow-md active:translate-y-0;
 }
 
 .panel {
-  @apply rounded-2xl border border-border bg-white p-4 shadow-sm;
+  @apply rounded-2xl border border-border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70;
+}
+
+@keyframes smsbridge-pending-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(14, 165, 233, 0);
+  }
+}
+
+.pending-glow {
+  animation: smsbridge-pending-glow 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
 }

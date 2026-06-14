@@ -41,8 +41,7 @@ const config: Config = {
         ink: "hsl(var(--foreground))",
         line: "hsl(var(--border))",
         panel: "hsl(var(--muted))",
-        violet: "#6d5dfc",
-        cyan: "#0891b2"
+        violet: "#6d5dfc"
       },
       borderRadius: {
         xl: "1rem",

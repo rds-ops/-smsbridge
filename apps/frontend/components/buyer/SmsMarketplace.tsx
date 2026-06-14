@@ -361,8 +361,8 @@ function MarketplaceStorefront({
 }) {
   const {t} = useTranslation();
   return (
-    <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-      <div className="rounded-2xl bg-blue-50 px-4 py-3 text-center text-sm font-semibold text-accent ring-1 ring-blue-100">
+    <aside className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur transition-all duration-300 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+      <div className="rounded-2xl bg-gradient-to-r from-blue-50 via-cyan-50 to-sky-50 px-4 py-3 text-center text-sm font-semibold text-accent ring-1 ring-cyan-100">
         {t("buy.activations")}
       </div>
       <PickerBlock
@@ -393,13 +393,13 @@ function MarketplaceStorefront({
         showAll={showAllCountries}
         showAllLabel={t("buy.showAllCountries")}
       />
-      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white hover:shadow-sm">
         <label className="grid gap-1 text-sm font-medium">
           {t("common.operator")} <span className="font-normal text-neutral-500">{t("common.optional")}</span>
           <input className="field" value={operator} onChange={(event) => setOperator(event.target.value)} placeholder={t("buy.leaveEmpty")} />
         </label>
       </div>
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/60">
         <SummaryRow label={t("common.price")} value={hasPrice ? money(price?.final_price) : "-"} strong />
         <SummaryRow label={t("common.availability")} value={price?.available_count ?? "-"} />
         <SummaryRow label={t("common.deliveryRate")} value={price ? percent(price.delivery_rate) : "-"} />
@@ -456,19 +456,23 @@ function PickerBlock({
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-neutral-500">{t("common.loading")}</div>
         ) : rows.length ? rows.map((row) => (
           <button
-            className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
-              selected === row.code ? "border-blue-300 bg-blue-50 text-slate-950 shadow-sm" : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50"
+            className={`group flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all duration-200 ${
+              selected === row.code
+                ? "border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white text-slate-950 shadow-md shadow-cyan-100/70 ring-1 ring-cyan-100"
+                : "border-transparent bg-white hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-200/70"
             }`}
             key={row.code}
             onClick={() => onSelect(row.code)}
             type="button"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-700">{row.badge}</span>
+            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-semibold transition-all duration-200 ${
+              selected === row.code ? "bg-white text-accent shadow-sm ring-1 ring-cyan-100" : "bg-slate-100 text-slate-700 group-hover:bg-white group-hover:text-accent"
+            }`}>{row.badge}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{row.name}</span>
               <span className="block text-xs text-neutral-500">{row.count.toLocaleString()} {t("buy.availableShort")}</span>
             </span>
-            <span className="text-xs font-semibold text-accent">{row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
+            <span className="text-xs font-semibold text-accent transition-colors group-hover:text-blue-700">{row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
           </button>
         )) : (
           <EmptyState title={t("common.noRowsFound")} />
@@ -505,8 +509,10 @@ function MarketplaceHomeContent({
   const {t} = useTranslation();
   return (
     <>
-      <section className="rounded-3xl border border-blue-100 bg-[linear-gradient(135deg,#ffffff_0%,#eef5ff_58%,#f7fbff_100%)] p-6 shadow-sm md:p-9">
-        <div className="max-w-3xl">
+      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(239,246,255,0.9)_46%,rgba(236,254,255,0.72)_100%)] p-6 shadow-[0_22px_70px_rgba(14,116,144,0.12)] backdrop-blur md:p-9">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-200/30 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 right-10 h-40 w-40 rounded-full bg-blue-300/20 blur-2xl" />
+        <div className="relative max-w-3xl">
           <p className="text-sm font-semibold text-blue-700">{t("buy.marketplaceEyebrow")}</p>
           <h1 className="mt-4 text-4xl font-semibold tracking-normal text-slate-950 md:text-6xl">{t("buy.marketplaceTitle")}</h1>
           <p className="mt-5 text-base leading-7 text-slate-700">{t("buy.marketplaceSubtitle")}</p>
@@ -528,11 +534,11 @@ function MarketplaceHomeContent({
           <InfoCard icon={<Code2 size={18} />} label={t("buy.developerHint")} value={t("buy.developerHintValue")} />
         </div>
       </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70">
         <h2 className="text-lg font-semibold">{t("buy.howItWorks")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
           {[t("buy.stepChoose"), t("buy.stepBuy"), t("buy.stepReceive"), t("buy.stepFinish")].map((step, index) => (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" key={step}>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50" key={step}>
               <span className="grid h-7 w-7 place-items-center rounded-full bg-white text-xs font-semibold text-accent ring-1 ring-slate-200">{index + 1}</span>
               <p className="mt-3 text-sm font-medium text-slate-900">{step}</p>
             </div>
@@ -554,12 +560,12 @@ function SelectedOfferCard({countryName, price, serviceName}: {countryName: stri
     [t("common.deliveryRate"), price ? percent(price.delivery_rate) : "-"]
   ];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70">
       <h2 className="text-lg font-semibold">{t("buy.offerTitle")}</h2>
       <p className="mt-1 text-sm leading-6 text-neutral-600">{t("buy.offerDesc")}</p>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
         {rows.map(([label, value]) => (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" key={label}>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white" key={label}>
             <p className="text-xs uppercase text-neutral-500">{label}</p>
             <p className="mt-1 font-semibold text-slate-950">{value}</p>
           </div>
@@ -573,7 +579,7 @@ function OrderStatusPanel({busy, onAction, onBackToMarket, order}: {busy: boolea
   const {t} = useTranslation();
   const active = ["created", "reserved", "waiting_sms", "sms_received"].includes(order.status);
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] transition-all duration-200 md:p-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-sm font-semibold text-blue-700">{t("buy.orderCreated")}</p>
@@ -583,14 +589,14 @@ function OrderStatusPanel({busy, onAction, onBackToMarket, order}: {busy: boolea
         <StatusBadge status={order.status} />
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50">
           <p className="text-sm text-neutral-500">{t("orderDetail.phoneNumber")}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-2xl font-semibold">{order.phone_number || "-"}</p>
             <CopyButton value={order.phone_number} />
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50">
           <p className="text-sm text-neutral-500">{t("common.smsCode")}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-2xl font-semibold">{order.sms_code || "-"}</p>
@@ -688,7 +694,7 @@ function SummaryRow({label, strong = false, value}: {label: string; strong?: boo
 
 function SummaryBox({label, value}: {label: string; value: React.ReactNode}) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white">
       <p className="text-xs uppercase text-neutral-500">{label}</p>
       <div className="mt-1 break-all font-semibold text-slate-950">{value}</div>
     </div>
@@ -697,7 +703,7 @@ function SummaryBox({label, value}: {label: string; value: React.ReactNode}) {
 
 function InfoCard({icon, label, value}: {icon: React.ReactNode; label: string; value: string}) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700">{icon}</span>
         <div>
