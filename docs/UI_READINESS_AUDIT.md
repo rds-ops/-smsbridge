@@ -18,6 +18,7 @@ Task 55 update: the supplier API-key cabinet MVP is now implemented at `/supplie
 Task 56 update: admin API request logs now show explicit operational columns.
 Task 64 update: admin API request logs now support backend-side filters for request ID, identity fields, method, endpoint, status, limit and offset.
 Task 57 update: buyer manual_test deposit/payment intent creation and status visibility are now implemented at `/deposit`.
+Task 65 update: supplier-scoped transaction/reward history is now implemented at `/supplier`.
 
 ## 1. Current Frontend Coverage
 
@@ -49,6 +50,7 @@ Implemented:
 - Supplier inventory list/update from `GET /supplier/v1/inventory` and `POST /supplier/v1/inventory/update`.
 - Supplier SMS push helper from `POST /supplier/v1/sms`.
 - Supplier payout request create/list from `POST /supplier/v1/payout-requests` and `GET /supplier/v1/payout-requests`.
+- Supplier transaction/reward history from `GET /supplier/v1/transactions`.
 
 Admin-only supplier views implemented:
 - Supplier create/update/status/reward/API key generation.
@@ -58,8 +60,7 @@ Admin-only supplier views implemented:
 - Supplier transactions list by supplier ID.
 
 Partially implemented:
-- Supplier reservation config fields and reservation visibility exist in backend, but frontend supplier create/update/types do not expose them.
-- Supplier activation/reward history remains admin-only because no supplier-facing endpoints exist yet.
+- Supplier activation history remains admin-only because no supplier-facing activation list endpoint exists yet.
 
 ### Admin UI
 
@@ -96,7 +97,7 @@ Partially implemented:
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
 | Supplier activations view | No supplier-facing activation list endpoint currently; admin-only exists | requires backend endpoint before supplier UI | later | medium |
-| Supplier reward transaction history | No supplier-facing transaction endpoint currently; admin-only exists | requires backend endpoint before supplier UI | beta useful | medium |
+| Supplier reward transaction history | `GET /supplier/v1/transactions` | implemented in `/supplier` transactions tab | implemented | medium |
 | Reservation/release callback docs/status | docs plus admin config endpoints only | supplier docs page/static guidance | later | small |
 
 ### Admin UI
@@ -124,9 +125,9 @@ Partially implemented:
    - Notes: Admin UI sends backend filters for request ID, method and status. Backend also supports user, supplier, buyer API key, endpoint, limit and offset filters.
 
 4. Supplier reward transaction history.
-    - Endpoint: not implemented supplier-side yet
-    - Priority: beta useful
-    - Complexity: medium
+    - Status: implemented.
+    - Endpoint: `GET /supplier/v1/transactions`
+    - Notes: supplier-scoped, safe fields only, with load-more pagination in `/supplier`.
 
 6. Real payment provider deposit UX.
     - Endpoint: future provider-specific payment integration
@@ -154,6 +155,6 @@ It is closer to closed-beta readiness after the operations/admin and supplier ca
 
 3. API key management now supports managed keys, scopes, revocation and usage, while the legacy regenerate endpoint remains for compatibility.
 
-4. Supplier UX now has an API-key cabinet for profile, inventory, SMS push testing and payout requests. Supplier activation history and reward transaction history remain later because supplier-facing endpoints do not exist yet.
+4. Supplier UX now has an API-key cabinet for profile, inventory, SMS push testing, payout requests and transaction/reward history. Supplier activation history remains later because a supplier-facing endpoint does not exist yet.
 
 5. Local E2E flow is documented but not surfaced in UI. The app has a developer commands page and API docs page, but they do not reflect the current manual_test payment intent + fake supplier reservation flow.

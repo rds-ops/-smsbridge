@@ -3,14 +3,15 @@
 import {useEffect, useState} from "react";
 import {DataTable} from "@/components/shared/data-table";
 import {Alert, Card, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
-import {createSupplierPayoutRequest, getSupplierInventory, getSupplierPayoutRequests, pushSupplierSms, supplierMe, updateSupplierInventory} from "@/lib/supplier/api";
+import {createSupplierPayoutRequest, getSupplierInventory, getSupplierPayoutRequests, getSupplierTransactions, pushSupplierSms, supplierMe, updateSupplierInventory} from "@/lib/supplier/api";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
-import type {SupplierInventoryRow, SupplierPayoutRequest, SupplierProfile, SupplierSmsPushResponse} from "@/lib/shared/types";
+import type {SupplierInventoryRow, SupplierPayoutRequest, SupplierProfile, SupplierSmsPushResponse, SupplierTransactionHistoryRow} from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type SupplierTab = "profile" | "inventory" | "sms" | "payouts";
+type SupplierTab = "profile" | "inventory" | "sms" | "payouts" | "transactions";
 
 const storageKey = "smsbridge_supplier_api_key";
+const TRANSACTION_LIMIT = 50;
 
 export default function SupplierPage() {
   const {t} = useTranslation();
@@ -19,6 +20,10 @@ export default function SupplierPage() {
   const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [inventory, setInventory] = useState<SupplierInventoryRow[]>([]);
   const [payouts, setPayouts] = useState<SupplierPayoutRequest[]>([]);
+  const [transactions, setTransactions] = useState<SupplierTransactionHistoryRow[]>([]);
+  const [transactionOffset, setTransactionOffset] = useState(0);
+  const [transactionsHasMore, setTransactionsHasMore] = useState(false);
+  const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
   const [tab, setTab] = useState<SupplierTab>("profile");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -61,9 +66,13 @@ export default function SupplierPage() {
         getSupplierInventory(key),
         getSupplierPayoutRequests(key)
       ]);
+      const transactionData = await getSupplierTransactions(key, {limit: TRANSACTION_LIMIT, offset: 0});
       setProfile(profileData);
       setInventory(inventoryData);
       setPayouts(payoutData);
+      setTransactions(transactionData);
+      setTransactionOffset(0);
+      setTransactionsHasMore(transactionData.length === TRANSACTION_LIMIT);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("supplierCabinet.loadFailed"));
     } finally {
@@ -90,6 +99,9 @@ export default function SupplierPage() {
     setProfile(null);
     setInventory([]);
     setPayouts([]);
+    setTransactions([]);
+    setTransactionOffset(0);
+    setTransactionsHasMore(false);
     setError("");
   }
 
@@ -131,9 +143,16 @@ export default function SupplierPage() {
         payout_method: payoutMethod.trim() || null,
         payout_address: payoutAddress.trim() || null
       });
-      const [profileData, payoutData] = await Promise.all([supplierMe(apiKey), getSupplierPayoutRequests(apiKey)]);
+      const [profileData, payoutData, transactionData] = await Promise.all([
+        supplierMe(apiKey),
+        getSupplierPayoutRequests(apiKey),
+        getSupplierTransactions(apiKey, {limit: TRANSACTION_LIMIT, offset: 0})
+      ]);
       setProfile(profileData);
       setPayouts(payoutData);
+      setTransactions(transactionData);
+      setTransactionOffset(0);
+      setTransactionsHasMore(transactionData.length === TRANSACTION_LIMIT);
       setPayoutAmount("");
       setPayoutMethod("");
       setPayoutAddress("");
@@ -179,6 +198,22 @@ export default function SupplierPage() {
     }
   }
 
+  async function loadMoreTransactions() {
+    if (!apiKey || transactionsLoadingMore) return;
+    const nextOffset = transactionOffset + TRANSACTION_LIMIT;
+    setTransactionsLoadingMore(true);
+    try {
+      const nextRows = await getSupplierTransactions(apiKey, {limit: TRANSACTION_LIMIT, offset: nextOffset});
+      setTransactions((current) => [...current, ...nextRows]);
+      setTransactionOffset(nextOffset);
+      setTransactionsHasMore(nextRows.length === TRANSACTION_LIMIT);
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("supplierCabinet.transactionsFailed")});
+    } finally {
+      setTransactionsLoadingMore(false);
+    }
+  }
+
   return (
     <PageShell wide>
       {toast && <Toast type={toast.type} message={toast.message} />}
@@ -210,7 +245,7 @@ export default function SupplierPage() {
         <>
           {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
           <div className="mt-6 flex flex-wrap gap-2">
-            {(["profile", "inventory", "sms", "payouts"] as SupplierTab[]).map((item) => (
+            {(["profile", "inventory", "sms", "payouts", "transactions"] as SupplierTab[]).map((item) => (
               <button className={`btn ${tab === item ? "btn-primary" : "btn-secondary"}`} key={item} onClick={() => setTab(item)}>
                 {t(`supplierCabinet.${item}`)}
               </button>
@@ -379,6 +414,32 @@ export default function SupplierPage() {
                     {key: "updated_at", header: t("supplierCabinet.updatedAt"), render: (row) => dateTime(row.updated_at)}
                   ]}
                 />
+              </Card>
+            </section>
+          )}
+
+          {tab === "transactions" && (
+            <section className="mt-6">
+              <Card title={t("supplierCabinet.transactions")} description={t("supplierCabinet.transactionsDesc")}>
+                <DataTable
+                  rows={transactions as unknown as Record<string, unknown>[]}
+                  emptyTitle={t("supplierCabinet.noTransactions")}
+                  columns={[
+                    {key: "type", header: t("common.type"), render: (row) => <StatusBadge status={String(row.type)} />},
+                    {key: "amount", header: t("common.amount"), render: (row) => money(row.amount, String(row.currency || profile?.currency || "USD"))},
+                    {key: "status", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status)} />},
+                    {key: "reference", header: t("common.reference"), render: (row) => row.reference ? truncate(row.reference, 24) : "-"},
+                    {key: "order_public_id", header: t("common.order"), render: (row) => row.order_public_id ? truncate(row.order_public_id, 18) : "-"},
+                    {key: "created_at", header: t("common.createdAt"), render: (row) => dateTime(row.created_at)}
+                  ]}
+                />
+                {transactionsHasMore && (
+                  <div className="mt-4">
+                    <button className="btn btn-secondary" onClick={loadMoreTransactions} disabled={transactionsLoadingMore}>
+                      {transactionsLoadingMore ? t("common.loading") : t("supplierCabinet.loadMoreTransactions")}
+                    </button>
+                  </div>
+                )}
               </Card>
             </section>
           )}

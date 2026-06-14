@@ -96,6 +96,93 @@ def test_supplier_sees_only_own_payout_requests(client, admin_token):
     assert [row["public_id"] for row in rows] == [first_payout["public_id"]]
 
 
+def test_supplier_can_list_own_transactions_with_safe_fields(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+
+    response = client.get("/supplier/v1/transactions", headers={"Authorization": f"Bearer {api_key}"})
+
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert len(rows) == 1
+    assert rows[0]["type"] == "adjustment"
+    assert rows[0]["amount"] == "10.0000"
+    assert rows[0]["currency"] == "USD"
+    assert rows[0]["status"] == "completed"
+    assert rows[0]["reference"] == "test-fund"
+    assert "supplier_id" not in rows[0]
+    assert "activation_id" not in rows[0]
+    assert "order_id" not in rows[0]
+    assert "tx_metadata" not in rows[0]
+
+
+def test_supplier_transactions_are_supplier_scoped(client, admin_token):
+    first = create_supplier(client, admin_token)
+    second = create_supplier(client, admin_token)
+    first_key = supplier_key(client, admin_token, first["id"])
+    _fund_supplier(client, admin_token, first["id"], "7.0000")
+    _fund_supplier(client, admin_token, second["id"], "9.0000")
+
+    response = client.get("/supplier/v1/transactions", headers={"Authorization": f"Bearer {first_key}"})
+
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert len(rows) == 1
+    assert rows[0]["amount"] == "7.0000"
+    assert "9.0000" not in str(rows)
+
+
+def test_supplier_transactions_require_supplier_auth(client, user_token):
+    missing = client.get("/supplier/v1/transactions")
+    buyer = client.get("/supplier/v1/transactions", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert missing.status_code == 401
+    assert buyer.status_code == 401
+
+
+def test_blocked_supplier_can_read_own_transactions_like_other_read_endpoints(client, admin_token):
+    supplier = create_supplier(client, admin_token, status="blocked")
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+
+    response = client.get("/supplier/v1/transactions", headers={"Authorization": f"Bearer {api_key}"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["type"] == "adjustment"
+
+
+def test_supplier_transactions_limit_offset_and_filters(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"], "10.0000")
+    first_payout = _create_payout(client, api_key, "1.0000")
+    second_payout = _create_payout(client, api_key, "2.0000")
+    assert first_payout.status_code == 200, first_payout.text
+    assert second_payout.status_code == 200, second_payout.text
+
+    filtered = client.get(
+        "/supplier/v1/transactions?type=payout_hold&status=completed",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    first_page = client.get(
+        "/supplier/v1/transactions?limit=1&offset=0",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    second_page = client.get(
+        "/supplier/v1/transactions?limit=1&offset=1",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+
+    assert filtered.status_code == 200, filtered.text
+    assert [row["type"] for row in filtered.json()] == ["payout_hold", "payout_hold"]
+    assert first_page.status_code == 200, first_page.text
+    assert second_page.status_code == 200, second_page.text
+    assert len(first_page.json()) == 1
+    assert len(second_page.json()) == 1
+    assert first_page.json()[0] != second_page.json()[0]
+
+
 def test_admin_can_list_detail_and_approve_supplier_payout(client, admin_token):
     supplier = create_supplier(client, admin_token)
     api_key = supplier_key(client, admin_token, supplier["id"])

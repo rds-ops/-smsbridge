@@ -188,6 +188,7 @@ What is mixed:
 | POST | `/supplier/v1/inventory/update` | `app/api/supplier.py` | supplier active | Upsert count-based inventory | No real phone-number inventory; no idempotency key; max 500 items. |
 | POST | `/supplier/v1/payout-requests` | `app/api/supplier.py` | supplier active | Request payout from supplier balance | Moves balance to held balance and writes `payout_hold`; no external payout provider. |
 | GET | `/supplier/v1/payout-requests` | `app/api/supplier.py` | supplier | List own payout requests | Supplier-scoped. |
+| GET | `/supplier/v1/transactions` | `app/api/supplier.py` | supplier | List own supplier transaction ledger | Supplier-scoped safe fields only; no internal IDs, metadata, buyer identity, provider costs or secrets. |
 | POST | `/supplier/v1/sms` | `app/api/supplier.py` | supplier active | Push SMS for activation/phone | Idempotent by supplier SMS id. Does not require activation id if phone matches active activation. |
 
 Dangerous or wrongly exposed endpoints/fields:
@@ -760,7 +761,7 @@ Recommended 1-2 week plan:
 6. P1 marketplace accounting:
    - Add supplier payout/withdrawal model. PARTIAL (request/hold/admin approve/reject/mark-paid skeleton + read-only reconciliation visibility; no external payout provider)
    - Add wallet transaction history endpoint for buyers.
-   - Add supplier transaction/payout endpoints for suppliers. PARTIAL (payout request list/create exists; transaction list is admin-only)
+   - Add supplier transaction/payout endpoints for suppliers. PARTIAL (payout request list/create and safe supplier transaction list exist; activation history remains admin-only)
 
 7. P1 observability/admin:
    - Add pagination to admin/users/orders/supplier logs.

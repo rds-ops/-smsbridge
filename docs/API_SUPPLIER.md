@@ -164,6 +164,41 @@ curl -sS "$BASE_URL/supplier/v1/payout-requests" \
   -H "Authorization: Bearer $SUPPLIER_API_KEY"
 ```
 
+### List transactions
+
+`GET /supplier/v1/transactions`
+
+Returns newest reward, payout and adjustment ledger entries for the authenticated supplier only.
+
+Query params:
+- `limit` optional, default `50`, max `100`
+- `offset` optional, default `0`
+- `type` optional
+- `status` optional
+
+Buyer identity, internal supplier IDs, activation IDs, internal order IDs, provider costs, metadata and secrets are not returned.
+
+Response fields:
+```json
+[
+  {
+    "type": "reward",
+    "amount": "0.0700",
+    "currency": "USD",
+    "status": "completed",
+    "reference": "order:ord_123",
+    "order_public_id": "ord_123",
+    "created_at": "2026-01-01T12:00:00Z"
+  }
+]
+```
+
+Example:
+```bash
+curl -sS "$BASE_URL/supplier/v1/transactions?limit=50&offset=0" \
+  -H "Authorization: Bearer $SUPPLIER_API_KEY"
+```
+
 ## Supplier Reservation / Release Callbacks (Supplier-side expectations)
 
 These are outbound calls from smsbridge to the supplier (supplier must host the endpoints). The detailed contract is documented in `docs/API_CALLBACKS.md`.

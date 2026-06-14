@@ -174,6 +174,16 @@ export type SupplierTransaction = {
   created_at: string;
 };
 
+export type SupplierTransactionHistoryRow = {
+  type: string;
+  amount: string;
+  currency: string;
+  status: string;
+  reference?: string | null;
+  order_public_id?: string | null;
+  created_at: string;
+};
+
 export type Metrics = Record<string, unknown>;
 
 export type AdminOpsSummary = {

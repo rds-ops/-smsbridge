@@ -4,7 +4,8 @@ import type {
   SupplierPayoutRequest,
   SupplierProfile,
   SupplierSmsPushRequest,
-  SupplierSmsPushResponse
+  SupplierSmsPushResponse,
+  SupplierTransactionHistoryRow
 } from "@/lib/shared/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -54,6 +55,18 @@ export function updateSupplierInventory(apiKey: string, items: SupplierInventory
 
 export function getSupplierPayoutRequests(apiKey: string) {
   return supplierFetch<SupplierPayoutRequest[]>(apiKey, "/supplier/v1/payout-requests");
+}
+
+export function getSupplierTransactions(
+  apiKey: string,
+  params: {limit?: number; offset?: number; type?: string; status?: string} = {}
+) {
+  const query = new URLSearchParams();
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  if (params.type) query.set("type", params.type);
+  if (params.status) query.set("status", params.status);
+  return supplierFetch<SupplierTransactionHistoryRow[]>(apiKey, `/supplier/v1/transactions?${query.toString()}`);
 }
 
 export function createSupplierPayoutRequest(apiKey: string, body: {amount: string; payout_method?: string | null; payout_address?: string | null}) {

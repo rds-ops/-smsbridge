@@ -171,6 +171,16 @@ class SupplierTransactionOut(ORMModel):
     created_at: datetime
 
 
+class SupplierTransactionSafeOut(BaseModel):
+    type: str
+    amount: Decimal
+    currency: str
+    status: str
+    reference: str | None = None
+    order_public_id: str | None = None
+    created_at: datetime
+
+
 class SupplierReleaseRetryOut(ORMModel):
     id: int
     supplier_activation_id: int

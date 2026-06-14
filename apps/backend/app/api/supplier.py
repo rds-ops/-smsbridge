@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_supplier, require_active_supplier
 from app.db.session import get_db
-from app.models import Supplier, SupplierInventory, SupplierPayoutRequest
+from app.models import Order, Supplier, SupplierInventory, SupplierPayoutRequest, SupplierTransaction
 from app.schemas.supplier import (
     SupplierInventoryOut,
     SupplierInventoryUpdateIn,
@@ -16,6 +16,7 @@ from app.schemas.supplier import (
     SupplierPayoutRequestOut,
     SupplierSmsIn,
     SupplierSmsPushOut,
+    SupplierTransactionSafeOut,
 )
 from app.services.suppliers import create_supplier_payout_request, push_sms, upsert_inventory
 
@@ -77,6 +78,43 @@ def payout_requests(db: Session = Depends(get_db), supplier: Supplier = Depends(
             .limit(200)
         )
     )
+
+
+@router.get("/transactions", response_model=list[SupplierTransactionSafeOut])
+def transactions(
+    tx_type: str | None = Query(default=None, alias="type", max_length=40),
+    status: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    supplier: Supplier = Depends(get_current_supplier),
+):
+    stmt = (
+        select(SupplierTransaction, Order.public_id)
+        .outerjoin(Order, SupplierTransaction.order_id == Order.id)
+        .where(SupplierTransaction.supplier_id == supplier.id)
+    )
+    if tx_type:
+        stmt = stmt.where(SupplierTransaction.type == tx_type)
+    if status:
+        stmt = stmt.where(SupplierTransaction.status == status)
+    rows = db.execute(
+        stmt.order_by(SupplierTransaction.created_at.desc(), SupplierTransaction.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [
+        SupplierTransactionSafeOut(
+            type=transaction.type,
+            amount=transaction.amount,
+            currency=supplier.currency,
+            status=transaction.status,
+            reference=transaction.reference,
+            order_public_id=order_public_id,
+            created_at=transaction.created_at,
+        )
+        for transaction, order_public_id in rows
+    ]
 
 
 @router.post("/sms", response_model=SupplierSmsPushOut)
