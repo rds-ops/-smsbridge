@@ -26,6 +26,7 @@ Implemented:
 - Login/register/session handling.
 - Dashboard with balance, held balance, limits, active/completed order counts, recent orders.
 - Buy flow using services, countries, prices, balance, and `POST /api/v1/orders`.
+- Buy flow sends an `Idempotency-Key` on order creation to reduce duplicate order risk on retries/double-clicks.
 - Order list with filters and cancel/finish actions.
 - Order detail with phone number, SMS code/text, balance refresh, cancel/finish actions.
 - Wallet transaction history on the dashboard from `GET /api/v1/wallet/transactions`.
@@ -91,7 +92,7 @@ Missing:
 | --- | --- | --- | --- | --- |
 | Real payment provider deposit UX | Future provider-backed payment intent flow | buyer deposit page/provider selection | later | large |
 | Order events/status details | No buyer endpoint currently; admin endpoint exists at `GET /admin/orders/{order_id}/events` only | no buyer UI until backend buyer-safe endpoint exists | later | medium |
-| Idempotency-Key support in buy flow | `POST /api/v1/orders` with `Idempotency-Key` header | `apps/frontend/lib/client/api.ts`, `apps/frontend/app/buy/page.tsx` | beta useful | small |
+| Idempotency-Key support in buy flow | `POST /api/v1/orders` with `Idempotency-Key` header | implemented in buyer API client and `/buy` submit flow | implemented | small |
 
 ### Supplier UI
 

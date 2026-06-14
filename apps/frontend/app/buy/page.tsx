@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {useRouter} from "next/navigation";
 import {Alert, Card, PageHeader, PageShell, Toast} from "@/components/shared/ui";
 import {createOrder, getBalance, getCountries, getPrices, getServices} from "@/lib/client/api";
@@ -21,6 +21,7 @@ export default function BuyPage() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [buying, setBuying] = useState(false);
+  const pendingOrderKeyRef = useRef<string | null>(null);
 
   async function load() {
     setError("");
@@ -50,19 +51,27 @@ export default function BuyPage() {
   const hasPrice = Boolean(selected);
   const hasFunds = hasPrice && availableBalance >= requiredPrice;
 
+  function createOrderIdempotencyKey() {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `order-${crypto.randomUUID()}`;
+    return `order-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
   async function buy() {
-    if (!hasFunds || buying) return;
+    if (!hasFunds || buying || pendingOrderKeyRef.current) return;
+    const idempotencyKey = createOrderIdempotencyKey();
+    pendingOrderKeyRef.current = idempotencyKey;
     setBuying(true);
     setError("");
     setToast("");
     try {
-      const order = await createOrder({service_code: service, country_iso2: country, operator: operator || null});
+      const order = await createOrder({service_code: service, country_iso2: country, operator: operator || null}, idempotencyKey);
       setToast(t("buy.success"));
       await getBalance().then(setBalance).catch(() => null);
       router.push(`/orders/${order.public_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("buy.orderFailed"));
     } finally {
+      pendingOrderKeyRef.current = null;
       setBuying(false);
     }
   }

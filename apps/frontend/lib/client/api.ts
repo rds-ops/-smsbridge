@@ -56,8 +56,9 @@ export function getOrder(publicId: string) {
   return apiFetch<Order>(`/api/v1/orders/${publicId}`);
 }
 
-export function createOrder(payload: {service_code: string; country_iso2: string; operator?: string | null}) {
-  return apiFetch<Order>("/api/v1/orders", {method: "POST", body: JSON.stringify(payload)});
+export function createOrder(payload: {service_code: string; country_iso2: string; operator?: string | null}, idempotencyKey?: string) {
+  const headers = idempotencyKey ? {"Idempotency-Key": idempotencyKey} : undefined;
+  return apiFetch<Order>("/api/v1/orders", {method: "POST", body: JSON.stringify(payload), headers});
 }
 
 export function cancelOrder(publicId: string) {
