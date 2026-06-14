@@ -3,12 +3,12 @@
 import {useEffect, useState} from "react";
 import {DataTable} from "@/components/shared/data-table";
 import {Alert, Card, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
-import {createSupplierPayoutRequest, getSupplierInventory, getSupplierPayoutRequests, supplierMe, updateSupplierInventory} from "@/lib/supplier/api";
+import {createSupplierPayoutRequest, getSupplierInventory, getSupplierPayoutRequests, pushSupplierSms, supplierMe, updateSupplierInventory} from "@/lib/supplier/api";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
-import type {SupplierInventoryRow, SupplierPayoutRequest, SupplierProfile} from "@/lib/shared/types";
+import type {SupplierInventoryRow, SupplierPayoutRequest, SupplierProfile, SupplierSmsPushResponse} from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type SupplierTab = "profile" | "inventory" | "payouts";
+type SupplierTab = "profile" | "inventory" | "sms" | "payouts";
 
 const storageKey = "smsbridge_supplier_api_key";
 
@@ -35,6 +35,13 @@ export default function SupplierPage() {
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutMethod, setPayoutMethod] = useState("");
   const [payoutAddress, setPayoutAddress] = useState("");
+  const [supplierSmsId, setSupplierSmsId] = useState("");
+  const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
+  const [smsPhoneFrom, setSmsPhoneFrom] = useState("");
+  const [smsText, setSmsText] = useState("");
+  const [smsActivationId, setSmsActivationId] = useState("");
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [smsResult, setSmsResult] = useState<SupplierSmsPushResponse | null>(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem(storageKey);
@@ -136,6 +143,42 @@ export default function SupplierPage() {
     }
   }
 
+  async function submitSms(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const supplierSmsIdValue = supplierSmsId.trim();
+    const phoneNumber = smsPhoneNumber.trim();
+    const text = smsText.trim();
+    if (!supplierSmsIdValue || !phoneNumber || !text) {
+      setToast({type: "error", message: t("supplierCabinet.smsRequired")});
+      return;
+    }
+    if (!phoneNumber.startsWith("+")) {
+      setToast({type: "error", message: t("supplierCabinet.smsPhoneInvalid")});
+      return;
+    }
+    setSmsLoading(true);
+    setSmsResult(null);
+    try {
+      const result = await pushSupplierSms(apiKey, {
+        supplier_sms_id: supplierSmsIdValue,
+        phone_number: phoneNumber,
+        phone_from: smsPhoneFrom.trim() || null,
+        text,
+        supplier_activation_id: smsActivationId.trim() || null
+      });
+      setSmsResult(result);
+      setSmsText("");
+      setToast({
+        type: "success",
+        message: result.duplicate ? t("supplierCabinet.smsDuplicate") : t("supplierCabinet.smsPushed")
+      });
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("supplierCabinet.smsFailed")});
+    } finally {
+      setSmsLoading(false);
+    }
+  }
+
   return (
     <PageShell wide>
       {toast && <Toast type={toast.type} message={toast.message} />}
@@ -167,7 +210,7 @@ export default function SupplierPage() {
         <>
           {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
           <div className="mt-6 flex flex-wrap gap-2">
-            {(["profile", "inventory", "payouts"] as SupplierTab[]).map((item) => (
+            {(["profile", "inventory", "sms", "payouts"] as SupplierTab[]).map((item) => (
               <button className={`btn ${tab === item ? "btn-primary" : "btn-secondary"}`} key={item} onClick={() => setTab(item)}>
                 {t(`supplierCabinet.${item}`)}
               </button>
@@ -245,6 +288,61 @@ export default function SupplierPage() {
                     {key: "last_sync_at", header: t("common.lastSync"), render: (row) => dateTime(row.last_sync_at || row.updated_at)}
                   ]}
                 />
+              </Card>
+            </section>
+          )}
+
+          {tab === "sms" && (
+            <section className="mt-6 grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+              <Card title={t("supplierCabinet.pushSms")} description={t("supplierCabinet.smsHelperDesc")}>
+                <form className="grid gap-3" onSubmit={submitSms}>
+                  <label className="grid gap-1 text-sm">
+                    {t("supplierCabinet.supplierSmsId")}
+                    <input className="field" value={supplierSmsId} onChange={(event) => setSupplierSmsId(event.target.value)} autoComplete="off" />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("supplierCabinet.phoneNumber")}
+                    <input className="field" value={smsPhoneNumber} onChange={(event) => setSmsPhoneNumber(event.target.value)} placeholder="+628123456789" autoComplete="off" />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("supplierCabinet.phoneFromOptional")}
+                    <input className="field" value={smsPhoneFrom} onChange={(event) => setSmsPhoneFrom(event.target.value)} placeholder="Telegram" autoComplete="off" />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("supplierCabinet.smsText")}
+                    <textarea className="field min-h-28" value={smsText} onChange={(event) => setSmsText(event.target.value)} autoComplete="off" />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("supplierCabinet.activationIdOptional")}
+                    <input className="field" value={smsActivationId} onChange={(event) => setSmsActivationId(event.target.value)} autoComplete="off" />
+                  </label>
+                  <button className="btn btn-primary justify-self-start" disabled={smsLoading} type="submit">
+                    {smsLoading ? t("common.saving") : t("supplierCabinet.pushSms")}
+                  </button>
+                </form>
+              </Card>
+              <Card title={t("supplierCabinet.smsResult")} description={t("supplierCabinet.smsResultDesc")}>
+                <div className="grid gap-4">
+                  <Alert type="info">{t("supplierCabinet.smsHelperNote")}</Alert>
+                  {smsResult ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Detail label={t("common.status")} value={smsResult.status} />
+                      <Detail
+                        label={t("supplierCabinet.duplicate")}
+                        value={
+                          <span className={`rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                            smsResult.duplicate ? "bg-amber-50 text-amber-800 ring-amber-200" : "bg-green-50 text-green-700 ring-green-200"
+                          }`}>
+                            {smsResult.duplicate ? t("common.yes") : t("common.no")}
+                          </span>
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-6 text-neutral-600">{t("supplierCabinet.noSmsResult")}</p>
+                  )}
+                  <p className="text-xs leading-5 text-neutral-500">{t("supplierCabinet.smsSafetyNote")}</p>
+                </div>
               </Card>
             </section>
           )}

@@ -390,6 +390,19 @@ export type SupplierInventoryUpdateItem = {
   status: string;
 };
 
+export type SupplierSmsPushRequest = {
+  supplier_sms_id: string;
+  phone_number: string;
+  phone_from?: string | null;
+  text: string;
+  supplier_activation_id?: string | null;
+};
+
+export type SupplierSmsPushResponse = {
+  status: string;
+  duplicate: boolean;
+};
+
 export type SupplierPayoutRequest = {
   id: number;
   public_id: string;

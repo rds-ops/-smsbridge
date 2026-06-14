@@ -1,4 +1,11 @@
-import type {SupplierInventoryRow, SupplierInventoryUpdateItem, SupplierPayoutRequest, SupplierProfile} from "@/lib/shared/types";
+import type {
+  SupplierInventoryRow,
+  SupplierInventoryUpdateItem,
+  SupplierPayoutRequest,
+  SupplierProfile,
+  SupplierSmsPushRequest,
+  SupplierSmsPushResponse
+} from "@/lib/shared/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -51,6 +58,13 @@ export function getSupplierPayoutRequests(apiKey: string) {
 
 export function createSupplierPayoutRequest(apiKey: string, body: {amount: string; payout_method?: string | null; payout_address?: string | null}) {
   return supplierFetch<SupplierPayoutRequest>(apiKey, "/supplier/v1/payout-requests", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export function pushSupplierSms(apiKey: string, body: SupplierSmsPushRequest) {
+  return supplierFetch<SupplierSmsPushResponse>(apiKey, "/supplier/v1/sms", {
     method: "POST",
     body: JSON.stringify(body)
   });

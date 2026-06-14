@@ -45,6 +45,7 @@ Implemented:
 - Supplier API-key session screen at `/supplier`.
 - Supplier profile, balances, reward percent and status from `GET /supplier/v1/me`.
 - Supplier inventory list/update from `GET /supplier/v1/inventory` and `POST /supplier/v1/inventory/update`.
+- Supplier SMS push helper from `POST /supplier/v1/sms`.
 - Supplier payout request create/list from `POST /supplier/v1/payout-requests` and `GET /supplier/v1/payout-requests`.
 
 Admin-only supplier views implemented:
@@ -56,7 +57,6 @@ Admin-only supplier views implemented:
 
 Partially implemented:
 - Supplier reservation config fields and reservation visibility exist in backend, but frontend supplier create/update/types do not expose them.
-- Supplier SMS push helper is not implemented in the supplier cabinet yet.
 - Supplier activation/reward history remains admin-only because no supplier-facing endpoints exist yet.
 
 ### Admin UI
@@ -97,7 +97,6 @@ Missing:
 
 | Item | Backend endpoint(s) | Likely frontend files | Priority | Complexity |
 | --- | --- | --- | --- | --- |
-| Supplier SMS push helper | `POST /supplier/v1/sms` | supplier dev/testing page or local integration helper UI | later | medium |
 | Supplier activations view | No supplier-facing activation list endpoint currently; admin-only exists | requires backend endpoint before supplier UI | later | medium |
 | Supplier reward transaction history | No supplier-facing transaction endpoint currently; admin-only exists | requires backend endpoint before supplier UI | beta useful | medium |
 | Reservation/release callback docs/status | docs plus admin config endpoints only | supplier docs page/static guidance | later | small |
@@ -126,12 +125,7 @@ Missing:
    - Priority: later
    - Complexity: small
 
-4. Supplier SMS push helper.
-    - Endpoint: `POST /supplier/v1/sms`
-    - Priority: later
-    - Complexity: medium
-
-5. Supplier reward transaction history.
+4. Supplier reward transaction history.
     - Endpoint: not implemented supplier-side yet
     - Priority: beta useful
     - Complexity: medium
@@ -162,6 +156,6 @@ It is closer to closed-beta readiness after the operations/admin and supplier ca
 
 3. API key management now supports managed keys, scopes, revocation and usage, while the legacy regenerate endpoint remains for compatibility.
 
-4. Supplier UX now has an API-key cabinet for profile, inventory and payout requests. Supplier SMS helper, activation history and reward transaction history remain later.
+4. Supplier UX now has an API-key cabinet for profile, inventory, SMS push testing and payout requests. Supplier activation history and reward transaction history remain later because supplier-facing endpoints do not exist yet.
 
 5. Local E2E flow is documented but not surfaced in UI. The app has a developer commands page and API docs page, but they do not reflect the current manual_test payment intent + fake supplier reservation flow.
