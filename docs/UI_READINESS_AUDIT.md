@@ -15,7 +15,8 @@ Scope inspected:
 - `docs/API_AUDIT.md`
 
 Task 55 update: the supplier API-key cabinet MVP is now implemented at `/supplier`.
-Task 56 update: admin API request logs now show explicit operational columns and frontend-side `request_id` filtering.
+Task 56 update: admin API request logs now show explicit operational columns.
+Task 64 update: admin API request logs now support backend-side filters for request ID, identity fields, method, endpoint, status, limit and offset.
 Task 57 update: buyer manual_test deposit/payment intent creation and status visibility are now implemented at `/deposit`.
 
 ## 1. Current Frontend Coverage
@@ -78,11 +79,7 @@ Implemented:
 - Reliability Center with supplier release retries, payment reconciliation, supplier payout reconciliation, and cleanup dry-run visibility.
 
 Partially implemented:
-- API request logs show `request_id`, identity columns and frontend-side request ID filtering, but there is no backend request ID query/filter endpoint yet.
 - Supplier inventory/activations/SMS/transactions are visible only via manually entering supplier ID.
-
-Missing:
-- Backend-side admin request log filtering/search by request ID.
 
 ## 2. Missing UI Plan
 
@@ -122,9 +119,9 @@ Missing:
     - Notes: UI exposes last reservation/release timestamps, last errors and failed attempt counts.
 
 3. Backend-side request log request ID filtering.
+   - Status: implemented.
    - Endpoint: `GET /admin/api-request-logs`
-   - Priority: later
-   - Complexity: small
+   - Notes: Admin UI sends backend filters for request ID, method and status. Backend also supports user, supplier, buyer API key, endpoint, limit and offset filters.
 
 4. Supplier reward transaction history.
     - Endpoint: not implemented supplier-side yet
@@ -147,11 +144,11 @@ It is usable for the basic buyer flow and basic admin setup:
 - basic admin metrics/users/orders/providers/suppliers
 - manual admin wallet deposit
 
-It is closer to closed-beta readiness after the operations/admin and supplier cabinet work, but still has gaps in admin supplier reservation configuration, request-log filtering, and buyer payment intent UX.
+It is closer to closed-beta readiness after the operations/admin and supplier cabinet work. Remaining gaps are now more focused on supplier-facing reward history, buyer-safe order event visibility, and deferred real payment/provider work.
 
 ## 5. Biggest Gaps
 
-1. Admin operations are still the largest gap. The admin UI now has ops summary, risk actions, payment intent manual completion, supplier payout operations, retries, reconciliation, and cleanup dry-run visibility, but request ID filtering and supplier reservation configuration are still missing.
+1. Admin operations are much stronger after ops summary, risk actions, payment intent manual completion, supplier payout operations, retries, reconciliation, cleanup dry-run visibility, supplier reservation configuration, and backend request-log filtering. Remaining admin gaps are mostly pagination/filter polish and broader operational reporting.
 
 2. Buyer accounting transparency is improved with wallet transaction history, manual_test payment intent creation/status visibility, and buyer payment intent history on `/deposit`. Real payment provider UX is still deferred, and manual completion remains admin-only.
 

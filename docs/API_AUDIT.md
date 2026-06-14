@@ -181,7 +181,7 @@ What is mixed:
 | POST | `/admin/wallets/adjustment` | `app/api/admin.py` | admin | Manual user wallet adjustment | Creates wallet transaction, prevents negative balance. |
 | POST | `/admin/orders/{order_id}/refund` | `app/api/admin.py` | admin | Refund order | Idempotent for refunded/expired/cancelled. Can attempt refund after completed and fail in wallet if captured. |
 | GET | `/admin/audit-logs` | `app/api/admin.py` | admin | List audit logs | Limit 200 only. |
-| GET | `/admin/api-request-logs` | `app/api/admin.py` | admin | List request logs | Includes buyer/admin/auth/supplier/internal provider webhook metadata; no request bodies. |
+| GET | `/admin/api-request-logs` | `app/api/admin.py` | admin | List/filter request logs | Supports exact filters for `request_id`, identity fields, `status_code`, `method`, `endpoint`, plus `limit`/`offset`. Includes buyer/admin/auth/supplier/internal provider webhook metadata; no request bodies. |
 | GET | `/admin/metrics` | `app/api/admin.py` | admin | Basic daily metrics | Gross profit subtracts provider cost but not supplier rewards consistently; no time zone/accounting period abstraction. |
 | GET | `/supplier/v1/me` | `app/api/supplier.py` | supplier | Supplier profile | API key auth. |
 | GET | `/supplier/v1/inventory` | `app/api/supplier.py` | supplier | Supplier inventory list | OK. |

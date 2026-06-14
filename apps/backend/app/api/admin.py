@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -499,8 +499,35 @@ def audit_logs(db: Session = Depends(get_db), admin: User = Depends(require_admi
 
 
 @router.get("/api-request-logs", response_model=list[ApiRequestLogOut])
-def api_request_logs(db: Session = Depends(get_db), admin: User = Depends(require_admin)):
-    return list(db.scalars(select(ApiRequestLog).order_by(ApiRequestLog.created_at.desc()).limit(200)))
+def api_request_logs(
+    request_id: str | None = Query(default=None, max_length=128),
+    user_id: int | None = Query(default=None, gt=0),
+    supplier_id: int | None = Query(default=None, gt=0),
+    buyer_api_key_id: int | None = Query(default=None, gt=0),
+    status_code: int | None = Query(default=None, ge=100, le=599),
+    method: str | None = Query(default=None, max_length=10),
+    endpoint: str | None = Query(default=None, max_length=500),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    stmt = select(ApiRequestLog)
+    if request_id:
+        stmt = stmt.where(ApiRequestLog.request_id == request_id)
+    if user_id:
+        stmt = stmt.where(ApiRequestLog.user_id == user_id)
+    if supplier_id:
+        stmt = stmt.where(ApiRequestLog.supplier_id == supplier_id)
+    if buyer_api_key_id:
+        stmt = stmt.where(ApiRequestLog.buyer_api_key_id == buyer_api_key_id)
+    if status_code:
+        stmt = stmt.where(ApiRequestLog.status_code == status_code)
+    if method:
+        stmt = stmt.where(ApiRequestLog.method == method.upper())
+    if endpoint:
+        stmt = stmt.where(ApiRequestLog.endpoint == endpoint)
+    return list(db.scalars(stmt.order_by(ApiRequestLog.created_at.desc(), ApiRequestLog.id.desc()).offset(offset).limit(limit)))
 
 
 @router.get("/metrics")

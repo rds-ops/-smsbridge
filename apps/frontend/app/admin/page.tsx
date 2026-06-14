@@ -115,6 +115,8 @@ function AdminPanel() {
   const [apiLogs, setApiLogs] = useState<AdminApiRequestLog[]>([]);
   const [query, setQuery] = useState("");
   const [requestIdFilter, setRequestIdFilter] = useState("");
+  const [apiLogMethodFilter, setApiLogMethodFilter] = useState("");
+  const [apiLogStatusFilter, setApiLogStatusFilter] = useState("");
   const [depositUserId, setDepositUserId] = useState("2");
   const [depositAmount, setDepositAmount] = useState("10.00");
   const [depositReference, setDepositReference] = useState("manual-frontend");
@@ -198,7 +200,7 @@ function AdminPanel() {
         if (selectedTab === "supplier transactions") setSupplierTransactions(await getSupplierTransactions(supplierId));
       }
       if (selectedTab === "audit") setAuditLogs(await getAuditLogs());
-      if (selectedTab === "api logs") setApiLogs(await getApiRequestLogs());
+      if (selectedTab === "api logs") setApiLogs(await getApiRequestLogs(apiRequestLogFilters(requestIdFilter, apiLogMethodFilter, apiLogStatusFilter)));
     } catch (err) {
       setError(err instanceof Error ? err.message : t(supplierDetailTabs.includes(selectedTab) ? "admin.supplierLoadFailed" : "buy.loadFailed"));
     } finally {
@@ -235,6 +237,10 @@ function AdminPanel() {
   useEffect(() => {
     if (tab === "supplier payouts") load(tab);
   }, [supplierPayoutStatusFilter]);
+
+  useEffect(() => {
+    if (tab === "api logs") load(tab);
+  }, [requestIdFilter, apiLogMethodFilter, apiLogStatusFilter]);
 
   async function selectRiskUser(userId: number) {
     const [detail, actions] = await Promise.all([getAdminRiskUser(userId), getAdminRiskActions(userId)]);
@@ -477,13 +483,7 @@ function AdminPanel() {
     if (tab === "supplier sms") return filter(supplierSms as unknown as Record<string, unknown>[]);
     if (tab === "supplier transactions") return filter(supplierTransactions as unknown as Record<string, unknown>[]);
     if (tab === "audit") return filter(auditLogs);
-    if (tab === "api logs") {
-      const requestLower = requestIdFilter.trim().toLowerCase();
-      const rows = requestLower
-        ? apiLogs.filter((row) => String(row.request_id || "").toLowerCase().includes(requestLower))
-        : apiLogs;
-      return filter(rows as unknown as Record<string, unknown>[]);
-    }
+    if (tab === "api logs") return filter(apiLogs as unknown as Record<string, unknown>[]);
     return [];
   }, [tab, users, orders, providers, suppliers, supplierInventory, supplierActivations, supplierSms, supplierTransactions, auditLogs, apiLogs, query, requestIdFilter]);
 
@@ -833,10 +833,24 @@ function AdminPanel() {
       ) : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
           {tab === "api logs" ? (
-            <div className="mb-4 grid gap-3 md:grid-cols-2">
+            <div className="mb-4 grid gap-3 md:grid-cols-4">
               <label className="grid gap-1 text-sm">
                 request_id
                 <input className="field" value={requestIdFilter} onChange={(e) => setRequestIdFilter(e.target.value)} placeholder="request_id" />
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("common.method")}
+                <select className="field" value={apiLogMethodFilter} onChange={(e) => setApiLogMethodFilter(e.target.value)}>
+                  <option value="">{t("common.any")}</option>
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("common.status")}
+                <input className="field" value={apiLogStatusFilter} onChange={(e) => setApiLogStatusFilter(e.target.value)} placeholder="200" inputMode="numeric" />
               </label>
               <label className="grid gap-1 text-sm">
                 {t("common.search")}
@@ -1450,6 +1464,15 @@ function supplierPayoutFilters(status: string, supplierId: string) {
   return {
     ...(status ? {status} : {}),
     ...(Number.isInteger(parsedSupplierId) && parsedSupplierId > 0 ? {supplier_id: parsedSupplierId} : {})
+  };
+}
+
+function apiRequestLogFilters(requestId: string, method: string, status: string) {
+  const parsedStatus = Number(status);
+  return {
+    ...(requestId.trim() ? {request_id: requestId.trim()} : {}),
+    ...(method ? {method} : {}),
+    ...(Number.isInteger(parsedStatus) && parsedStatus >= 100 && parsedStatus <= 599 ? {status_code: parsedStatus} : {})
   };
 }
 

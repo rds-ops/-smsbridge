@@ -364,6 +364,18 @@ export type AdminApiRequestLog = {
   created_at: string;
 };
 
+export type AdminApiRequestLogFilters = {
+  request_id?: string;
+  user_id?: number;
+  supplier_id?: number;
+  buyer_api_key_id?: number;
+  status_code?: number;
+  method?: string;
+  endpoint?: string;
+  limit?: number;
+  offset?: number;
+};
+
 export type SupplierProfile = {
   id: number;
   name: string;

@@ -2,6 +2,7 @@ import {apiFetch} from "@/lib/shared/api";
 import type {
   AdminOpsSummary,
   AdminApiRequestLog,
+  AdminApiRequestLogFilters,
   AdminPaymentIntent,
   AdminPaymentIntentFilters,
   AdminRiskAction,
@@ -181,8 +182,19 @@ export function getAuditLogs() {
   return apiFetch<Array<Record<string, unknown>>>("/admin/audit-logs");
 }
 
-export function getApiRequestLogs() {
-  return apiFetch<AdminApiRequestLog[]>("/admin/api-request-logs");
+export function getApiRequestLogs(filters: AdminApiRequestLogFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.request_id) params.set("request_id", filters.request_id);
+  if (filters.user_id) params.set("user_id", String(filters.user_id));
+  if (filters.supplier_id) params.set("supplier_id", String(filters.supplier_id));
+  if (filters.buyer_api_key_id) params.set("buyer_api_key_id", String(filters.buyer_api_key_id));
+  if (filters.status_code) params.set("status_code", String(filters.status_code));
+  if (filters.method) params.set("method", filters.method);
+  if (filters.endpoint) params.set("endpoint", filters.endpoint);
+  params.set("limit", String(filters.limit ?? 200));
+  if (filters.offset) params.set("offset", String(filters.offset));
+  const query = params.toString();
+  return apiFetch<AdminApiRequestLog[]>(`/admin/api-request-logs${query ? `?${query}` : ""}`);
 }
 
 export function manualDeposit(payload: {user_id: number; amount: string; reference?: string | null}) {
