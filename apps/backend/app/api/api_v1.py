@@ -37,12 +37,12 @@ def balance(user: User = Depends(require_buyer_scope("wallet:read"))):
 
 
 @router.get("/services", response_model=list[ServiceOut])
-def services(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def services(db: Session = Depends(get_db), user: User = Depends(require_buyer_scope("read"))):
     return list(db.scalars(select(Service).where(Service.is_active.is_(True)).order_by(Service.code)))
 
 
 @router.get("/countries", response_model=list[CountryOut])
-def countries(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def countries(db: Session = Depends(get_db), user: User = Depends(require_buyer_scope("read"))):
     return list(db.scalars(select(Country).where(Country.is_active.is_(True)).order_by(Country.iso2)))
 
 

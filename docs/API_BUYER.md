@@ -219,9 +219,11 @@ curl -sS "$BASE_URL/api/v1/wallet/transactions?limit=50&offset=0" \
 
 `GET /api/v1/services`
 - Returns active services.
+- Supports buyer JWT, managed buyer API keys with `read` scope, and legacy buyer API keys.
 
 `GET /api/v1/countries`
 - Returns active countries.
+- Supports buyer JWT, managed buyer API keys with `read` scope, and legacy buyer API keys.
 
 `GET /api/v1/prices`
 Query params:

@@ -9,7 +9,7 @@ Main conclusion: the core direction is correct, but the marketplace core is stil
 Critical issues before launch:
 
 - Public/buyer price response exposes `provider_cost`; buyers should not see internal cost. DONE
-- `/api/v1/services` and `/api/v1/countries` require JWT only, while `/api/v1/prices` allows JWT or API key. A real marketplace usually needs public catalog endpoints.
+- `/api/v1/services` and `/api/v1/countries` now accept buyer JWT, managed buyer API keys with `read` scope, and legacy buyer API keys. A real marketplace may still need separate public unauthenticated catalog endpoints later.
 - Order creation with external providers reserves provider number before wallet hold. If wallet hold fails, provider number is not cancelled. DONE
 - Supplier pool uses generated fake phone numbers instead of supplier-provided real numbers; current inventory is count-only. PARTIAL (supplier reservation callback supported; fake phone legacy/dev-only and blocked in production-like env)
 - Supplier inventory decrement and wallet hold are transactional for supplier pool, but external provider stock is not decremented locally.
@@ -138,11 +138,11 @@ What is mixed:
 | POST | `/auth/refresh` | `app/api/auth.py` | auth | Refresh access/refresh pair | Refresh tokens are stateless; no revocation table/session model. |
 | GET | `/auth/me` | `app/api/auth.py` | auth | Current user profile | OK. |
 | GET | `/api/v1/balance` | `app/api/api_v1.py` | buyer/API key | Return wallet balance/held balance | OK, but only current wallet, no transaction history endpoint. |
-| GET | `/api/v1/services` | `app/api/api_v1.py` | buyer JWT | Active services | Should probably be public or public catalog. API key is not accepted here while other buyer API endpoints accept it. |
-| GET | `/api/v1/countries` | `app/api/api_v1.py` | buyer JWT | Active countries | Same issue as services. |
+| GET | `/api/v1/services` | `app/api/api_v1.py` | buyer/API key | Active services | Managed buyer API keys require `read` scope; legacy buyer API keys work for compatibility. Public unauthenticated catalog may still be added later. |
+| GET | `/api/v1/countries` | `app/api/api_v1.py` | buyer/API key | Active countries | Managed buyer API keys require `read` scope; legacy buyer API keys work for compatibility. Public unauthenticated catalog may still be added later. |
 | GET | `/api/v1/prices` | `app/api/api_v1.py` | buyer/API key | List prices filtered by service/country | Buyer schema exposes `final_price`, not `provider_cost`. |
 | POST | `/api/v1/orders` | `app/api/api_v1.py` | buyer/API key | Buy/reserve number and hold wallet funds | Uses explicit transactional wrapper and optional `Idempotency-Key`; wallet hold happens before external provider reservation. |
-| GET | `/api/v1/orders` | `app/api/api_v1.py` | buyer JWT | List own orders | API key not accepted here, inconsistent with get order/create/cancel/finish. |
+| GET | `/api/v1/orders` | `app/api/api_v1.py` | buyer/API key | List own orders | Managed buyer API keys require `orders:read` scope; legacy buyer API keys work for compatibility. |
 | GET | `/api/v1/orders/{public_id}` | `app/api/api_v1.py` | buyer/API key | Fetch own order | Ownership enforced. |
 | POST | `/api/v1/orders/{public_id}/cancel` | `app/api/api_v1.py` | buyer/API key | Cancel order and refund hold | Idempotent for cancelled/expired/refunded. |
 | POST | `/api/v1/orders/{public_id}/finish` | `app/api/api_v1.py` | buyer/API key | Finish after SMS and capture hold | Idempotent for completed. |
@@ -193,7 +193,7 @@ What is mixed:
 Dangerous or wrongly exposed endpoints/fields:
 
 - `/api/v1/prices` no longer exposes `provider_cost`; buyer/admin price schemas are separated.
-- `/api/v1/services`, `/api/v1/countries`, `/api/v1/orders` list are JWT-only while other API endpoints accept API keys. This is inconsistent for developer API usage.
+- `/api/v1/services`, `/api/v1/countries`, and `/api/v1/orders` list accept buyer JWT and buyer API keys. Separate public unauthenticated catalog endpoints remain a later product/API decision.
 - `/admin/metrics` is admin-only, but its financial math is not production accounting.
 - Supplier endpoints are included in API request logging. DONE
 - `/internal/provider-webhooks/{provider_code}` exists as a skeleton, but does not process real provider webhook payloads yet.

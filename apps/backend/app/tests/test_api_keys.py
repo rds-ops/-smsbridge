@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models import ApiRequestLog, BuyerApiKey
+from app.models import ApiRequestLog, BuyerApiKey, Country, Service
 
 
 def _create_api_key(client, user_token: str, name: str = "local test", scopes: list[str] | None = None) -> dict:
@@ -213,6 +213,74 @@ def test_revoked_key_usage_visible_but_revoked_key_cannot_authenticate(client, u
 def test_jwt_buyer_access_still_works_without_api_key_scopes(client, user_token):
     response = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"})
     assert response.status_code == 200, response.text
+
+
+def test_jwt_buyer_can_read_catalog(client, user_token):
+    services = client.get("/api/v1/services", headers={"Authorization": f"Bearer {user_token}"})
+    countries = client.get("/api/v1/countries", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert services.status_code == 200, services.text
+    assert countries.status_code == 200, countries.text
+    assert any(row["code"] == "telegram" for row in services.json())
+    assert any(row["iso2"] == "ID" for row in countries.json())
+
+
+def test_managed_api_key_with_read_scope_can_read_catalog(client, user_token):
+    created = _create_api_key(client, user_token, scopes=["read"])
+
+    services = client.get("/api/v1/services", headers={"Authorization": f"Bearer {created['api_key']}"})
+    countries = client.get("/api/v1/countries", headers={"Authorization": f"Bearer {created['api_key']}"})
+
+    assert services.status_code == 200, services.text
+    assert countries.status_code == 200, countries.text
+    assert any(row["code"] == "telegram" for row in services.json())
+    assert any(row["iso2"] == "ID" for row in countries.json())
+
+
+def test_legacy_api_key_can_read_catalog(client, user_token):
+    legacy = client.post("/api/v1/api-key/regenerate", headers={"Authorization": f"Bearer {user_token}"})
+    assert legacy.status_code == 200, legacy.text
+
+    services = client.get("/api/v1/services", headers={"Authorization": f"Bearer {legacy.json()['api_key']}"})
+    countries = client.get("/api/v1/countries", headers={"Authorization": f"Bearer {legacy.json()['api_key']}"})
+
+    assert services.status_code == 200, services.text
+    assert countries.status_code == 200, countries.text
+
+
+def test_catalog_requires_valid_buyer_auth(client):
+    missing = client.get("/api/v1/services")
+    invalid = client.get("/api/v1/countries", headers={"Authorization": "Bearer invalid"})
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+
+
+def test_managed_api_key_without_read_scope_cannot_read_catalog(client, user_token):
+    created = _create_api_key(client, user_token, scopes=["wallet:read"])
+
+    services = client.get("/api/v1/services", headers={"Authorization": f"Bearer {created['api_key']}"})
+    countries = client.get("/api/v1/countries", headers={"Authorization": f"Bearer {created['api_key']}"})
+
+    assert services.status_code == 403
+    assert countries.status_code == 403
+    assert services.json()["detail"] == "API key scope is not allowed"
+    assert countries.json()["detail"] == "API key scope is not allowed"
+
+
+def test_catalog_returns_only_active_services_and_countries(client, user_token):
+    with SessionLocal() as db:
+        db.add(Service(code="inactive_test", name_en="Inactive", name_ru="Неактивный", is_active=False))
+        db.add(Country(iso2="ZZ", name_en="Inactive Country", name_ru="Неактивная страна", is_active=False))
+        db.commit()
+
+    services = client.get("/api/v1/services", headers={"Authorization": f"Bearer {user_token}"})
+    countries = client.get("/api/v1/countries", headers={"Authorization": f"Bearer {user_token}"})
+
+    assert services.status_code == 200, services.text
+    assert countries.status_code == 200, countries.text
+    assert all(row["code"] != "inactive_test" for row in services.json())
+    assert all(row["iso2"] != "ZZ" for row in countries.json())
 
 
 def test_managed_key_without_wallet_read_cannot_read_balance(client, user_token):
