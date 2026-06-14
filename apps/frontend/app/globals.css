@@ -2,14 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --muted: 214 32% 94%;
+  --muted-foreground: 215 16% 47%;
+  --border: 214 32% 89%;
+  --input: 214 32% 89%;
+  --ring: 217 91% 60%;
+  --primary: 217 91% 54%;
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: #f6f8fb;
-  color: #111827;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 input,
@@ -20,21 +38,21 @@ textarea {
 }
 
 .field {
-  @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100;
+  @apply w-full rounded-xl border border-input bg-white px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-blue-100;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .btn-primary {
-  @apply bg-accent text-white shadow-sm shadow-blue-100 hover:bg-blue-700;
+  @apply bg-primary text-primary-foreground shadow-sm shadow-blue-100 hover:bg-blue-700;
 }
 
 .btn-secondary {
-  @apply border-line bg-white text-ink hover:bg-panel;
+  @apply border-border bg-white text-foreground hover:bg-muted;
 }
 
 .panel {
-  @apply rounded-lg border border-line bg-white p-4 shadow-sm;
+  @apply rounded-2xl border border-border bg-white p-4 shadow-sm;
 }

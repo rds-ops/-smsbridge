@@ -21,7 +21,8 @@ export default function LoginPage() {
       const role = session.user && typeof session.user === "object" && "role" in session.user
         ? String((session.user as {role: unknown}).role)
         : "user";
-      router.push(role === "admin" ? "/admin" : "/dashboard");
+      const next = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null;
+      router.push(role === "admin" ? "/admin" : next || "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.loginFailed"));
     }

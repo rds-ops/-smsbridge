@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
+import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, CopyButton, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {createApiKey, getApiKeyUsage, listApiKeys, regenerateApiKey, revokeApiKey} from "@/lib/client/api";
 import {dateTime} from "@/lib/shared/format";
@@ -102,6 +103,7 @@ export default function ApiDocsPage() {
   }
 
   return (
+    <SmsMarketplace>
     <PageShell>
       <Toast type={toast.type} message={toast.message} />
       <PageHeader
@@ -300,5 +302,6 @@ print(order.json())`}</pre>
         </Card>
       </section>
     </PageShell>
+    </SmsMarketplace>
   );
 }

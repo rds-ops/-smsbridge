@@ -2,6 +2,7 @@
 
 import {useEffect, useMemo, useState} from "react";
 import Link from "next/link";
+import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, CopyButton, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {cancelOrder, finishOrder, getBalance, getOrder} from "@/lib/client/api";
 import {countdown, dateTime, money} from "@/lib/shared/format";
@@ -61,6 +62,7 @@ export default function OrderPage({params}: {params: {public_id: string}}) {
   void now;
 
   return (
+    <SmsMarketplace>
     <PageShell>
       <Toast type={toast.type} message={toast.message} />
       <PageHeader
@@ -128,6 +130,7 @@ export default function OrderPage({params}: {params: {public_id: string}}) {
         </div>
       </Card>
     </PageShell>
+    </SmsMarketplace>
   );
 }
 

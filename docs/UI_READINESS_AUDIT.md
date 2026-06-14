@@ -19,6 +19,8 @@ Task 56 update: admin API request logs now show explicit operational columns.
 Task 64 update: admin API request logs now support backend-side filters for request ID, identity fields, method, endpoint, status, limit and offset.
 Task 57 update: buyer manual_test deposit/payment intent creation and status visibility are now implemented at `/deposit`.
 Task 65 update: supplier-scoped transaction/reward history is now implemented at `/supplier`.
+Task UI-3 update: `/` is now marketplace-first, `/buy` reuses the same marketplace, the old buyer sidebar shell was removed, and unauthenticated buy opens an auth gate while preserving selection.
+Task UI-4 update: local shadcn/ui foundation components were added, the top navigation spacing was cleaned up, and buyer account routes now render inside the marketplace shell with the storefront visible.
 
 ## 1. Current Frontend Coverage
 
@@ -27,8 +29,13 @@ Task 65 update: supplier-scoped transaction/reward history is now implemented at
 Implemented:
 - Login/register/session handling.
 - Dashboard with balance, held balance, limits, active/completed order counts, recent orders.
+- Public `/` marketplace storefront with service/country/operator selection before login.
 - Buy flow using services, countries, prices, balance, and `POST /api/v1/orders`.
+- `/buy` reuses the same marketplace experience as `/` for backward compatibility.
+- `/orders`, `/orders/{public_id}`, `/deposit`, `/api-docs`, and `/settings` render beside the persistent marketplace storefront.
 - Buy flow sends an `Idempotency-Key` on order creation to reduce duplicate order risk on retries/double-clicks.
+- Unauthenticated marketplace buy opens an auth gate on the same page, preserves selected service/country/operator, and requires explicit post-login purchase confirmation.
+- Successful marketplace purchase shows inline order status with phone, SMS code/text, cancel/finish actions and full order-detail fallback link.
 - Order list with filters and cancel/finish actions.
 - Order detail with phone number, SMS code/text, balance refresh, cancel/finish actions.
 - Wallet transaction history on the dashboard from `GET /api/v1/wallet/transactions`.
@@ -41,6 +48,8 @@ Implemented:
 Partially implemented:
 - Order detail has a static four-step timeline, but it does not use durable `order_events`.
 - Payment/deposit UX supports local `manual_test` payment intent creation, but real payment provider UX is still deferred and completion remains admin-only.
+- Account utility pages now use top navigation instead of the old dashboard-style buyer sidebar.
+- shadcn/ui-compatible base components exist locally for button, card, input, dialog, badge, tabs, dropdown menu, sheet, separator and table. Further migration is incremental.
 
 ### Supplier UI
 

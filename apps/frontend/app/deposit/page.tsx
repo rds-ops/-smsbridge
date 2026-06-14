@@ -2,6 +2,7 @@
 
 import {useEffect, useState} from "react";
 import Link from "next/link";
+import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, CopyButton, EmptyState, LoadingState, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {createPaymentIntent, getPaymentIntent, listPaymentIntents} from "@/lib/client/api";
 import {dateTime, money} from "@/lib/shared/format";
@@ -112,6 +113,7 @@ export default function DepositPage() {
   }
 
   return (
+    <SmsMarketplace>
     <PageShell>
       <Toast type={toast.type} message={toast.message} />
       <PageHeader
@@ -243,6 +245,7 @@ export default function DepositPage() {
         )}
       </Card>
     </PageShell>
+    </SmsMarketplace>
   );
 }
 

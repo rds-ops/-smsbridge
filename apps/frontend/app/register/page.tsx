@@ -20,7 +20,8 @@ export default function RegisterPage() {
     try {
       setAppLocale(locale);
       await auth("/auth/register", {email, password, locale});
-      router.push("/dashboard");
+      const next = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null;
+      router.push(next || "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.registrationFailed"));
     }

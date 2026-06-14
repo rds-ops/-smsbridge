@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
+import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, PageHeader, PageShell, StatusBadge} from "@/components/shared/ui";
 import {getLimits} from "@/lib/client/api";
 import {currentUser, logout} from "@/lib/shared/api";
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   }
 
   return (
+    <SmsMarketplace>
     <PageShell>
       <PageHeader title={t("settings.title")} description={t("settings.description")} />
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
@@ -62,5 +64,6 @@ export default function SettingsPage() {
         </Card>
       </section>
     </PageShell>
+    </SmsMarketplace>
   );
 }

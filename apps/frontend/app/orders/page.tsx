@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
+import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {DataTable} from "@/components/shared/data-table";
 import {Alert, Card, CopyButton, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {cancelOrder, finishOrder, listOrders} from "@/lib/client/api";
@@ -59,6 +60,7 @@ export default function OrdersPage() {
   const countryOptions = useMemo(() => Array.from(new Set(orders.map((order) => order.country_iso2))).sort(), [orders]);
 
   return (
+    <SmsMarketplace>
     <PageShell wide>
       <Toast type={toast.type} message={toast.message} />
       <PageHeader
@@ -119,5 +121,6 @@ export default function OrdersPage() {
         />
       </section>
     </PageShell>
+    </SmsMarketplace>
   );
 }
