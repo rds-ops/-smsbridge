@@ -651,10 +651,10 @@ function AuthGateModal({locale, onClose, onLocaleChange, onSuccess}: {locale: Lo
           </DialogHeader>
           <Button onClick={onClose} size="sm" type="button" variant="secondary">×</Button>
         </div>
-        <Tabs className="mt-5">
+        <Tabs className="mt-5" value={mode} onValueChange={(value) => setMode(value as "login" | "register")}>
           <TabsList className="grid grid-cols-2">
-            <TabsTrigger active={mode === "login"} onClick={() => setMode("login")} type="button">{t("nav.login")}</TabsTrigger>
-            <TabsTrigger active={mode === "register"} onClick={() => setMode("register")} type="button">{t("nav.register")}</TabsTrigger>
+            <TabsTrigger value="login">{t("nav.login")}</TabsTrigger>
+            <TabsTrigger value="register">{t("nav.register")}</TabsTrigger>
           </TabsList>
         </Tabs>
         <form className="mt-5 grid gap-3" onSubmit={submit}>

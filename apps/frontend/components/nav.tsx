@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import {usePathname, useRouter} from "next/navigation";
-import {BookOpen, ClipboardList, LogOut, ShieldCheck, Truck, Wallet} from "lucide-react";
+import {BookOpen, ChevronDown, ClipboardList, LogOut, Settings, ShieldCheck, Truck, UserCircle, Wallet} from "lucide-react";
 import {useEffect, useState} from "react";
 import {LanguageSwitcher} from "@/components/shared/ui";
 import {Button} from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import {getBalance} from "@/lib/client/api";
 import {currentUser, getToken, logout} from "@/lib/shared/api";
 import {money} from "@/lib/shared/format";
@@ -82,60 +89,94 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
   const signedIn = Boolean(user);
   const linkClass = (href: string) => {
     const active = pathname === href || (href !== "/" && pathname.startsWith(href));
-    return `inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
+    return `inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
       active ? "bg-blue-50 text-accent" : "text-neutral-600 hover:bg-slate-50 hover:text-slate-950"
     }`;
   };
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
-      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-3 px-4 py-2.5 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4 lg:px-6">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-normal">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 lg:gap-4 lg:px-6">
+        <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-normal">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-sm font-bold text-white">sb</span>
             smsbridge
-          </Link>
-          <div className="lg:hidden"><LanguageSwitcher compact /></div>
-        </div>
+        </Link>
 
-        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto pb-1 lg:justify-center lg:pb-0">
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
           <Link className={linkClass("/")} href="/">{t("common.publicHome")}</Link>
           <Link className={linkClass("/orders")} href="/orders"><ClipboardList size={16} />{t("nav.orders")}</Link>
           <Link className={linkClass("/deposit")} href="/deposit"><Wallet size={16} />{t("nav.deposit")}</Link>
           <Link className={linkClass("/api-docs")} href="/api-docs"><BookOpen size={16} />{t("nav.api")}</Link>
-          <Link className={linkClass("/abuse")} href="/abuse">{t("nav.support")}</Link>
+          <Link className={`${linkClass("/abuse")} hidden xl:inline-flex`} href="/abuse">{t("nav.support")}</Link>
         </nav>
 
-        <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 overflow-x-auto lg:overflow-visible">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">
           {signedIn ? (
             <>
-              <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs sm:text-sm">
+              <div className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs sm:flex sm:text-sm">
                 <Wallet size={15} className="text-accent" />
-                <span className="hidden text-neutral-500 xl:inline">{t("common.availableBalance")}</span>
                 <strong>{money(balance?.balance, balance?.currency)}</strong>
               </div>
-              <Link className={`${linkClass("/settings")} max-w-[150px] truncate`} href="/settings" title={user?.email || undefined}>{user?.email}</Link>
-              <div className="hidden lg:block"><LanguageSwitcher compact /></div>
-              {user?.role === "admin" && <Link className="btn btn-secondary shrink-0 px-2.5 py-1.5 text-sm" href="/admin"><ShieldCheck size={15} />{t("nav.admin")}</Link>}
-              <Link className="btn btn-secondary shrink-0 px-2.5 py-1.5 text-sm" href="/supplier"><Truck size={15} />{t("nav.supplier")}</Link>
-              <Button className="shrink-0 px-2.5 py-1.5 text-sm" onClick={logout} variant="secondary">
-                <LogOut size={15} />
-                {t("nav.logout")}
-              </Button>
+              <div className="hidden sm:block"><LanguageSwitcher compact /></div>
+              <AccountMenu user={user} />
             </>
           ) : (
             <>
-              <Link className="btn btn-secondary" href="/login">{t("nav.login")}</Link>
-              <Link className="btn btn-primary" href="/register">{t("nav.register")}</Link>
-              <Link className="hidden shrink-0 items-center gap-1.5 rounded-xl border border-border bg-white px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted sm:inline-flex" href="/supplier">
+              <div className="hidden sm:block"><LanguageSwitcher compact /></div>
+              <Button asChild size="sm" variant="secondary">
+                <Link href="/login">{t("nav.login")}</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/register">{t("nav.register")}</Link>
+              </Button>
+              <Button asChild className="hidden lg:inline-flex" size="sm" variant="outline">
+                <Link href="/supplier">
                 <Truck size={15} />
                 {t("nav.supplier")}
-              </Link>
-              <div className="hidden lg:block"><LanguageSwitcher compact /></div>
+                </Link>
+              </Button>
             </>
           )}
         </div>
       </div>
     </header>
+  );
+}
+
+function AccountMenu({user}: {user: User | null}) {
+  const {t} = useTranslation();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button className="shrink-0 px-2.5" size="sm" variant="secondary">
+          <UserCircle size={16} />
+          <span className="hidden max-w-28 truncate lg:inline" title={user?.email || undefined}>{user?.email}</span>
+          <ChevronDown size={14} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <div className="px-2 py-1.5">
+          <p className="text-xs text-muted-foreground">{t("settings.account")}</p>
+          <p className="truncate text-sm font-medium" title={user?.email || undefined}>{user?.email}</p>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/settings"><Settings size={15} />{t("nav.settings")}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/supplier"><Truck size={15} />{t("nav.supplier")}</Link>
+        </DropdownMenuItem>
+        {user?.role === "admin" && (
+          <DropdownMenuItem asChild>
+            <Link href="/admin"><ShieldCheck size={15} />{t("nav.admin")}</Link>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={logout}>
+          <LogOut size={15} />{t("nav.logout")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
