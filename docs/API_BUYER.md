@@ -147,6 +147,31 @@ Response fields:
 - `expires_at`
 - `created_at`
 
+`GET /api/v1/payment-intents`
+
+- Lists only the authenticated user's own payment intents.
+- Newest first.
+- Does not expose internal numeric IDs, provider references, idempotency hashes, webhook fields, metadata, or admin-only fields.
+
+Query params:
+- `limit` (default 50, max 100)
+- `offset` (default 0)
+
+Response item fields:
+- `public_id`
+- `provider`
+- `currency`
+- `amount`
+- `status`
+- `expires_at`
+- `created_at`
+
+Example:
+```bash
+curl -sS "$BASE_URL/api/v1/payment-intents?limit=50&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## Wallet / Balance
 
 `GET /api/v1/balance`

@@ -18,6 +18,13 @@ export function getPaymentIntent(publicId: string) {
   return apiFetch<PaymentIntent>(`/api/v1/payment-intents/${publicId}`);
 }
 
+export function listPaymentIntents(params: {limit?: number; offset?: number} = {}) {
+  const query = new URLSearchParams();
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  return apiFetch<PaymentIntent[]>(`/api/v1/payment-intents?${query}`);
+}
+
 export function getLimits() {
   return apiFetch<UserLimit>("/api/v1/limits");
 }
@@ -80,4 +87,3 @@ export function revokeApiKey(publicId: string) {
 export function getApiKeyUsage(publicId: string) {
   return apiFetch<BuyerApiKeyUsage>(`/api/v1/api-keys/${publicId}/usage`);
 }
-

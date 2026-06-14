@@ -111,6 +111,18 @@ def get_user_payment_intent(db: Session, *, user: User, public_id: str) -> Payme
     return intent
 
 
+def list_user_payment_intents(db: Session, *, user: User, limit: int, offset: int) -> list[PaymentIntent]:
+    return list(
+        db.scalars(
+            select(PaymentIntent)
+            .where(PaymentIntent.user_id == user.id)
+            .order_by(PaymentIntent.created_at.desc(), PaymentIntent.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+
+
 def payment_webhook_payload_hash(payload: dict[str, Any]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

@@ -264,7 +264,15 @@ export const translations: Record<Locale, TranslationTree> = {
       noIntent: "No payment intent selected yet.",
       publicIdRequired: "Payment intent public_id is required.",
       lookupFailed: "Could not load payment intent.",
-      adminCompleteHint: "Admin completion remains admin-only. Buyers cannot complete or credit payment intents from this page."
+      adminCompleteHint: "Admin completion remains admin-only. Buyers cannot complete or credit payment intents from this page.",
+      historyTitle: "Deposit history",
+      historyDesc: "Your recent payment intents. This list is scoped to your buyer account only.",
+      historyHelper: "Use this history to check local manual_test deposit requests and copy a public_id for support.",
+      loadingHistory: "Loading deposit history...",
+      historyFailed: "Could not load deposit history.",
+      noHistory: "No deposit intents yet.",
+      noHistoryDesc: "Create a manual_test payment intent to see it here.",
+      loadMoreHistory: "Load more"
     },
     orders: {
       title: "Orders",
@@ -1203,7 +1211,15 @@ export const translations: Record<Locale, TranslationTree> = {
       noIntent: "No payment intent selected yet.",
       publicIdRequired: "Payment intent public_id is required.",
       lookupFailed: "Could not load payment intent.",
-      adminCompleteHint: "Admin completion remains admin-only. Buyers cannot complete or credit payment intents from this page."
+      adminCompleteHint: "Admin completion remains admin-only. Buyers cannot complete or credit payment intents from this page.",
+      historyTitle: "История депозитов",
+      historyDesc: "Ваши последние payment intents. Список ограничен только вашим buyer-аккаунтом.",
+      historyHelper: "Используйте историю, чтобы проверить local manual_test заявки и скопировать public_id для поддержки.",
+      loadingHistory: "Загружаем историю депозитов...",
+      historyFailed: "Не удалось загрузить историю депозитов.",
+      noHistory: "Депозитных intents пока нет.",
+      noHistoryDesc: "Создайте manual_test payment intent, чтобы он появился здесь.",
+      loadMoreHistory: "Загрузить еще"
     }
   }
 };

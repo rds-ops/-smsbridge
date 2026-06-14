@@ -30,6 +30,7 @@ Implemented:
 - Order detail with phone number, SMS code/text, balance refresh, cancel/finish actions.
 - Wallet transaction history on the dashboard from `GET /api/v1/wallet/transactions`.
 - Buyer manual_test deposit/payment intent creation and status visibility at `/deposit`.
+- Buyer payment intent history/list on `/deposit` from `GET /api/v1/payment-intents`.
 - Managed API key list/create/revoke/scopes/usage on `/api-docs`.
 - Legacy API key regeneration on `/api-docs` through `POST /api/v1/api-key/regenerate`.
 - Static API examples for balance/prices/orders.
@@ -157,7 +158,7 @@ It is closer to closed-beta readiness after the operations/admin and supplier ca
 
 1. Admin operations are still the largest gap. The admin UI now has ops summary, risk actions, payment intent manual completion, supplier payout operations, retries, reconciliation, and cleanup dry-run visibility, but request ID filtering and supplier reservation configuration are still missing.
 
-2. Buyer accounting transparency is improved with wallet transaction history and manual_test payment intent creation/status visibility. Real payment provider UX is still deferred, and manual completion remains admin-only.
+2. Buyer accounting transparency is improved with wallet transaction history, manual_test payment intent creation/status visibility, and buyer payment intent history on `/deposit`. Real payment provider UX is still deferred, and manual completion remains admin-only.
 
 3. API key management now supports managed keys, scopes, revocation and usage, while the legacy regenerate endpoint remains for compatibility.
 

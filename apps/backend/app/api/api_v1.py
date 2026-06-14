@@ -231,6 +231,16 @@ def create_payment_intent(
     return intent
 
 
+@router.get("/payment-intents", response_model=list[PaymentIntentOut])
+def list_payment_intents(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_buyer_scope("payments:read")),
+):
+    return payment_intent_service.list_user_payment_intents(db, user=user, limit=limit, offset=offset)
+
+
 @router.get("/payment-intents/{public_id}", response_model=PaymentIntentOut)
 def get_payment_intent(
     public_id: str,
@@ -238,4 +248,3 @@ def get_payment_intent(
     user: User = Depends(require_buyer_scope("payments:read")),
 ):
     return payment_intent_service.get_user_payment_intent(db, user=user, public_id=public_id)
-
