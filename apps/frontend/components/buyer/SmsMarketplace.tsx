@@ -2,14 +2,11 @@
 
 import {useEffect, useMemo, useRef, useState} from "react";
 import Link from "next/link";
-import {ArrowRight, Code2, Loader2, Search, ShieldCheck, Wallet} from "lucide-react";
+import {ArrowDown, ArrowRight, CheckCircle2, Code2, Loader2, MapPin, Radio, RotateCcw, Search, ShieldCheck, Sparkles, Wallet} from "lucide-react";
+import {AuthModal} from "@/components/shared/auth-modal";
 import {Alert, CopyButton, EmptyState, StatusBadge, Toast} from "@/components/shared/ui";
-import {Button} from "@/components/ui/button";
-import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from "@/components/ui/dialog";
-import {Input} from "@/components/ui/input";
-import {Tabs, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {cancelOrder, createOrder, finishOrder, getBalance, getCountries, getOrder, getPrices, getServices} from "@/lib/client/api";
-import {auth, currentUser, getToken} from "@/lib/shared/api";
+import {currentUser, getToken} from "@/lib/shared/api";
 import {countdown, money, percent} from "@/lib/shared/format";
 import type {Country, Order, Price, Service, User, Wallet as WalletType} from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
@@ -24,7 +21,16 @@ const previewServices: Service[] = [
   {code: "google", name_en: "Google", name_ru: "Google", category: "identity", is_active: true},
   {code: "facebook", name_en: "Facebook", name_ru: "Facebook", category: "social", is_active: true},
   {code: "amazon", name_en: "Amazon", name_ru: "Amazon", category: "commerce", is_active: true},
-  {code: "openai", name_en: "OpenAI", name_ru: "OpenAI", category: "developer", is_active: true}
+  {code: "openai", name_en: "OpenAI", name_ru: "OpenAI", category: "developer", is_active: true},
+  {code: "instagram", name_en: "Instagram", name_ru: "Instagram", category: "social", is_active: true},
+  {code: "tiktok", name_en: "TikTok", name_ru: "TikTok", category: "social", is_active: true},
+  {code: "discord", name_en: "Discord", name_ru: "Discord", category: "developer", is_active: true},
+  {code: "apple", name_en: "Apple", name_ru: "Apple", category: "identity", is_active: true},
+  {code: "microsoft", name_en: "Microsoft", name_ru: "Microsoft", category: "identity", is_active: true},
+  {code: "steam", name_en: "Steam", name_ru: "Steam", category: "gaming", is_active: true},
+  {code: "uber", name_en: "Uber", name_ru: "Uber", category: "mobility", is_active: true},
+  {code: "binance", name_en: "Binance", name_ru: "Binance", category: "finance", is_active: true},
+  {code: "netflix", name_en: "Netflix", name_ru: "Netflix", category: "media", is_active: true}
 ];
 
 const previewCountries: Country[] = [
@@ -34,7 +40,16 @@ const previewCountries: Country[] = [
   {iso2: "KZ", name_en: "Kazakhstan", name_ru: "Казахстан", is_active: true},
   {iso2: "PH", name_en: "Philippines", name_ru: "Филиппины", is_active: true},
   {iso2: "UZ", name_en: "Uzbekistan", name_ru: "Узбекистан", is_active: true},
-  {iso2: "MX", name_en: "Mexico", name_ru: "Мексика", is_active: true}
+  {iso2: "MX", name_en: "Mexico", name_ru: "Мексика", is_active: true},
+  {iso2: "US", name_en: "United States", name_ru: "США", is_active: true},
+  {iso2: "CA", name_en: "Canada", name_ru: "Канада", is_active: true},
+  {iso2: "DE", name_en: "Germany", name_ru: "Германия", is_active: true},
+  {iso2: "FR", name_en: "France", name_ru: "Франция", is_active: true},
+  {iso2: "GB", name_en: "United Kingdom", name_ru: "Великобритания", is_active: true},
+  {iso2: "TR", name_en: "Turkey", name_ru: "Турция", is_active: true},
+  {iso2: "VN", name_en: "Vietnam", name_ru: "Вьетнам", is_active: true},
+  {iso2: "TH", name_en: "Thailand", name_ru: "Таиланд", is_active: true},
+  {iso2: "MY", name_en: "Malaysia", name_ru: "Малайзия", is_active: true}
 ];
 
 const previewPrices: Price[] = previewServices.flatMap((service, serviceIndex) => (
@@ -64,8 +79,10 @@ type PickerRow = {
   price?: string | null;
 };
 
+type FunnelStep = "service" | "country" | "offer" | "review";
+
 export function SmsMarketplace({children}: {children?: React.ReactNode}) {
-  const {t, locale, setLocale} = useTranslation();
+  const {t, locale} = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [services, setServices] = useState<Service[]>(previewServices);
   const [countries, setCountries] = useState<Country[]>(previewCountries);
@@ -78,6 +95,7 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
   const [countrySearch, setCountrySearch] = useState("");
   const [showAllServices, setShowAllServices] = useState(false);
   const [showAllCountries, setShowAllCountries] = useState(false);
+  const [openStep, setOpenStep] = useState<FunnelStep>("service");
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
   const [error, setError] = useState("");
@@ -175,8 +193,6 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
     return selectedPrices.find((price) => !price.operator || price.operator === "any") || selectedPrices[0];
   }, [operator, selectedPrices]);
 
-  const serviceName = nameForService(services, service, locale);
-  const countryName = nameForCountry(countries, country, locale);
   const hasPrice = Boolean(selected);
   const availableBalance = Number(balance?.balance || 0);
   const requiredPrice = Number(selected?.final_price || 0);
@@ -184,6 +200,27 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
   const canBuy = Boolean(hasPrice && hasFunds && !buying && !loading);
   const filteredServices = filterRows(serviceRows, serviceSearch);
   const filteredCountries = filterRows(countryRows, countrySearch);
+  const selectedServiceRow = serviceRows.find((row) => row.code === service) || serviceRows[0];
+  const selectedCountryRow = countryRows.find((row) => row.code === country) || countryRows[0];
+  const offerOptions = selectedPrices.length ? selectedPrices : selected ? [selected] : [];
+  const selectedOfferId = offerId(selected);
+
+  function selectService(code: string) {
+    setService(code);
+    setServiceSearch("");
+    setOpenStep("country");
+  }
+
+  function selectCountry(code: string) {
+    setCountry(code);
+    setCountrySearch("");
+    setOpenStep("offer");
+  }
+
+  function selectOffer(priceRow: Price) {
+    setOperator(priceRow.operator && priceRow.operator !== "any" ? priceRow.operator : "");
+    setOpenStep("review");
+  }
 
   async function buy() {
     if (!user) {
@@ -250,17 +287,23 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
           loading={loading}
           onBuy={buy}
           onCountrySearch={setCountrySearch}
-          onSelectCountry={setCountry}
-          onSelectService={setService}
+          onOpenStep={setOpenStep}
+          onSelectCountry={selectCountry}
+          onSelectOffer={selectOffer}
+          onSelectService={selectService}
           onServiceSearch={setServiceSearch}
           onShowAllCountries={() => setShowAllCountries(true)}
           onShowAllServices={() => setShowAllServices(true)}
+          openStep={openStep}
           operator={operator}
+          offerOptions={offerOptions}
           price={selected}
           service={service}
+          selectedCountryRow={selectedCountryRow}
+          selectedOfferId={selectedOfferId}
+          selectedServiceRow={selectedServiceRow}
           serviceRows={showAllServices ? filteredServices : filteredServices.slice(0, visibleLimit)}
           serviceSearch={serviceSearch}
-          setOperator={setOperator}
           showAllCountries={showAllCountries}
           showAllServices={showAllServices}
           user={user}
@@ -278,26 +321,21 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
             <div className="min-w-0">{children}</div>
           ) : (
             <MarketplaceHomeContent
-              canBuy={canBuy}
-              countryName={countryName}
+              canBuy={canBuy && openStep === "review"}
               hasFunds={hasFunds}
               hasPrice={hasPrice}
               onBuy={buy}
-              price={selected}
-              serviceName={serviceName}
               user={user}
             />
           )}
         </section>
       </div>
-      {authOpen && (
-        <AuthGateModal
-          locale={locale}
-          onClose={() => setAuthOpen(false)}
-          onLocaleChange={setLocale}
-          onSuccess={handleAuthSuccess}
-        />
-      )}
+      <AuthModal
+        initialMode="login"
+        onClose={() => setAuthOpen(false)}
+        onSuccess={handleAuthSuccess}
+        open={authOpen}
+      />
     </div>
   );
 }
@@ -316,17 +354,23 @@ function MarketplaceStorefront({
   loading,
   onBuy,
   onCountrySearch,
+  onOpenStep,
   onSelectCountry,
+  onSelectOffer,
   onSelectService,
   onServiceSearch,
   onShowAllCountries,
   onShowAllServices,
+  openStep,
   operator,
+  offerOptions,
   price,
   service,
+  selectedCountryRow,
+  selectedOfferId,
+  selectedServiceRow,
   serviceRows,
   serviceSearch,
-  setOperator,
   showAllCountries,
   showAllServices,
   user
@@ -344,17 +388,23 @@ function MarketplaceStorefront({
   loading: boolean;
   onBuy: () => void;
   onCountrySearch: (value: string) => void;
+  onOpenStep: (step: FunnelStep) => void;
   onSelectCountry: (value: string) => void;
+  onSelectOffer: (price: Price) => void;
   onSelectService: (value: string) => void;
   onServiceSearch: (value: string) => void;
   onShowAllCountries: () => void;
   onShowAllServices: () => void;
+  openStep: FunnelStep;
   operator: string;
+  offerOptions: Price[];
   price?: Price;
   service: string;
+  selectedCountryRow?: PickerRow;
+  selectedOfferId: string;
+  selectedServiceRow?: PickerRow;
   serviceRows: PickerRow[];
   serviceSearch: string;
-  setOperator: (value: string) => void;
   showAllCountries: boolean;
   showAllServices: boolean;
   user: User | null;
@@ -365,49 +415,84 @@ function MarketplaceStorefront({
       <div className="rounded-2xl bg-gradient-to-r from-blue-50 via-cyan-50 to-sky-50 px-4 py-3 text-center text-sm font-semibold text-accent ring-1 ring-cyan-100">
         {t("buy.activations")}
       </div>
-      <PickerBlock
-        count={filteredServiceCount}
-        heading={t("buy.serviceHeading")}
-        loading={loading}
-        onSearch={onServiceSearch}
-        onSelect={onSelectService}
-        onShowAll={onShowAllServices}
-        placeholder={t("buy.searchService")}
-        rows={serviceRows}
-        search={serviceSearch}
-        selected={service}
-        showAll={showAllServices}
-        showAllLabel={t("buy.showAllServices")}
-      />
-      <PickerBlock
-        count={filteredCountryCount}
-        heading={t("buy.countryHeading")}
-        loading={loading}
-        onSearch={onCountrySearch}
-        onSelect={onSelectCountry}
-        onShowAll={onShowAllCountries}
-        placeholder={t("buy.searchCountry")}
-        rows={countryRows}
-        search={countrySearch}
-        selected={country}
-        showAll={showAllCountries}
-        showAllLabel={t("buy.showAllCountries")}
-      />
-      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white hover:shadow-sm">
-        <label className="grid gap-1 text-sm font-medium">
-          {t("common.operator")} <span className="font-normal text-neutral-500">{t("common.optional")}</span>
-          <input className="field" value={operator} onChange={(event) => setOperator(event.target.value)} placeholder={t("buy.leaveEmpty")} />
-        </label>
-      </div>
+      <StepPanel active={openStep === "service"} done={openStep !== "service"} number={1} title={t("buy.serviceStepTitle")}>
+        {openStep === "service" ? (
+          <PickerBlock
+            count={filteredServiceCount}
+            loading={loading}
+            onSearch={onServiceSearch}
+            onSelect={onSelectService}
+            onShowAll={onShowAllServices}
+            placeholder={t("buy.searchService")}
+            rows={serviceRows}
+            search={serviceSearch}
+            selected={service}
+            showAll={showAllServices}
+            showAllLabel={t("buy.showAllServices")}
+          />
+        ) : selectedServiceRow ? (
+          <SelectedPickerRow onChange={() => onOpenStep("service")} row={selectedServiceRow} />
+        ) : null}
+      </StepPanel>
+
+      <StepPanel active={openStep === "country"} done={["offer", "review"].includes(openStep)} number={2} title={t("buy.countryStepTitle")}>
+        {openStep === "service" ? (
+          <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.completePreviousStep")}</p>
+        ) : openStep === "country" ? (
+          <PickerBlock
+            count={filteredCountryCount}
+            loading={loading}
+            onSearch={onCountrySearch}
+            onSelect={onSelectCountry}
+            onShowAll={onShowAllCountries}
+            placeholder={t("buy.searchCountry")}
+            rows={countryRows}
+            search={countrySearch}
+            selected={country}
+            showAll={showAllCountries}
+            showAllLabel={t("buy.showAllCountries")}
+          />
+        ) : selectedCountryRow ? (
+          <SelectedPickerRow onChange={() => onOpenStep("country")} row={selectedCountryRow} />
+        ) : (
+          <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.completePreviousStep")}</p>
+        )}
+      </StepPanel>
+
+      <StepPanel active={openStep === "offer"} done={openStep === "review"} number={3} title={t("buy.offerStepTitle")}>
+        {["service", "country"].includes(openStep) ? (
+          <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.completePreviousStep")}</p>
+        ) : openStep === "offer" ? (
+          <OfferPicker
+            loading={loading}
+            onSelect={onSelectOffer}
+            options={offerOptions}
+            selectedOfferId={selectedOfferId}
+          />
+        ) : price ? (
+          <SelectedOfferRow onChange={() => onOpenStep("offer")} price={price} />
+        ) : (
+          <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.noPrice")}</p>
+        )}
+      </StepPanel>
+
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/60">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-cyan-50 text-xs font-semibold text-accent ring-1 ring-cyan-100">4</span>
+          <h2 className="text-sm font-semibold text-slate-950">{t("buy.reviewStepTitle")}</h2>
+        </div>
+        <SummaryRow label={t("common.service")} value={selectedServiceRow?.name || service} />
+        <SummaryRow label={t("common.country")} value={selectedCountryRow?.name || country} />
+        <SummaryRow label={t("common.operator")} value={operator || price?.operator || t("common.any")} />
         <SummaryRow label={t("common.price")} value={hasPrice ? money(price?.final_price) : "-"} strong />
         <SummaryRow label={t("common.availability")} value={price?.available_count ?? "-"} />
         <SummaryRow label={t("common.deliveryRate")} value={price ? percent(price.delivery_rate) : "-"} />
         {user && <SummaryRow label={t("common.availableBalance")} value={money(balance?.balance, balance?.currency)} />}
+        <p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-neutral-600">{t("buy.refundNote")}</p>
         {!hasPrice && <p className="mt-3 text-xs leading-5 text-red-700">{t("buy.noPrice")}</p>}
         {user && hasPrice && !hasFunds && <p className="mt-3 text-xs leading-5 text-red-700">{t("buy.insufficient")}</p>}
         {!user && <p className="mt-3 text-xs leading-5 text-neutral-500">{t("buy.previewNotice")}</p>}
-        <button className="btn btn-primary mt-4 w-full" disabled={user ? !canBuy : !hasPrice} onClick={onBuy}>
+        <button className="btn btn-primary mt-4 w-full" disabled={user ? !canBuy : !hasPrice || openStep !== "review"} onClick={onBuy}>
           {buying ? <Loader2 size={16} className="animate-spin" /> : null}
           {!user ? t("buy.signInToBuy") : buying ? t("buy.creating") : t("buy.buyButton")}
         </button>
@@ -416,9 +501,28 @@ function MarketplaceStorefront({
   );
 }
 
+function StepPanel({active, children, done, number, title}: {active: boolean; children: React.ReactNode; done: boolean; number: number; title: string}) {
+  return (
+    <section className={`mt-4 rounded-2xl border p-3 transition-all duration-200 ${
+      active
+        ? "border-cyan-200 bg-white shadow-md shadow-cyan-100/50 ring-1 ring-cyan-100"
+        : done
+          ? "border-slate-200 bg-slate-50/80"
+          : "border-slate-200 bg-white"
+    }`}>
+      <div className="mb-3 flex items-center gap-2">
+        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${
+          done ? "bg-cyan-50 text-accent ring-1 ring-cyan-100" : active ? "bg-accent text-white" : "bg-slate-100 text-slate-600"
+        }`}>{done ? <CheckCircle2 size={14} /> : number}</span>
+        <h2 className="min-w-0 truncate text-sm font-semibold text-slate-950">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function PickerBlock({
   count,
-  heading,
   loading,
   onSearch,
   onSelect,
@@ -431,7 +535,6 @@ function PickerBlock({
   showAllLabel
 }: {
   count: number;
-  heading: string;
   loading: boolean;
   onSearch: (value: string) => void;
   onSelect: (value: string) => void;
@@ -445,20 +548,19 @@ function PickerBlock({
 }) {
   const {t} = useTranslation();
   return (
-    <div className="mt-5">
-      <h2 className="text-sm font-semibold text-slate-950">{heading}</h2>
-      <label className="relative mt-3 block">
-        <Search className="pointer-events-none absolute left-3 top-2.5 text-neutral-400" size={15} />
-        <input className="field pl-9" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
+    <div>
+      <label className="relative block">
+        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+        <input className="field min-h-10 pl-10" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
       </label>
       <div className="mt-2 grid gap-1.5">
         {loading ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-neutral-500">{t("common.loading")}</div>
         ) : rows.length ? rows.map((row) => (
           <button
-            className={`group flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all duration-200 ${
+            className={`group flex min-h-[3.35rem] items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all duration-200 ${
               selected === row.code
-                ? "border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white text-slate-950 shadow-md shadow-cyan-100/70 ring-1 ring-cyan-100"
+                ? "border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white text-slate-950 shadow-md shadow-cyan-100/70 ring-1 ring-cyan-100 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
                 : "border-transparent bg-white hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-200/70"
             }`}
             key={row.code}
@@ -472,7 +574,7 @@ function PickerBlock({
               <span className="block truncate text-sm font-semibold">{row.name}</span>
               <span className="block text-xs text-neutral-500">{row.count.toLocaleString()} {t("buy.availableShort")}</span>
             </span>
-            <span className="text-xs font-semibold text-accent transition-colors group-hover:text-blue-700">{row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
+            <span className="min-w-[5.5rem] text-right text-xs font-semibold text-accent transition-colors group-hover:text-blue-700">{row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
           </button>
         )) : (
           <EmptyState title={t("common.noRowsFound")} />
@@ -487,29 +589,101 @@ function PickerBlock({
   );
 }
 
+function SelectedPickerRow({onChange, row}: {onChange: () => void; row: PickerRow}) {
+  const {t} = useTranslation();
+  return (
+    <button
+      className="group flex min-h-[3.35rem] w-full items-center gap-3 rounded-xl border border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white px-3 py-2 text-left shadow-sm ring-1 ring-cyan-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-cyan-100/70 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
+      onClick={onChange}
+      type="button"
+    >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-semibold text-accent shadow-sm ring-1 ring-cyan-100">{row.badge}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-slate-950">{row.name}</span>
+        <span className="block truncate text-xs text-neutral-500">{row.count.toLocaleString()} {t("buy.availableShort")} · {row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
+      </span>
+      <span className="shrink-0 rounded-lg border border-cyan-100 bg-white px-2 py-1 text-xs font-semibold text-accent transition-colors group-hover:bg-cyan-50">
+        {t("buy.change")}
+      </span>
+    </button>
+  );
+}
+
+function OfferPicker({loading, onSelect, options, selectedOfferId}: {loading: boolean; onSelect: (price: Price) => void; options: Price[]; selectedOfferId: string}) {
+  const {t} = useTranslation();
+  if (loading) return <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-neutral-500">{t("common.loading")}</div>;
+  if (!options.length) return <EmptyState title={t("buy.noPrice")} />;
+  return (
+    <div className="grid gap-2">
+      {options.map((option) => {
+        const id = offerId(option);
+        const selected = id === selectedOfferId;
+        return (
+          <button
+            className={`rounded-xl border p-3 text-left transition-all duration-200 ${
+              selected
+                ? "border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white shadow-sm ring-1 ring-cyan-100 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
+                : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-slate-50 hover:shadow-md"
+            }`}
+            key={id}
+            onClick={() => onSelect(option)}
+            type="button"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2">
+                <Radio size={15} className="shrink-0 text-accent" />
+                <span className="truncate text-sm font-semibold text-slate-950">{option.operator || t("buy.anyOperator")}</span>
+              </span>
+              <span className="shrink-0 text-sm font-semibold text-accent">{money(option.final_price)}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-500">
+              <span>{option.available_count} {t("buy.availableShort")}</span>
+              <span>{percent(option.delivery_rate)}</span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SelectedOfferRow({onChange, price}: {onChange: () => void; price: Price}) {
+  const {t} = useTranslation();
+  return (
+    <button
+      className="group w-full rounded-xl border border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white p-3 text-left shadow-sm ring-1 ring-cyan-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-cyan-100/70 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
+      onClick={onChange}
+      type="button"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <Radio size={15} className="shrink-0 text-accent" />
+          <span className="truncate text-sm font-semibold text-slate-950">{price.operator || t("buy.anyOperator")}</span>
+        </span>
+        <span className="shrink-0 rounded-lg border border-cyan-100 bg-white px-2 py-1 text-xs font-semibold text-accent">{t("buy.change")}</span>
+      </div>
+      <p className="mt-2 text-xs text-neutral-500">{money(price.final_price)} · {price.available_count} {t("buy.availableShort")} · {percent(price.delivery_rate)}</p>
+    </button>
+  );
+}
+
 function MarketplaceHomeContent({
   canBuy,
-  countryName,
   hasFunds,
   hasPrice,
   onBuy,
-  price,
-  serviceName,
   user
 }: {
   canBuy: boolean;
-  countryName: string;
   hasFunds: boolean;
   hasPrice: boolean;
   onBuy: () => void;
-  price?: Price;
-  serviceName: string;
   user: User | null;
 }) {
   const {t} = useTranslation();
   return (
     <>
-      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(239,246,255,0.9)_46%,rgba(236,254,255,0.72)_100%)] p-6 shadow-[0_22px_70px_rgba(14,116,144,0.12)] backdrop-blur md:p-9">
+      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(239,246,255,0.9)_46%,rgba(236,254,255,0.72)_100%)] p-6 shadow-[0_22px_70px_rgba(14,116,144,0.12)] backdrop-blur transition-all duration-300 dark:border-cyan-900/40 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.96)_0%,rgba(8,47,73,0.88)_52%,rgba(2,6,23,0.96)_100%)] dark:shadow-cyan-950/30 md:p-9">
         <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-200/30 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 right-10 h-40 w-40 rounded-full bg-blue-300/20 blur-2xl" />
         <div className="relative max-w-3xl">
@@ -526,51 +700,78 @@ function MarketplaceHomeContent({
           {user && hasPrice && !hasFunds && <div className="mt-5"><Alert type="error">{t("buy.insufficient")}</Alert></div>}
         </div>
       </section>
-      <section className="grid gap-5 lg:grid-cols-[1fr_300px]">
-        <SelectedOfferCard countryName={countryName} price={price} serviceName={serviceName} />
-        <div className="grid gap-3">
-          <InfoCard icon={<ShieldCheck size={18} />} label={t("buy.refundPolicy")} value={t("buy.refundPolicyValue")} />
-          <InfoCard icon={<Wallet size={18} />} label={t("buy.marketplaceMode")} value={t("buy.marketplaceModeValue")} />
-          <InfoCard icon={<Code2 size={18} />} label={t("buy.developerHint")} value={t("buy.developerHintValue")} />
-        </div>
-      </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70">
-        <h2 className="text-lg font-semibold">{t("buy.howItWorks")}</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          {[t("buy.stepChoose"), t("buy.stepBuy"), t("buy.stepReceive"), t("buy.stepFinish")].map((step, index) => (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50" key={step}>
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-white text-xs font-semibold text-accent ring-1 ring-slate-200">{index + 1}</span>
-              <p className="mt-3 text-sm font-medium text-slate-900">{step}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <PrinciplesRow />
+      <PurchaseRoadmap />
     </>
   );
 }
 
-function SelectedOfferCard({countryName, price, serviceName}: {countryName: string; price?: Price; serviceName: string}) {
+function PrinciplesRow() {
   const {t} = useTranslation();
-  const rows = [
-    [t("common.service"), serviceName],
-    [t("common.country"), countryName],
-    [t("common.operator"), price?.operator || t("common.any")],
-    [t("common.price"), price ? money(price.final_price) : "-"],
-    [t("common.availability"), price?.available_count ?? "-"],
-    [t("common.deliveryRate"), price ? percent(price.delivery_rate) : "-"]
+  const items = [
+    {icon: <Sparkles size={16} />, label: t("buy.principleFast")},
+    {icon: <RotateCcw size={16} />, label: t("buy.principleRefund")},
+    {icon: <Code2 size={16} />, label: t("buy.principleApi")},
+    {icon: <Wallet size={16} />, label: t("buy.principleSupplier")},
+    {icon: <ShieldCheck size={16} />, label: t("buy.principleCompliance")}
   ];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70">
-      <h2 className="text-lg font-semibold">{t("buy.offerTitle")}</h2>
-      <p className="mt-1 text-sm leading-6 text-neutral-600">{t("buy.offerDesc")}</p>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white" key={label}>
-            <p className="text-xs uppercase text-neutral-500">{label}</p>
-            <p className="mt-1 font-semibold text-slate-950">{value}</p>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <div className="flex min-h-11 flex-1 basis-[10rem] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-950 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50" key={item.label}>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-cyan-50 text-accent ring-1 ring-cyan-100">{item.icon}</span>
+            <span className="min-w-0 truncate">{item.label}</span>
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function PurchaseRoadmap() {
+  const {t} = useTranslation();
+  const steps = [
+    {icon: <Sparkles size={17} />, title: t("buy.roadmapService"), desc: t("buy.roadmapServiceDesc")},
+    {icon: <MapPin size={17} />, title: t("buy.roadmapCountry"), desc: t("buy.roadmapCountryDesc")},
+    {icon: <Radio size={17} />, title: t("buy.roadmapOperator"), desc: t("buy.roadmapOperatorDesc")},
+    {icon: <Wallet size={17} />, title: t("buy.roadmapBuy"), desc: t("buy.roadmapBuyDesc")},
+    {icon: <Loader2 size={17} />, title: t("buy.roadmapWait"), desc: t("buy.roadmapWaitDesc")},
+    {icon: <CheckCircle2 size={17} />, title: t("buy.roadmapFinish"), desc: t("buy.roadmapFinishDesc")}
+  ];
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-blue-700">{t("buy.roadmapEyebrow")}</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">{t("buy.roadmapTitle")}</h2>
+        </div>
+        <p className="max-w-md text-sm leading-6 text-neutral-600">{t("buy.roadmapDesc")}</p>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {steps.map((step, index) => (
+          <RoadmapStep desc={step.desc} icon={step.icon} index={index} key={step.title} title={step.title} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RoadmapStep({desc, icon, index, title}: {desc: string; icon: React.ReactNode; index: number; title: string}) {
+  const showRightArrow = index !== 2 && index !== 5;
+  const showDownArrow = index === 2;
+  return (
+    <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-accent shadow-sm ring-1 ring-slate-200">{icon}</span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-neutral-500">{String(index + 1).padStart(2, "0")}</p>
+          <h3 className="mt-1 text-sm font-semibold text-slate-950">{title}</h3>
+          <p className="mt-2 text-xs leading-5 text-neutral-600">{desc}</p>
+        </div>
+      </div>
+      {showRightArrow && <ArrowRight className="absolute -right-4 top-1/2 hidden -translate-y-1/2 text-cyan-500 md:block" size={20} />}
+      {showDownArrow && <ArrowDown className="absolute -bottom-5 left-1/2 hidden -translate-x-1/2 text-cyan-500 md:block" size={20} />}
     </div>
   );
 }
@@ -623,66 +824,6 @@ function OrderStatusPanel({busy, onAction, onBackToMarket, order}: {busy: boolea
   );
 }
 
-function AuthGateModal({locale, onClose, onLocaleChange, onSuccess}: {locale: Locale; onClose: () => void; onLocaleChange: (locale: Locale) => void; onSuccess: (user: User) => void}) {
-  const {t} = useTranslation();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("user@smsbridge.local");
-  const [password, setPassword] = useState("change-me");
-  const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      if (mode === "register") onLocaleChange(selectedLocale);
-      const session = await auth(mode === "login" ? "/auth/login" : "/auth/register", mode === "login" ? {email, password} : {email, password, locale: selectedLocale});
-      onSuccess(session.user as User);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : mode === "login" ? t("auth.loginFailed") : t("auth.registrationFailed"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Dialog open>
-      <DialogContent>
-        <div className="flex items-start justify-between gap-4">
-          <DialogHeader>
-            <DialogTitle>{t("buy.authGateTitle")}</DialogTitle>
-            <DialogDescription>{t("buy.authGateDesc")}</DialogDescription>
-          </DialogHeader>
-          <Button onClick={onClose} size="sm" type="button" variant="secondary">×</Button>
-        </div>
-        <Tabs className="mt-5" value={mode} onValueChange={(value) => setMode(value as "login" | "register")}>
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="login">{t("nav.login")}</TabsTrigger>
-            <TabsTrigger value="register">{t("nav.register")}</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <form className="mt-5 grid gap-3" onSubmit={submit}>
-          <Input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("common.email")} />
-          <Input value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "login" ? t("auth.password") : t("auth.passwordHint")} type="password" />
-          {mode === "register" && (
-            <select className="field" value={selectedLocale} onChange={(event) => setSelectedLocale(event.target.value as Locale)}>
-              <option value="en">{t("common.english")}</option>
-              <option value="ru">{t("common.russian")}</option>
-            </select>
-          )}
-          {error && <Alert type="error">{error}</Alert>}
-          <Button disabled={loading} type="submit">
-            {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-            {mode === "login" ? t("auth.signIn") : t("auth.signUp")}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function SummaryRow({label, strong = false, value}: {label: string; strong?: boolean; value: React.ReactNode}) {
   return (
     <div className="mt-3 flex items-center justify-between gap-3">
@@ -697,20 +838,6 @@ function SummaryBox({label, value}: {label: string; value: React.ReactNode}) {
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white">
       <p className="text-xs uppercase text-neutral-500">{label}</p>
       <div className="mt-1 break-all font-semibold text-slate-950">{value}</div>
-    </div>
-  );
-}
-
-function InfoCard({icon, label, value}: {icon: React.ReactNode; label: string; value: string}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70">
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700">{icon}</span>
-        <div>
-          <p className="text-sm text-neutral-500">{label}</p>
-          <p className="mt-1 font-semibold text-slate-950">{value}</p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -754,23 +881,26 @@ function minPrice(rows: Price[]) {
   return Math.min(...values).toFixed(4);
 }
 
-function nameForService(services: Service[], code: string, locale: Locale) {
-  const item = services.find((service) => service.code === code);
-  return item ? (locale === "ru" ? item.name_ru : item.name_en) : code;
-}
-
-function nameForCountry(countries: Country[], iso2: string, locale: Locale) {
-  const item = countries.find((country) => country.iso2 === iso2);
-  return item ? (locale === "ru" ? item.name_ru : item.name_en) : iso2;
+function offerId(price?: Price) {
+  return price?.operator || "any";
 }
 
 function serviceBadge(code: string) {
   const map: Record<string, string> = {
     amazon: "AM",
+    apple: "AP",
+    binance: "BN",
+    discord: "DC",
     facebook: "FB",
     google: "G",
+    instagram: "IG",
+    microsoft: "MS",
+    netflix: "NF",
     openai: "AI",
+    steam: "ST",
+    tiktok: "TT",
     telegram: "TG",
+    uber: "UB",
     whatsapp: "WA"
   };
   return map[code] || code.slice(0, 2).toUpperCase();

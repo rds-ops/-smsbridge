@@ -10,8 +10,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("smsbridge-theme");var d=t?t==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d);}catch(e){}`
+          }}
+        />
         <I18nProvider>
           <Nav>{children}</Nav>
         </I18nProvider>

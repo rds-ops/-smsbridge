@@ -24,6 +24,28 @@
   --destructive-foreground: 0 0% 100%;
 }
 
+.dark {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 96%;
+  --card: 222 38% 11%;
+  --card-foreground: 210 40% 96%;
+  --popover: 222 38% 11%;
+  --popover-foreground: 210 40% 96%;
+  --muted: 217 30% 16%;
+  --muted-foreground: 215 20% 72%;
+  --border: 217 24% 22%;
+  --input: 217 24% 22%;
+  --ring: 199 89% 48%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 222 47% 7%;
+  --secondary: 217 30% 16%;
+  --secondary-foreground: 210 40% 96%;
+  --accent: 190 95% 45%;
+  --accent-foreground: 222 47% 7%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -38,6 +60,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.dark body {
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.14), transparent 28rem),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.10), transparent 24rem),
+    linear-gradient(180deg, #020617, hsl(var(--background)) 44rem);
+}
+
 input,
 select,
 button,
@@ -46,7 +75,7 @@ textarea {
 }
 
 .field {
-  @apply w-full rounded-xl border border-input bg-white px-3 py-2 text-sm outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-all duration-200 placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-cyan-100;
+  @apply w-full rounded-xl border border-input bg-white px-3 py-2 text-sm outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-all duration-200 placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-cyan-100 dark:bg-slate-900 dark:shadow-none dark:focus:ring-cyan-950;
 }
 
 .btn {
@@ -63,6 +92,63 @@ textarea {
 
 .panel {
   @apply rounded-2xl border border-border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70;
+}
+
+.dark .bg-white,
+.dark .bg-white\/90,
+.dark .bg-white\/95 {
+  background-color: hsl(var(--card) / 0.94) !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/80,
+.dark .bg-blue-50,
+.dark .bg-cyan-50,
+.dark .bg-panel {
+  background-color: hsl(var(--muted) / 0.92) !important;
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-neutral-700,
+.dark .text-neutral-600 {
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .text-neutral-500,
+.dark .text-slate-500,
+.dark .text-muted-foreground {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.dark .border-slate-200,
+.dark .border-slate-200\/80,
+.dark .border-blue-100\/80,
+.dark .border-line,
+.dark .border-border {
+  border-color: hsl(var(--border)) !important;
+}
+
+.dark .ring-cyan-100,
+.dark .ring-blue-100,
+.dark .ring-slate-200 {
+  --tw-ring-color: hsl(var(--border)) !important;
+}
+
+.dark .shadow-slate-200\/70,
+.dark .shadow-cyan-100\/50,
+.dark .shadow-cyan-100\/60,
+.dark .shadow-cyan-100\/70,
+.dark .shadow-blue-100 {
+  --tw-shadow-color: rgba(8, 47, 73, 0.34) !important;
+}
+
+.dark .btn-secondary {
+  background-color: hsl(var(--secondary));
+}
+
+.dark .panel {
+  background-color: hsl(var(--card));
 }
 
 @keyframes smsbridge-pending-glow {
