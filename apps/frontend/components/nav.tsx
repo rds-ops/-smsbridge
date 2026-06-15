@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {usePathname, useRouter} from "next/navigation";
-import {BookOpen, ChevronDown, ClipboardList, LogOut, Settings, ShieldCheck, Truck, UserCircle, Wallet} from "lucide-react";
+import {BookOpen, ChevronDown, ClipboardList, HelpCircle, LogOut, Settings, ShieldCheck, Truck, UserCircle, Wallet} from "lucide-react";
 import {useEffect, useState} from "react";
 import {LanguageSwitcher} from "@/components/shared/ui";
 import {Button} from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {useTranslation} from "@/lib/i18n";
 const publicRoutes = new Set([
   "/",
   "/buy",
+  "/api-docs",
   "/login",
   "/register",
   "/acceptable-use",
@@ -29,6 +30,8 @@ const publicRoutes = new Set([
   "/privacy",
   "/abuse",
   "/developer-commands",
+  "/faq",
+  "/suppliers",
   "/supplier"
 ]);
 
@@ -104,10 +107,9 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
 
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
           <Link className={linkClass("/")} href="/">{t("common.publicHome")}</Link>
-          <Link className={linkClass("/orders")} href="/orders"><ClipboardList size={16} />{t("nav.orders")}</Link>
-          <Link className={linkClass("/deposit")} href="/deposit"><Wallet size={16} />{t("nav.deposit")}</Link>
           <Link className={linkClass("/api-docs")} href="/api-docs"><BookOpen size={16} />{t("nav.api")}</Link>
-          <Link className={`${linkClass("/abuse")} hidden xl:inline-flex`} href="/abuse">{t("nav.support")}</Link>
+          <Link className={linkClass("/suppliers")} href="/suppliers"><Truck size={16} />{t("nav.suppliers")}</Link>
+          <Link className={linkClass("/faq")} href="/faq"><HelpCircle size={16} />{t("nav.faq")}</Link>
         </nav>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">
@@ -128,12 +130,6 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
               </Button>
               <Button asChild size="sm">
                 <Link href="/register">{t("nav.register")}</Link>
-              </Button>
-              <Button asChild className="hidden lg:inline-flex" size="sm" variant="outline">
-                <Link href="/supplier">
-                <Truck size={15} />
-                {t("nav.supplier")}
-                </Link>
               </Button>
             </>
           )}
@@ -162,10 +158,16 @@ function AccountMenu({user}: {user: User | null}) {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
+          <Link href="/orders"><ClipboardList size={15} />{t("nav.orders")}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/deposit"><Wallet size={15} />{t("nav.addFunds")}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
           <Link href="/settings"><Settings size={15} />{t("nav.settings")}</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/supplier"><Truck size={15} />{t("nav.supplier")}</Link>
+          <Link href="/supplier"><Truck size={15} />{t("nav.supplierCabinet")}</Link>
         </DropdownMenuItem>
         {user?.role === "admin" && (
           <DropdownMenuItem asChild>

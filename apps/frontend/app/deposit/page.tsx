@@ -1,7 +1,6 @@
 "use client";
 
 import {useEffect, useState} from "react";
-import Link from "next/link";
 import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, CopyButton, EmptyState, LoadingState, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {createPaymentIntent, getPaymentIntent, listPaymentIntents} from "@/lib/client/api";
@@ -119,7 +118,6 @@ export default function DepositPage() {
       <PageHeader
         title={t("deposit.title")}
         description={t("deposit.description")}
-        actions={<Link className="btn btn-secondary" href="/dashboard">{t("nav.dashboard")}</Link>}
       />
 
       {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}

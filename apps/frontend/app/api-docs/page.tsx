@@ -1,9 +1,11 @@
 "use client";
 
 import {useEffect, useState} from "react";
+import Link from "next/link";
 import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, CopyButton, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
 import {createApiKey, getApiKeyUsage, listApiKeys, regenerateApiKey, revokeApiKey} from "@/lib/client/api";
+import {getToken} from "@/lib/shared/api";
 import {dateTime} from "@/lib/shared/format";
 import type {BuyerApiKey, BuyerApiKeyCreated, BuyerApiKeyUsage} from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
@@ -36,9 +38,16 @@ export default function ApiDocsPage() {
   const [usage, setUsage] = useState<BuyerApiKeyUsage | null>(null);
   const [keyName, setKeyName] = useState("Default integration key");
   const [scopes, setScopes] = useState<string[]>(defaultScopes);
+  const [hasToken, setHasToken] = useState(false);
   const [toast, setToast] = useState<{type: "success" | "error"; message: string}>({type: "success", message: ""});
 
   async function loadKeys() {
+    if (!getToken()) {
+      setManagedKeys([]);
+      setSelectedUsageKey("");
+      setUsage(null);
+      return;
+    }
     try {
       const rows = await listApiKeys();
       setManagedKeys(rows);
@@ -49,11 +58,13 @@ export default function ApiDocsPage() {
   }
 
   useEffect(() => {
-    loadKeys();
+    const signedIn = Boolean(getToken());
+    setHasToken(signedIn);
+    if (signedIn) loadKeys();
   }, []);
 
   useEffect(() => {
-    if (!selectedUsageKey) {
+    if (!hasToken || !selectedUsageKey) {
       setUsage(null);
       return;
     }
@@ -111,6 +122,14 @@ export default function ApiDocsPage() {
         description={t("api.description")}
       />
 
+      {!hasToken && (
+        <Card className="mt-6" title={t("api.managedKeys")} description={t("api.signInForKeys")}>
+          <Link className="btn btn-primary" href="/login">{t("nav.login")}</Link>
+        </Card>
+      )}
+
+      {hasToken && (
+      <>
       <section className="mt-6 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
         <Card title={t("api.managedKeys")} description={t("api.managedKeysDesc")}>
           <div className="grid gap-3">
@@ -181,7 +200,10 @@ export default function ApiDocsPage() {
           )}
         </Card>
       </section>
+      </>
+      )}
 
+      {hasToken && (
       <section className="mt-6">
         <Card title={t("api.usageTitle")} description={usage ? `${usage.key_prefix} · ${usage.status}` : t("api.usageDesc")}>
           {!usage ? <p className="text-sm text-neutral-600">{t("api.selectKeyUsage")}</p> : (
@@ -224,7 +246,9 @@ export default function ApiDocsPage() {
           )}
         </Card>
       </section>
+      )}
 
+      {hasToken && (
       <section className="mt-6 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card title={t("api.legacyKeyStatus")} description={t("api.legacyKeyStatusDesc")}>
           <button className="btn btn-primary" onClick={regenerate}>{t("api.regenerate")}</button>
@@ -244,6 +268,7 @@ export default function ApiDocsPage() {
           <pre className="overflow-auto rounded-md bg-neutral-950 p-4 text-sm text-white">Authorization: Bearer $SMSBRIDGE_API_KEY</pre>
         </Card>
       </section>
+      )}
 
       <section className="mt-6 grid gap-4">
         {[
