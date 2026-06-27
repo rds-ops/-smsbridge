@@ -417,6 +417,7 @@ Codex не должен напрямую делать крупный refactor б
 - supplier-pool wallet hold before supplier reservation callback. DONE
 - supplier reservation timeout/ambiguous response policy. DONE (clear failures roll back locally; malformed responses with external activation id and phone enqueue release retry)
 - supplier integration contract and operator runbook. DONE
+- supplier admin API key issuance and reservation config validation. DONE
 - fix operator uniqueness issues. DONE
 - improve inventory locking
 
@@ -546,7 +547,7 @@ Codex не должен напрямую делать крупный refactor б
 - API usage analytics
 - better admin dashboards
 - provider analytics
-- supplier onboarding flows
+- supplier onboarding flows. PARTIAL (admin creation/API-key issuance ready; self-service KYC/contract flow not implemented)
 - moderation workflows
 
 ---

@@ -8,21 +8,60 @@ Current status:
 - Wallet hold happens before supplier reservation callback.
 - Supplier activation history exists at `GET /supplier/v1/activations`.
 - Release callback failures use a durable retry queue.
-- Real supplier onboarding, KYC/contract policy, and external payout execution are still not implemented.
+- Admin supplier creation and API key issuance are implemented.
+- Real supplier KYC/contract policy, supplier self-service onboarding, and external payout execution are still not implemented.
 
-## 1. Supplier Configuration
+## 1. Admin Onboarding and API Key Issuance
+
+Current onboarding flow:
+
+1. Admin reviews supplier manually outside the product.
+2. Admin creates a supplier record in `/admin/suppliers`, usually with `status=pending`.
+3. Admin configures reservation settings if the supplier will serve real reservations.
+4. Admin regenerates the supplier API key with `/admin/suppliers/{supplier_id}/api-key/regenerate`.
+5. Admin gives the raw key to the supplier through an approved secure channel.
+6. Admin sets supplier `status=active` only after sandbox signoff.
+
+API key behavior:
+
+- The raw supplier API key is returned only by the regenerate endpoint.
+- The raw key is not returned by supplier list/detail/profile endpoints.
+- SMSBridge stores only the key hash.
+- Regenerating the key replaces the previous key.
+- Supplier API keys must be treated like passwords and must never be sent in query strings.
+
+Status behavior:
+
+- `pending`: cannot use supplier API write endpoints and is not used for buyer routing.
+- `active`: can update inventory, push SMS, create payout requests, and be selected for supplier-pool routing.
+- `blocked`: cannot use active supplier endpoints and is not used for routing.
+
+Audit behavior:
+
+- Supplier create/update/API-key regeneration are audit logged.
+- Reservation bearer secrets are redacted in audit metadata.
+
+Backend-enforced reservation enablement rules:
+
+- `reservation_enabled=true` requires `reservation_url`.
+- `reservation_url` must be an HTTP(S) URL.
+- `reservation_auth_type` must be `none` or `bearer`; missing auth type is treated as `none`.
+- `reservation_auth_type=bearer` requires `reservation_auth_secret_encrypted`.
+- `reservation_timeout_seconds`, when provided, must be positive.
+
+## 2. Supplier Configuration
 
 Reservation callbacks are configured per supplier by admins:
 
 - `reservation_enabled`: must be `true` for production suppliers.
 - `reservation_url`: supplier reservation endpoint URL.
 - `reservation_auth_type`: `none` or `bearer`.
-- `reservation_auth_secret_encrypted`: bearer secret value when `reservation_auth_type=bearer`.
+- `reservation_auth_secret_encrypted`: bearer secret value when `reservation_auth_type=bearer`; stored server-side and never returned in supplier/admin response bodies.
 - `reservation_timeout_seconds`: optional positive integer; default is 5 seconds.
 
 Production/staging-like environments block the legacy fake-phone supplier path. Production suppliers must use reservation callback or a future exact-inventory flow.
 
-## 2. Reservation Callback
+## 3. Reservation Callback
 
 Direction: SMSBridge -> supplier.
 
@@ -94,7 +133,7 @@ Failure response rules:
 - Response bodies are not exposed to buyers.
 - Do not include secrets or internal supplier diagnostics in responses.
 
-## 3. Reservation Idempotency
+## 4. Reservation Idempotency
 
 Suppliers must implement idempotency for reservation callbacks.
 
@@ -111,7 +150,7 @@ Why this matters:
 - SMSBridge may retry or operators may investigate late responses.
 - Duplicate reservations with different phone numbers for the same idempotency key are not acceptable for production suppliers.
 
-## 4. Reservation Failure Policy
+## 5. Reservation Failure Policy
 
 SMSBridge classifies reservation callback failures into clear failures and ambiguous referenced failures.
 
@@ -155,7 +194,7 @@ Timeout with no external reference:
 - No release retry can be created because there is no activation id or phone number.
 - Operators should use the runbook below for repeated or suspicious no-reference timeouts.
 
-## 5. Release Callback
+## 6. Release Callback
 
 Direction: SMSBridge -> supplier.
 
@@ -217,7 +256,7 @@ SMSBridge behavior:
 - Retry attempts use the same idempotency key.
 - Retries use capped backoff and eventually become `dead`.
 
-## 6. Supplier SMS Push
+## 7. Supplier SMS Push
 
 After a successful reservation, the supplier pushes SMS to:
 
@@ -246,7 +285,7 @@ Rules:
 - Phone-only matching exists as a fallback, but production suppliers should not rely on it.
 - SMS text is sensitive and must not be logged unnecessarily.
 
-## 7. Operator Runbook
+## 8. Operator Runbook
 
 ### Inspect supplier reservation health
 
@@ -371,7 +410,7 @@ Before re-enabling:
 - supplier passes sandbox reservation/release/SMS tests
 - operator verifies no outstanding dead release retries need manual action
 
-## 8. Buyer Communication Rules
+## 9. Buyer Communication Rules
 
 Do not expose:
 
@@ -389,7 +428,7 @@ Buyer-safe messaging:
 - wallet hold was refunded or no charge was made
 - support can investigate with order public id
 
-## 9. Pre-Onboarding Checklist
+## 10. Pre-Onboarding Checklist
 
 Before enabling a real supplier:
 
@@ -400,7 +439,9 @@ Before enabling a real supplier:
 - supplier returns `status=reserved`, `supplier_activation_id`, and `phone_number`
 - supplier accepts release for already-released activations as success
 - supplier can push SMS with `supplier_activation_id`
-- operator has supplier API key issuance/rotation process
+- operator has generated the supplier API key and delivered it through a secure channel
+- supplier has confirmed API key receipt and storage
+- admin has set supplier `status=active` only after sandbox signoff
 - operator has payout policy and support contact
 - supplier has passed local/sandbox reservation, release, SMS, cancel, expire, and duplicate retry tests
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import object_session
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
 from app.models import (
+    AuditLog,
     Order,
     OrderEvent,
     Provider,
@@ -23,6 +24,7 @@ from app.models import (
     WalletTransaction,
 )
 from app.services import orders as order_service
+from app.services import suppliers as supplier_service
 from app.services.supplier_release_retries import process_due_release_retries
 from app.services.supplier_reservations import (
     SupplierReservationAmbiguousResponse,
@@ -143,6 +145,72 @@ def test_admin_can_configure_supplier_reservation_settings(client, admin_token):
     assert "reservation_auth_secret_encrypted" not in listed_supplier
 
 
+def test_reservation_enabled_requires_safe_config(client, admin_token):
+    missing_url = client.post(
+        "/admin/suppliers",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "name": "Missing URL Supplier",
+            "status": "active",
+            "reservation_enabled": True,
+        },
+    )
+    assert missing_url.status_code == 400
+    assert "reservation_url" in missing_url.json()["detail"]
+
+    bad_auth = client.post(
+        "/admin/suppliers",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "name": "Bad Auth Supplier",
+            "status": "active",
+            "reservation_enabled": True,
+            "reservation_url": "https://supplier.example.test/v1/reservations",
+            "reservation_auth_type": "bearer",
+        },
+    )
+    assert bad_auth.status_code == 400
+    assert "secret" in bad_auth.json()["detail"]
+
+    supplier = create_supplier(client, admin_token)
+    patch_missing_url = client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True},
+    )
+    assert patch_missing_url.status_code == 400
+
+
+def test_supplier_reservation_secret_is_redacted_from_audit_logs(client, admin_token):
+    response = client.post(
+        "/admin/suppliers",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "name": "Audit Reservation Supplier",
+            "status": "active",
+            "reservation_enabled": True,
+            "reservation_url": "https://supplier.example.test/v1/reservations",
+            "reservation_auth_type": "bearer",
+            "reservation_auth_secret_encrypted": "enc:super-secret",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    db = SessionLocal()
+    try:
+        audit = db.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "supplier.create",
+                AuditLog.entity_id == str(response.json()["id"]),
+            )
+        )
+        assert audit is not None
+        assert audit.log_metadata["reservation_auth_secret_encrypted"] == "[redacted]"
+        assert "super-secret" not in str(audit.log_metadata)
+    finally:
+        db.close()
+
+
 def test_supplier_reservation_timeout_must_be_positive(client, admin_token):
     response = client.post(
         "/admin/suppliers",
@@ -158,13 +226,26 @@ def test_supplier_reservation_timeout_must_be_positive(client, admin_token):
 
 def test_admin_can_regenerate_supplier_api_key_and_auth_works(client, admin_token):
     supplier = create_supplier(client, admin_token)
+    assert "api_key" not in supplier
+    assert "api_key_hash" not in supplier
     api_key = supplier_key(client, admin_token, supplier["id"])
     assert api_key.startswith("sbsup_live_")
+    detail = client.get(f"/admin/suppliers/{supplier['id']}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert detail.status_code == 200
+    assert "api_key" not in detail.json()
+    assert "api_key_hash" not in detail.json()
     response = client.get("/supplier/v1/me", headers={"Authorization": f"Bearer {api_key}"})
     assert response.status_code == 200, response.text
     assert response.json()["id"] == supplier["id"]
     assert "reservation_auth_secret_encrypted" not in response.json()
     assert "reservation_url" not in response.json()
+    db = SessionLocal()
+    try:
+        supplier_entity = db.get(Supplier, supplier["id"])
+        assert supplier_entity.api_key_hash is not None
+        assert supplier_entity.api_key_hash != api_key
+    finally:
+        db.close()
 
 
 def test_blocked_supplier_cannot_update_inventory(client, admin_token):
@@ -172,6 +253,29 @@ def test_blocked_supplier_cannot_update_inventory(client, admin_token):
     api_key = supplier_key(client, admin_token, supplier["id"])
     response = update_inventory(client, api_key)
     assert response.status_code == 403
+
+
+def test_blocked_supplier_inventory_is_excluded_from_routing(client, admin_token):
+    supplier = create_supplier(client, admin_token, status="blocked")
+    db = SessionLocal()
+    try:
+        db.add(
+            SupplierInventory(
+                supplier_id=supplier["id"],
+                service_code="telegram",
+                country_iso2="ID",
+                operator=None,
+                available_count=10,
+                status="active",
+            )
+        )
+        db.commit()
+
+        selected = supplier_service.select_inventory(db, "telegram", "ID", None)
+
+        assert selected is None
+    finally:
+        db.close()
 
 
 def test_supplier_can_update_inventory(client, admin_token):

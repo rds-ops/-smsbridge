@@ -231,12 +231,35 @@ def suppliers(db: Session = Depends(get_db), admin: User = Depends(require_admin
     return [SupplierListOut.model_validate(supplier).model_copy(update={"inventory_count": count}) for supplier, count in rows]
 
 
+def _validate_supplier_reservation_config(supplier: Supplier) -> None:
+    if not supplier.reservation_enabled:
+        return
+    if not supplier.reservation_url or not supplier.reservation_url.strip():
+        raise HTTPException(status_code=400, detail="reservation_url is required when reservation is enabled")
+    if not supplier.reservation_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="reservation_url must be an HTTP(S) URL")
+    auth_type = (supplier.reservation_auth_type or "none").lower()
+    if auth_type not in {"none", "bearer"}:
+        raise HTTPException(status_code=400, detail="reservation_auth_type must be none or bearer")
+    if auth_type == "bearer" and not supplier.reservation_auth_secret_encrypted:
+        raise HTTPException(status_code=400, detail="reservation bearer auth secret is required")
+    supplier.reservation_auth_type = auth_type
+
+
+def _supplier_audit_metadata(data: dict) -> dict:
+    safe = dict(data)
+    if "reservation_auth_secret_encrypted" in safe:
+        safe["reservation_auth_secret_encrypted"] = "[redacted]"
+    return safe
+
+
 @router.post("/suppliers", response_model=SupplierOut)
 def create_supplier(payload: SupplierCreate, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
     supplier = Supplier(**payload.model_dump())
+    _validate_supplier_reservation_config(supplier)
     db.add(supplier)
     db.flush()
-    add_audit_log(db, "supplier.create", "supplier", str(supplier.id), admin.id, payload.model_dump())
+    add_audit_log(db, "supplier.create", "supplier", str(supplier.id), admin.id, _supplier_audit_metadata(payload.model_dump()))
     db.commit()
     db.refresh(supplier)
     return supplier
@@ -258,7 +281,8 @@ def update_supplier(supplier_id: int, payload: SupplierPatch, db: Session = Depe
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(supplier, key, value)
-    add_audit_log(db, "supplier.update", "supplier", str(supplier.id), admin.id, data)
+    _validate_supplier_reservation_config(supplier)
+    add_audit_log(db, "supplier.update", "supplier", str(supplier.id), admin.id, _supplier_audit_metadata(data))
     db.commit()
     db.refresh(supplier)
     return supplier

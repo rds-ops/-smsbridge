@@ -16,6 +16,8 @@ Supplier endpoints require:
 
 Notes:
 - This is not a JWT. It is a supplier API key stored as a hash server-side.
+- The raw supplier API key is shown only when an admin regenerates it.
+- Supplier list/detail/profile responses never return the raw key or key hash.
 - Missing/invalid credentials return `401` with `{"detail":"..."}`.
 - Blocked/inactive suppliers are rejected with `403`.
 
@@ -125,6 +127,42 @@ curl -sS -X POST "$BASE_URL/supplier/v1/sms" \
   -d '{"supplier_sms_id":"msg-1","phone_number":"+628123456789","text":"Your code is 12345","supplier_activation_id":"act-1"}'
 ```
 
+### List activations
+
+`GET /supplier/v1/activations`
+
+Returns supplier-owned activation/reservation history only.
+
+Query params:
+- `limit` optional, default `50`, max `100`
+- `offset` optional, default `0`
+- `status` optional
+- `service` optional
+- `country` optional
+- `phone` optional
+
+Safe response fields:
+- `id`
+- `supplier_activation_id`
+- `phone_number`
+- `service_code`
+- `country_iso2`
+- `operator`
+- `status`
+- `order_public_id`
+- `sms_count`
+- `latest_sms_at`
+- `created_at`
+- `updated_at`
+
+The endpoint does not expose buyer private data, provider cost, internal margin, supplier reward, or SMS text/code.
+
+Example:
+```bash
+curl -sS "$BASE_URL/supplier/v1/activations?limit=50&offset=0" \
+  -H "Authorization: Bearer $SUPPLIER_API_KEY"
+```
+
 ### Create payout request
 
 `POST /supplier/v1/payout-requests`
@@ -207,6 +245,7 @@ These are outbound calls from smsbridge to the supplier (supplier must host the 
 
 High level:
 - Reservation callback is used when a supplier is configured with `reservation_enabled=true` (admin configuration).
+- Enabling reservation requires a valid reservation URL and auth configuration.
 - Release callback is best-effort on cancel/expire/fail and must not block buyer refunds. Failed release callbacks are retried by smsbridge with the same idempotency key.
 
 Supplier requirements:

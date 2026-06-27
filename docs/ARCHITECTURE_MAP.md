@@ -330,6 +330,13 @@ Supplier API endpoints:
 - `GET /supplier/v1/transactions`
 - `POST /supplier/v1/sms`
 
+Admin onboarding and key issuance:
+
+- admins create suppliers under `/admin/suppliers`
+- admins regenerate supplier API keys through `/admin/suppliers/{supplier_id}/api-key/regenerate`
+- raw supplier key is returned only on regeneration and only a hash is stored
+- `pending` and `blocked` suppliers are excluded from supplier-pool routing; only `active` suppliers can update inventory and be selected
+
 Supplier reservation callback:
 
 - Configured on supplier records through admin fields:
@@ -345,6 +352,7 @@ Supplier reservation callback:
 - Release callback is best-effort and failed releases are persisted to `supplier_release_retries` for retry.
 - Suppliers can view their own activation/reservation history at `GET /supplier/v1/activations`; the response is supplier-scoped and omits buyer private data, provider cost, and internal margin fields.
 - The supplier contract and operator runbook live in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
+- Enabling reservation callbacks through admin requires a valid HTTP(S) URL, supported auth type, and a bearer secret when bearer auth is selected.
 
 Legacy fake supplier phone:
 
@@ -479,7 +487,7 @@ Deferred:
 
 ## 12. Main Remaining Architecture Risks
 
-1. Supplier onboarding controls, sandbox signoff, and supplier UI polish still need to be finalized before real suppliers.
+1. Supplier KYC/contract controls, sandbox signoff, payout policy, and supplier UI polish still need to be finalized before real suppliers.
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Refresh tokens are stateless; logout/session revocation is incomplete.
