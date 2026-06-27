@@ -1,5 +1,7 @@
 # API (Supplier) — Draft / Internal
 
+Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+
 This document describes the current supplier partner API as implemented in this repo. It is intended for internal/operator use and may change.
 
 Base URL: `http(s)://<host>`

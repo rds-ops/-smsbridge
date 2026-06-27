@@ -1,5 +1,7 @@
 # API (Buyer) — Draft / Internal
 
+Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+
 This document describes the current buyer-facing HTTP API as implemented in this repo. It is intentionally practical and may change as stabilization continues.
 
 Base URL: `http(s)://<host>`
@@ -115,9 +117,10 @@ Current provider behavior:
 - Enabled now: `manual_test` only
 
 Important:
-- Creating a payment intent does not credit wallet balance yet.
+- Creating a payment intent by itself does not credit wallet balance.
 - Internal payment webhooks can update payment intent status.
 - When an internal webhook transitions a payment intent to `succeeded`, the wallet is credited once with a `deposit` wallet transaction.
+- Admins can complete `manual_test` intents from the admin payment intent screen for local/dev testing.
 - Real payment provider verification/signature integrations are not implemented yet.
 
 Idempotency behavior:

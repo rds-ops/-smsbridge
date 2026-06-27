@@ -1,5 +1,7 @@
 # SMSBridge — Core Rules & Roadmap
 
+Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+
 ## Review of Current Architecture Map
 
 Текущий `ARCHITECTURE_MAP.md` уже очень хороший для MVP-проекта.

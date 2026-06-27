@@ -1,5 +1,7 @@
 # Callbacks / Webhooks — Draft / Internal
 
+Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+
 This document describes callback/webhook-style HTTP contracts currently implemented or planned in this repo.
 
 Status legend:

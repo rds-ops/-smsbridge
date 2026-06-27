@@ -373,6 +373,43 @@ def activation_for_order(db: Session, order_id: int) -> SupplierActivation | Non
     return db.scalar(select(SupplierActivation).where(SupplierActivation.order_id == order_id))
 
 
+def _find_sms_activation(db: Session, supplier: Supplier, payload) -> SupplierActivation | None:
+    if payload.supplier_activation_id:
+        activation = db.scalar(
+            select(SupplierActivation).where(
+                SupplierActivation.supplier_id == supplier.id,
+                SupplierActivation.supplier_activation_id == payload.supplier_activation_id,
+            )
+        )
+        if activation:
+            return activation
+
+    activation = db.scalar(
+        select(SupplierActivation)
+        .where(
+            SupplierActivation.supplier_id == supplier.id,
+            SupplierActivation.phone_number == payload.phone_number,
+            SupplierActivation.status.in_(ACTIVE_ACTIVATION_STATUSES),
+        )
+        .order_by(SupplierActivation.created_at.desc())
+    )
+    if activation:
+        return activation
+
+    return db.scalar(
+        select(SupplierActivation)
+        .join(Order, Order.id == SupplierActivation.order_id)
+        .join(Provider, Provider.id == Order.provider_id)
+        .where(
+            SupplierActivation.supplier_id == supplier.id,
+            Order.phone_number == payload.phone_number,
+            Provider.type == "supplier_pool",
+            Order.status.in_([OrderStatus.WAITING_SMS, OrderStatus.SMS_RECEIVED]),
+        )
+        .order_by(Order.created_at.desc(), SupplierActivation.created_at.desc())
+    )
+
+
 def _release_supplier_activation(order: Order, activation: SupplierActivation, reason: str) -> None:
     if reason not in RELEASE_ACTIVATION_STATUSES:
         return
@@ -447,25 +484,7 @@ def push_sms(db: Session, supplier: Supplier, payload) -> tuple[SupplierSms, boo
     if existing:
         return existing, True
 
-    activation: SupplierActivation | None = None
-    if payload.supplier_activation_id:
-        activation = db.scalar(
-            select(SupplierActivation).where(
-                SupplierActivation.supplier_id == supplier.id,
-                SupplierActivation.supplier_activation_id == payload.supplier_activation_id,
-            )
-        )
-    if not activation:
-        activation = db.scalar(
-            select(SupplierActivation)
-            .where(
-                SupplierActivation.supplier_id == supplier.id,
-                SupplierActivation.phone_number == payload.phone_number,
-                SupplierActivation.status.in_(ACTIVE_ACTIVATION_STATUSES),
-            )
-            .order_by(SupplierActivation.created_at.desc())
-        )
-
+    activation = _find_sms_activation(db, supplier, payload)
     order = db.get(Order, activation.order_id) if activation and activation.order_id else None
     sms_code = extract_sms_code(payload.text)
     sms = SupplierSms(

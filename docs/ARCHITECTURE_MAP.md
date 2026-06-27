@@ -1,254 +1,205 @@
 # Architecture Map
 
+Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+
+This document describes the implemented architecture as of the current MVP state. It is an internal source of truth for how SMSBridge is wired today, not a future design.
+
 ## 1. System Overview
 
-`smsbridge` is an early MVP of a 5sim-like SMS number marketplace. Buyers buy temporary phone numbers for a service/country/operator combination. Suppliers or external providers supply numbers and SMS messages. Admins manage users, providers, suppliers, balances, limits, and operational visibility.
+SMSBridge is a 5sim-like SMS number marketplace MVP.
 
 Main roles:
 
-- `buyer`: registered user or API-key client that views prices, buys numbers, checks orders, cancels orders, and finishes orders after SMS is received.
-- `supplier`: marketplace partner that sends inventory/count updates and pushes SMS messages through `/supplier/v1`.
-- `admin`: internal operator that manages users, wallets, providers, suppliers, refunds, limits, metrics, and audit logs.
-- `external provider`: third-party SMS activation provider such as 5sim, SMS-Activate, Sms-man, or the current mock provider.
-- `internal worker`: Celery process that polls waiting orders and handles background work.
+- `buyer`: creates an account, funds a wallet, buys temporary numbers, waits for SMS, cancels or finishes orders, and can use JWT, managed API keys, or a legacy API key.
+- `supplier`: marketplace partner authenticated with a supplier API key. Suppliers manage count-based inventory, receive reservation callbacks if enabled, push SMS, request payouts, and view their transaction history.
+- `admin`: internal operator for users, orders, providers, suppliers, manual funding, payout review, risk review, logs, reconciliation, and operational visibility.
+- `provider`: external SMS activation source or local mock provider. Real provider adapters are placeholders except the local mock and supplier-pool path.
+- `worker`: Celery process for polling waiting orders, retrying supplier releases, and operational cleanup.
 
 ## 2. Main Components
 
-### Next.js frontend
+### Frontend
 
 - Location: `apps/frontend`
-- Uses Next.js App Router.
-- Main user pages: dashboard, buy, orders, order detail, settings, login, register.
-- Main admin page: `apps/frontend/app/admin/page.tsx`
+- Framework: Next.js App Router.
+- Primary shell: marketplace-first storefront rendered by `apps/frontend/components/buyer/SmsMarketplace.tsx`.
+- Main public/buyer routes:
+  - `/`
+  - `/buy`
+  - `/faq`
+  - `/suppliers`
+  - `/api-docs`
+  - `/dashboard`
+  - `/orders`
+  - `/orders/{public_id}`
+  - `/deposit`
+  - `/settings`
+- Supplier cabinet:
+  - `/supplier`
+- Admin console:
+  - `/admin`
 - API clients:
-  - `apps/frontend/lib/client/api.ts` for buyer API.
-  - `apps/frontend/lib/admin/api.ts` for admin API.
-  - `apps/frontend/lib/shared/api.ts` for shared fetch/auth token handling.
+  - `apps/frontend/lib/client/api.ts`
+  - `apps/frontend/lib/admin/api.ts`
+  - `apps/frontend/lib/supplier/api.ts`
+  - `apps/frontend/lib/shared/api.ts`
 
-### FastAPI backend
+Implemented UI foundation:
+
+- top navigation with Home, API, Suppliers, FAQ
+- account dropdown with Orders, Add funds, Settings, Supplier cabinet, Admin, Logout
+- shared auth modal
+- dark mode toggle
+- local shadcn/ui-compatible primitives
+- persistent marketplace storefront on public/buyer account pages
+
+### Backend
 
 - Location: `apps/backend/app`
+- Framework: FastAPI.
 - Entrypoint: `app/main.py`
 - Routers:
   - `app/api/auth.py`
   - `app/api/api_v1.py`
   - `app/api/supplier.py`
   - `app/api/admin.py`
-- Services:
+  - `app/api/internal_provider_webhooks.py`
+  - `app/api/internal_payment_webhooks.py`
+- Core services:
   - `app/services/orders.py`
+  - `app/services/order_state.py`
   - `app/services/wallet.py`
+  - `app/services/payment_intents.py`
   - `app/services/suppliers.py`
-  - `app/services/limits.py`
-  - `app/services/audit.py`
-- Current separation is acceptable for MVP, but routers still contain direct ORM queries, especially admin/list endpoints.
+  - `app/services/supplier_reservations.py`
+  - `app/services/rate_limit.py`
+  - `app/services/risk.py`
+  - `app/services/ops.py`
+  - `app/services/cleanup.py`
+- Models:
+  - `app/models/entities.py`
+- Provider adapters:
+  - `app/providers/mock.py`
+  - `app/providers/supplier_pool.py`
+  - `app/providers/five_sim.py`
+  - `app/providers/sms_activate.py`
+  - `app/providers/sms_man.py`
+  - `app/providers/router.py`
+
+Real provider adapters for 5sim, SMS-Activate, and Sms-man are intentionally deferred and remain incomplete placeholders.
 
 ### PostgreSQL
 
-- Stores all durable business state.
-- SQLAlchemy models are in `apps/backend/app/models/entities.py`.
-- Alembic migrations are in `apps/backend/alembic/versions`.
-- Critical durable state must stay here: users, wallets, orders, transactions, suppliers, inventory, SMS, audit logs.
+PostgreSQL stores all durable business state:
+
+- users, wallets, wallet transactions
+- buyer API keys
+- orders and order events
+- prices and provider rows
+- suppliers, inventory, activations, SMS, transactions, payout requests
+- payment intents and payment webhook events
+- idempotency keys
+- API request logs, audit logs, risk actions, cleanup/retry state
+
+Important database protections already implemented:
+
+- non-negative checks for wallet balance and held balance
+- non-negative checks for supplier balance and held balance
+- provider type/status checks
+- payment intent status/amount checks
+- supplier payout status/amount checks
+- normalized nullable-operator uniqueness for prices and supplier inventory
+- unique wallet credit linkage by `wallet_transactions.payment_intent_id`
 
 ### Redis
 
-- Configured by `settings.redis_url`.
-- Currently used as Celery broker and result backend.
-- Used for distributed rate limiting counters (fail-open) and as Celery broker/backend.
-- Not used for durable business state, idempotency keys, or distributed locks beyond Celery polling row locks.
+Redis is used for:
 
-### Celery worker
+- Celery broker/backend
+- distributed fixed-window rate limit counters
 
-- Location:
-  - `apps/backend/app/jobs/celery_app.py`
-  - `apps/backend/app/jobs/tasks.py`
-- Current task: `poll_waiting_orders`.
-- It polls `orders` with `status = waiting_sms` and asks external provider adapters for status.
+Rate limiting is identity-aware for:
 
-### Adminer
+- managed buyer API key
+- authenticated user/JWT
+- legacy buyer API key via user bucket
+- supplier
+- IP fallback
 
-- Defined in `docker-compose.yml`.
-- Exposes database UI on port `8080`.
-- Useful for local development only. It should be protected or disabled in production.
+Redis is not used for durable money, orders, idempotency, or reconciliation state.
 
-### External provider adapters
+### Celery
 
-- Location: `apps/backend/app/providers`
-- Current adapters:
-  - `mock.py` works as local fake provider.
-  - `supplier_pool.py` is a DB-backed supplier pool marker.
-  - `five_sim.py`, `sms_activate.py`, `sms_man.py` are placeholders.
-- Adapter selection is in `providers/router.py`.
+Celery worker tasks include:
 
-### Supplier API
+- polling waiting external/mock provider orders
+- retrying failed supplier release callbacks
+- cleanup of expired operational records
 
-- Router: `apps/backend/app/api/supplier.py`
-- Prefix: `/supplier/v1`
-- Uses supplier API key auth from `core/deps.py`.
-- Current functions:
-  - supplier profile
-  - inventory update
-  - inventory list
-  - SMS push
+Polling uses row-locking with `FOR UPDATE SKIP LOCKED` where supported to reduce double-processing by concurrent workers.
 
-## 3. Request Flow: Buyer Buys Number
+## 3. Buyer Flow
 
-Current endpoint:
+### Catalog and prices
+
+Buyer API endpoints:
+
+- `GET /api/v1/services`
+- `GET /api/v1/countries`
+- `GET /api/v1/prices`
+
+Auth modes:
+
+- buyer JWT
+- managed buyer API key with matching scope
+- legacy buyer API key
+
+`/api/v1/prices` returns `final_price` and does not expose `provider_cost`.
+
+Separate unauthenticated public catalog endpoints are not implemented. The frontend can show the storefront and then gates purchase/auth behavior through the shared auth modal.
+
+### Order creation
+
+Endpoint:
 
 - `POST /api/v1/orders`
-- Router: `apps/backend/app/api/api_v1.py`
-- Service: `apps/backend/app/services/orders.py::create_order`
 
-Current flow:
+Implemented behavior:
 
-1. Buyer calls `POST /api/v1/orders` with `service_code`, `country_iso2`, optional `operator`.
-2. Backend validates service and country through `services/suppliers.py::validate_service_country`.
-3. Backend finds candidate prices through `providers/router.py::candidate_prices`.
-4. Candidates are ordered by provider priority and final customer price.
-5. For each candidate, backend enforces buyer limits with `services/limits.py::enforce_can_order`.
-6. If provider type is `supplier_pool`:
-   - Backend creates an `Order` with `status = created`.
-   - Backend selects supplier inventory with `SELECT ... FOR UPDATE`.
-   - Backend decrements `supplier_inventory.available_count`.
-   - Backend creates `SupplierActivation`.
-   - If supplier reservation callback is enabled for the chosen supplier:
-     - Backend calls supplier reservation callback to obtain a real `phone_number` and `supplier_activation_id`.
-   - Otherwise (legacy/dev-only):
-     - Backend generates a fake supplier phone number.
-   - Backend transitions `created -> waiting_sms`.
-   - Backend creates wallet hold.
-   - Router commits and returns order/phone.
-7. If provider is external/mock:
-   - Backend creates an `Order` with `status = created`.
-   - Backend creates wallet hold.
-   - Backend calls adapter `get_number`.
-   - Adapter returns `provider_order_id` and `phone_number`.
-   - Backend writes `provider_order_id` / `phone_number` onto the order.
-   - Backend transitions `created -> waiting_sms`.
-   - Router commits and returns order/phone.
+- optional `Idempotency-Key`
+- explicit transactional wrapper
+- buyer limits
+- wallet hold creation
+- order status transition through `order_state.transition_order`
+- order event history
+- supplier-pool and external/mock provider paths
 
-How it is implemented now:
+External/mock provider path:
 
-- Order creation and wallet hold are in service code.
-- `POST /api/v1/orders` uses `create_order_idempotent_transactional()` as the explicit transaction boundary.
-- Supplier pool reservation uses DB row locking on `SupplierInventory`.
-- Wallet hold locks wallet row and creates `WalletTransaction(type='hold')`.
+1. Create local order in `created`.
+2. Create wallet hold.
+3. Call provider `get_number`.
+4. Attach provider order id and phone.
+5. Transition `created -> waiting_sms`.
+6. If provider reservation fails after hold, refund the hold and mark failure.
 
-Risk:
+Supplier-pool path:
 
-- External provider reservation now happens after wallet hold; reservation failure refunds the hold before the transaction returns. DONE
-- Buyer order creation idempotency exists through `Idempotency-Key`. DONE
-- Supplier pool uses reservation callback for configured suppliers; `_fake_supplier_phone` is legacy/dev-only and blocked in production-like environments.
-- External provider local `prices.available_count` is not decremented after purchase.
-- State transitions go through `services/order_state.py` in the stabilized paths and write `order_events`. DONE
+1. Create local order in `created`.
+2. Select supplier inventory with row lock.
+3. Decrement supplier inventory.
+4. If `reservation_enabled=true`, call supplier reservation callback and store returned real phone and supplier activation id.
+5. If `reservation_enabled=false`, use legacy fake phone only in local/dev/test; production-like environments block this path.
+6. Transition to `waiting_sms`.
+7. Create wallet hold.
 
-Implemented target flow:
+Known risk:
 
-1. Validate buyer, service, country, operator, limits, and idempotency key.
-2. Start explicit transaction.
-3. Lock wallet or pre-authorize hold before irreversible provider reservation.
-4. Select provider/stock.
-5. Reserve number with rollback/cancel handling.
-6. Create order and activation/provider mapping.
-7. Create wallet hold transaction.
-8. Commit.
-9. Return stable order response.
+- Supplier-pool reservation currently happens before wallet hold. If a reservation-enabled supplier returns a real number and a later wallet/DB step fails, compensation relies on cleanup/release behavior rather than the stricter external-provider ordering. This should be fixed or formally compensated before real supplier onboarding.
 
-For external providers, if provider reservation must happen before wallet mutation, the code needs a guaranteed compensation path: cancel provider order if DB commit or wallet hold fails.
+### Order lifecycle
 
-## 4. Request Flow: SMS Received
-
-### Scenario A: external provider through polling
-
-Current worker:
-
-- Task: `app.jobs.tasks.poll_waiting_orders`
-- Runs through Celery beat every 5 seconds.
-
-Current flow:
-
-1. Worker selects up to 100 orders where `orders.status = waiting_sms`.
-2. For each order, `services/orders.py::poll_order` is called.
-3. If order is expired:
-   - `wallet.refund` is called.
-   - `orders.status` becomes `expired`.
-   - supplier activation is marked expired if present.
-4. If provider is `supplier_pool`, polling returns without external status check.
-5. For external provider:
-   - Adapter `get_order_status(provider_order_id)` is called.
-   - If provider returns SMS:
-     - `orders.status` becomes `sms_received`.
-     - `orders.sms_code` is set.
-     - `orders.sms_text` is set.
-   - If provider returns timeout/failed:
-     - wallet hold is refunded.
-     - order status becomes `expired` or `failed`.
-
-Tables/fields updated:
-
-- `orders.status`
-- `orders.sms_code`
-- `orders.sms_text`
-- `wallets.balance`
-- `wallets.held_balance`
-- `wallet_transactions`
-- possibly `supplier_activations.status` if the order uses supplier pool
-
-Risk:
-
-- External provider SMS persistence is normalized into `sms_messages` (idempotent). DONE
-- Polling query uses `FOR UPDATE SKIP LOCKED` where supported to avoid double-processing. DONE
-- Internal provider webhook namespace exists (`/internal/provider-webhooks/{provider_code}`), but it is skeleton-only and does not process provider events yet. PARTIAL
-
-### Scenario B: supplier through `POST /supplier/v1/sms`
-
-Current endpoint:
-
-- `POST /supplier/v1/sms`
-- Router: `apps/backend/app/api/supplier.py`
-- Service: `services/suppliers.py::push_sms`
-
-Current flow:
-
-1. Supplier authenticates with supplier API key.
-2. Supplier sends:
-   - `supplier_sms_id`
-   - `phone_number`
-   - optional `phone_from`
-   - `text`
-   - optional `supplier_activation_id`
-3. Backend checks duplicate by `(supplier_id, supplier_sms_id)`.
-4. Backend finds activation by `supplier_activation_id` if provided.
-5. If not provided, backend finds latest active activation by supplier and phone number.
-6. Backend extracts SMS code with regex.
-7. Backend creates `SupplierSms`.
-8. Backend updates `SupplierActivation`:
-   - `status = sms_received`
-   - `sms_text`
-   - `sms_code`
-9. Backend updates `Order` if it is not terminal:
-   - `status = sms_received`
-   - `sms_text`
-   - `sms_code`
-
-Tables/fields updated:
-
-- `supplier_sms`
-- `supplier_activations.status`
-- `supplier_activations.sms_text`
-- `supplier_activations.sms_code`
-- `orders.status`
-- `orders.sms_text`
-- `orders.sms_code`
-
-Risk:
-
-- Phone-number fallback can attach SMS to the latest active activation if activation id is missing.
-- Supplier SMS endpoint is included in request logging, with `supplier_id` captured after successful auth. DONE
-- Supplier SMS is written to both `supplier_sms` and generic `sms_messages`. DONE
-
-## 5. Request Flow: Cancel / Finish / Expire Order
-
-Current order statuses:
+Statuses:
 
 - `created`
 - `waiting_sms`
@@ -259,446 +210,272 @@ Current order statuses:
 - `failed`
 - `refunded`
 
-Current lifecycle:
+Centralized module:
 
-```text
-created
-  -> waiting_sms
-  -> sms_received
-  -> completed
+- `apps/backend/app/services/order_state.py`
 
-waiting_sms
-  -> cancelled
-  -> expired
-  -> failed
+Transition history:
 
-sms_received
-  -> completed
-  -> cancelled currently allowed by cancel_order unless blocked by status logic
+- `order_events`
+- admin endpoint: `GET /admin/orders/{order_id}/events`
 
-waiting_sms/sms_received
-  -> refunded by admin path depending on wallet state
-```
+Buyer actions:
 
-Cancel flow:
+- `POST /api/v1/orders/{public_id}/cancel`
+- `POST /api/v1/orders/{public_id}/finish`
 
-- Endpoint: `POST /api/v1/orders/{public_id}/cancel`
-- Service: `orders.cancel_order`
-- If status is `cancelled`, `expired`, or `refunded`, returns as idempotent success.
-- If status is `completed` or `failed`, returns conflict.
-- For external provider order, calls adapter `cancel_order`.
-- Calls `wallet.refund`.
-- Sets `orders.status = cancelled`.
-- Marks supplier activation `cancelled` if present.
+Cancel/expire refund wallet holds. Finish captures wallet holds and credits supplier rewards for supplier-backed orders.
 
-Finish flow:
+## 4. SMS Flow
 
-- Endpoint: `POST /api/v1/orders/{public_id}/finish`
-- Service: `orders.finish_order`
-- If status is `completed`, returns as idempotent success.
-- Only allowed when `status = sms_received`.
-- For external provider order, calls adapter `finish_order`.
-- Calls `wallet.capture`.
-- Sets `orders.status = completed`.
-- Credits supplier reward if supplier activation exists.
+### External/mock provider polling
 
-Expire flow:
+Worker polls `waiting_sms` orders. If provider returns SMS:
 
-- Worker calls `orders.poll_order`.
-- If `expires_at <= now` and order is `waiting_sms`:
-  - Calls `wallet.refund`.
-  - Transitions order to `expired` through `transition_order`.
-  - Marks supplier activation `expired`.
-  - For reservation-enabled suppliers, release callback is best-effort and failed releases are queued in `supplier_release_retries`.
+- `orders.sms_text` and `orders.sms_code` are updated for compatibility.
+- generic `sms_messages` row is written idempotently.
+- order transitions to `sms_received`.
 
-Current state machine status:
+Provider webhook namespace exists:
 
-- Statuses are plain strings.
-- `services/order_state.py` centralizes allowed transitions for the stabilized order paths.
-- `order_events` records status transitions.
+- `POST /internal/provider-webhooks/{provider_code}`
 
-Remaining target:
+It is skeleton-only. It validates shared-secret auth and provider status, but does not process real provider webhook payloads.
 
-- Add timestamps such as `sms_received_at`, `completed_at`, `cancelled_at`, `expired_at`, `refunded_at`.
+### Supplier SMS push
 
-## 6. Money Flow
+Endpoint:
 
-### Wallet balance
+- `POST /supplier/v1/sms`
 
-`wallets.balance` is the buyer's available money.
+Behavior:
+
+- supplier API key auth
+- idempotent by supplier SMS id
+- creates `supplier_sms`
+- creates generic `sms_messages`
+- updates supplier activation and linked order
+- preserves denormalized order SMS fields
+
+If activation id is missing, the backend can fall back to matching the latest active supplier activation by supplier and phone number. This is useful locally, but real supplier integrations should prefer explicit activation ids.
+
+## 5. Money and Accounting
+
+### Buyer wallet
 
 Implemented:
 
-- Admin deposit increases balance.
-- Admin adjustment changes balance and prevents negative balance.
-- Order hold decreases balance.
-- Refund increases balance.
+- wallet balance and held balance
+- admin manual deposit and adjustment
+- order hold, capture, refund
+- idempotent hold/capture/refund per order
+- buyer wallet transaction history at `GET /api/v1/wallet/transactions`
+- DB-level non-negative balance constraints
 
-Missing:
+Every wallet movement must create a `WalletTransaction`.
 
-- Real payment/deposit provider flow.
-- Buyer wallet transaction history endpoint.
-- DB check constraint for non-negative balance.
+### Payment intents
 
-### Held balance
+Implemented foundation:
 
-`wallets.held_balance` is money reserved for active orders.
+- buyer create/list/fetch payment intents
+- optional `Idempotency-Key`
+- admin list/detail
+- admin manual completion for `manual_test`
+- internal payment webhook skeleton
+- payment webhook event deduplication
+- status transitions
+- wallet credit exactly once when a payment intent transitions to `succeeded`
+- reconciliation visibility for succeeded intent without wallet credit and linked wallet credit for non-succeeded intent
 
-Implemented:
+Not implemented:
 
-- `hold` moves money from `balance` to `held_balance`.
-- `capture` decreases `held_balance`.
-- `refund` decreases `held_balance` and returns money to `balance`.
+- real Payme/Click/crypto/provider verification
+- provider-specific signatures
+- provider-specific webhook parsing
+- chargeback/refund lifecycle
+- real payment provider UX beyond local/manual test flow
 
-Missing:
-
-- DB check constraint for non-negative held balance.
-- Reconciliation job that verifies wallet balances against ledger.
-
-### Hold
-
-Implemented in `services/wallet.py::hold`.
-
-- Checks amount is positive.
-- Checks enough available balance.
-- Locks wallet row.
-- Creates `WalletTransaction(type='hold')`.
-- Idempotent per order because of transaction lookup and unique constraint.
-
-### Capture
-
-Implemented in `services/wallet.py::capture`.
-
-- Used when buyer finishes an order after SMS received.
-- Decreases held balance.
-- Creates `WalletTransaction(type='capture')`.
-- Idempotent if capture already exists.
-- Refuses capture if refund already exists.
-
-### Refund
-
-Implemented in `services/wallet.py::refund`.
-
-- Used on cancel/expire/refund paths.
-- Moves held balance back to balance.
-- Creates `WalletTransaction(type='refund')`.
-- Idempotent if refund already exists.
-- Refuses refund if capture already exists.
-
-### Supplier reward
-
-Implemented in `services/suppliers.py::complete_supplier_reward`.
-
-- Called when buyer finishes supplier-pool order.
-- Credits `suppliers.balance`.
-- Creates `SupplierTransaction(type='reward')`.
-- Idempotent by `(supplier_id, order_id, type, status)`.
-
-### Admin deposit
+### Supplier rewards and payouts
 
 Implemented:
 
-- Endpoint: `POST /admin/wallets/deposit`
-- Service: `wallet.deposit`
-- Creates `WalletTransaction(type='deposit')`.
+- supplier reward is credited when a supplier-backed order is completed
+- supplier transaction ledger
+- supplier payout request creation
+- payout hold moves supplier balance to held balance
+- admin approve/reject/mark-paid
+- payout release and paid ledger entries
+- payout reconciliation visibility
 
-Risk:
+Not implemented:
 
-- Manual deposits are not idempotent.
-- No real payment intent/provider reference.
+- external payout provider execution
+- supplier KYC/payment-account verification
+- automated payout reconciliation with external payment rails
 
-### Supplier payout
+## 6. Supplier Flow
 
-Not found in current codebase.
+Supplier API endpoints:
 
-Needed:
+- `GET /supplier/v1/me`
+- `GET /supplier/v1/inventory`
+- `POST /supplier/v1/inventory/update`
+- `POST /supplier/v1/payout-requests`
+- `GET /supplier/v1/payout-requests`
+- `GET /supplier/v1/transactions`
+- `POST /supplier/v1/sms`
 
-- `supplier_payouts` or `withdrawal_requests` table.
-- Supplier endpoint to request payout.
-- Admin approve/reject/mark-paid endpoints.
-- Use `suppliers.held_balance` for pending withdrawals.
-- Ledger transactions for payout hold, payout completion, payout cancellation.
+Supplier reservation callback:
 
-## 7. Pricing Flow
+- Configured on supplier records through admin fields:
+  - `reservation_enabled`
+  - `reservation_url`
+  - `reservation_auth_type`
+  - `reservation_auth_secret_encrypted`
+  - `reservation_timeout_seconds`
+- Standalone client validates reservation responses.
+- Reservation-enabled suppliers must return a real phone number and supplier activation id.
+- Release callback is best-effort and failed releases are persisted to `supplier_release_retries` for retry.
 
-Current storage:
+Legacy fake supplier phone:
 
-- `prices.provider_cost`: internal cost from provider or supplier pool.
-- `prices.final_price`: customer-facing price.
-- `orders.price`: frozen customer price at purchase time.
-- `orders.provider_cost`: frozen provider/supplier cost at purchase time.
-- `providers.default_markup_percent`: default markup for seeded/mock provider pricing.
+- local/dev/test fallback only
+- blocked in production-like environments
+- not suitable for real supplier onboarding
 
-Current markup logic:
+## 7. Admin Flow
 
-- `providers/router.py::final_price(provider_cost, markup_percent)` calculates:
+Admin backend coverage includes:
 
-```text
-final_price = provider_cost * (1 + markup_percent / 100)
-```
+- users and user limits
+- orders and order events
+- providers
+- suppliers, inventory, activations, SMS, transactions
+- supplier reservation configuration
+- wallet deposit/adjustment
+- order refund
+- payment intents, manual completion, reconciliation
+- supplier payout requests and reconciliation
+- supplier release retries
+- audit logs
+- API request logs with request id and identity filters
+- metrics
+- ops summary
+- operational cleanup dry-run
+- risk users and manual risk actions
 
-Supplier pool logic:
+Admin UI coverage includes:
 
-- `sync_supplier_pool_price` uses cheapest active non-supplier-pool `final_price` as reference.
-- Supplier pool provider cost is set to 70% of that final price.
-- Supplier reward is calculated as `order.price * supplier.reward_percent / 100`.
+- metrics/users/orders/providers/suppliers
+- ops summary
+- risk users/actions
+- payment intents/manual completion
+- supplier payout requests
+- reliability center
+- request logs with request id filtering
+- supplier reservation config and visibility fields
 
-Why buyer must not see `provider_cost`:
+## 8. Observability, Risk, and Cleanup
 
-- `provider_cost` reveals marketplace margin.
-- It exposes supplier/provider economics.
-- It makes price negotiation and abuse easier.
-- It is internal accounting data, not buyer product data.
+Implemented:
 
-Current issue:
+- request id middleware with `X-Request-ID`
+- API request logging with `request_id`, `user_id`, `supplier_id`, and `buyer_api_key_id`
+- Redis fail-open rate limiting
+- health endpoints:
+  - `GET /health`
+  - `GET /health/live`
+  - `GET /health/ready`
+- admin ops summary
+- read-only payment and payout reconciliation
+- supplier release retry visibility
+- basic risk summaries and manual risk actions
+- retention policy document
+- cleanup helper/task for selected operational rows
 
-- Buyer schema no longer exposes `provider_cost`; admin/internal schemas can still include cost.
+Not implemented:
 
-Correct pricing architecture:
+- external metrics platform
+- alerting
+- Sentry/Prometheus/Grafana dashboards
+- automatic fraud blocking
+- automatic reconciliation repair
 
-- Public/buyer price response:
-  - service
-  - country
-  - operator
-  - final customer price
-  - approximate or exact available count
-  - delivery rate if safe to expose
-- Admin/internal price response:
-  - provider
-  - provider cost
-  - final price
-  - markup
-  - margin
-  - freshness
-- Pricing policy tables:
-  - global markup
-  - provider-specific markup
-  - service/country/operator override
-  - minimum price
-  - rounding rules
-- Provider price sync:
-  - fetch provider cost/stock
-  - apply pricing policy
-  - store final price
-  - track freshness and sync errors
+## 9. Current Database Map
 
-## 8. Stock / Count Flow
-
-Current `available_count` behavior:
-
-- External/mock provider stock is stored in `prices.available_count`.
-- Supplier stock is stored in `supplier_inventory.available_count`.
-- Supplier pool aggregate stock is stored in a synthetic `prices` row for provider `supplier_pool`.
-- Supplier pool aggregate count is calculated as the sum of active supplier inventory rows.
-
-External provider stock:
-
-- Source: provider adapter or seed/mock data.
-- Current mock data creates fixed counts.
-- On purchase, local `prices.available_count` is not decremented.
-- For real providers, this should be treated as cached/advisory unless synced often.
-
-Supplier inventory:
-
-- Source: supplier calls `POST /supplier/v1/inventory/update`.
-- Supplier sends count by service/country/operator.
-- On reservation, backend selects one `supplier_inventory` row and decrements count.
-
-Why count-only supplier inventory is risky:
-
-- Backend does not know the real phone numbers in advance.
-- Supplier can report count but fail to provide a real number.
-- Legacy fake phone generation remains only for local/dev/test suppliers and is blocked in production-like environments.
-- Count-only does not prevent supplier from reusing the same real number elsewhere.
-- It makes duplicate-number prevention difficult.
-
-Decision needed:
-
-Option 1: exact phone inventory.
-
-- Supplier uploads individual phone numbers.
-- Backend reserves one exact number with row locking.
-- Stronger duplicate prevention.
-- More DB rows and privacy/security concerns.
-
-Option 2: reservation callback.
-
-- Supplier reports count only.
-- When buyer purchases, backend asks supplier to reserve a number.
-- Supplier returns real phone number and supplier activation id.
-- Requires supplier callback/API availability and timeout handling.
-
-For this project, one of these strategies must be chosen before supplier pool can be production-grade.
-
-## 9. Database Map
-
-| Table | Purpose | Connected to | Critical Notes |
-|---|---|---|---|
-| `users` | Buyer/admin accounts | `wallets`, `user_limits`, `orders`, `wallet_transactions`, `audit_logs`, `api_request_logs` | Role/status are strings. No session/revoked-token table. |
-| `wallets` | Buyer balance and held balance | `users`, `wallet_transactions` | Service prevents negative balances, but DB constraints are missing. |
-| `wallet_transactions` | Buyer wallet ledger | `users`, `orders` | Hold/capture/refund are idempotent per order/type/status. Deposit/adjustment idempotency is missing. |
-| `providers` | External provider or supplier-pool config | `prices`, `orders` | Real API key encryption not implemented. Placeholder adapters exist. |
-| `services` | Product/service catalog | Referenced by code from `prices`, `orders`, `supplier_inventory` | No FK from code fields. |
-| `countries` | Country catalog | Referenced by code from `prices`, `orders`, `supplier_inventory` | No FK from code fields. |
-| `prices` | Provider price/stock by service/country/operator | `providers`, used by order creation | Buyer API currently exposes provider cost. Nullable operator unique constraint is risky in PostgreSQL. |
-| `orders` | Buyer number purchase lifecycle | `users`, `providers`, `wallet_transactions`, `supplier_activations`, `supplier_sms`, `supplier_transactions` | Needs explicit state machine and event history. |
-| `suppliers` | Supplier accounts and balances | `supplier_inventory`, `supplier_activations`, `supplier_sms`, `supplier_transactions` | No payout model yet. |
-| `supplier_inventory` | Supplier count by service/country/operator | `suppliers`, synthetic supplier-pool `prices` | Count-only inventory is not enough for real phone reservation unless reservation callback exists. |
-| `supplier_activations` | Supplier-side reservation mapped to buyer order | `suppliers`, `orders`, `supplier_sms`, `supplier_transactions` | Reservation callback returns real phone for configured suppliers; fake phone is legacy/dev-only and production-blocked. |
-| `supplier_sms` | SMS messages pushed by suppliers | `suppliers`, `supplier_activations`, `orders`, `sms_messages` | Idempotent by supplier SMS id; also normalized into `sms_messages`. |
-| `supplier_release_retries` | Retry queue for failed supplier release callbacks | `suppliers`, `supplier_activations`, `orders` | Capped retries; dead-letter status after max attempts. |
-| `supplier_transactions` | Supplier ledger | `suppliers`, `supplier_activations`, `orders` | Reward implemented. Payout/withdrawal missing. |
-| `audit_logs` | Admin/system audit trail | `users` actor | No supplier actor support. More events should be audited. |
-| `api_request_logs` | API request log | `users`, `suppliers` | Supplier/internal provider webhook endpoints are logged as metadata. No duration/user-agent. |
+| Table | Purpose | Current state |
+|---|---|---|
+| `users` | buyer/admin accounts | JWT auth, legacy API key compatibility, status/tier fields. No session revocation table. |
+| `buyer_api_keys` | managed buyer API keys | multiple keys, scopes, revoke, usage attribution. |
+| `wallets` | buyer balances | non-negative DB checks. |
+| `wallet_transactions` | buyer ledger | hold/capture/refund/deposit/adjustment/payment intent credit. |
+| `payment_intents` | deposit intent lifecycle | manual_test and internal webhook skeleton; real providers deferred. |
+| `payment_webhook_events` | webhook deduplication | status tracking; no provider-specific signature validation. |
+| `providers` | provider config | type/status validation; real adapters mostly placeholders. |
+| `prices` | provider/customer prices | buyer schema hides provider cost; nullable operator uniqueness normalized. |
+| `orders` | buyer activations | state machine, events, idempotency, wallet linkage. |
+| `order_events` | order transition history | admin-visible. |
+| `sms_messages` | normalized SMS storage | supplier and external/mock provider paths write here. |
+| `suppliers` | supplier accounts/balances/config | reservation config and visibility fields. |
+| `supplier_inventory` | count-based supplier stock | row-locked reservation, normalized operator uniqueness. |
+| `supplier_activations` | supplier reservation/order mapping | real callback ids/phones for reservation-enabled suppliers. |
+| `supplier_sms` | supplier SMS idempotency/source table | also mirrored to `sms_messages`. |
+| `supplier_transactions` | supplier ledger | rewards, payout hold/release/paid, adjustments. |
+| `supplier_payout_requests` | supplier payout lifecycle | request/approve/reject/paid skeleton, no external payout provider. |
+| `supplier_release_retries` | release callback retry queue | capped retries and dead-letter state. |
+| `api_request_logs` | request logging | request_id and identity attribution. |
+| `audit_logs` | admin/system audit | partial coverage. |
+| `user_risk_actions` | manual risk review history | admin-only. |
 
 ## 10. API Map
 
-| Namespace | Main endpoints | Role | Purpose | Notes |
-|---|---|---|---|---|
-| `auth` | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/me` | public/authenticated user | User registration, login, token refresh, current user | No token revocation/session table. |
-| `public` | Not found in current codebase | public | Public catalog/prices/health | Should be added for service/country/price discovery. |
-| `api/v1 buyer` | `/api/v1/balance`, `/api/v1/services`, `/api/v1/countries`, `/api/v1/prices`, `/api/v1/orders`, `/api/v1/orders/{public_id}`, `/cancel`, `/finish`, `/api-key/regenerate`, `/limits` | buyer/API key depending on endpoint | Buyer API for prices, orders, wallet balance, limits | Auth mode is inconsistent for catalog/list endpoints. |
-| `supplier/v1` | `/supplier/v1/me`, `/supplier/v1/inventory`, `/supplier/v1/inventory/update`, `/supplier/v1/sms` | supplier | Supplier profile, stock updates, SMS push | No supplier payouts or activation list for supplier. |
-| `admin` | `/admin/users`, `/admin/orders`, `/admin/providers`, `/admin/suppliers`, `/admin/wallets/*`, `/admin/audit-logs`, `/admin/api-request-logs`, `/admin/metrics` | admin | Back-office operations | Admin APIs mostly direct ORM. Pagination limited. |
-| `internal` | `/internal/provider-webhooks/{provider_code}` skeleton | internal worker/provider/payment callbacks | Webhooks, reconciliation, internal jobs | Provider webhook processing is not implemented yet. |
+| Namespace | Role | Current state |
+|---|---|---|
+| `/auth` | public/user | register, login, refresh, current user. No refresh token revocation table. |
+| `/api/v1` | buyer/API key | catalog, prices, orders, wallet, payment intents, limits, managed API keys. |
+| `/supplier/v1` | supplier | profile, inventory, payout requests, transactions, SMS push. |
+| `/admin` | admin | broad operations/admin API. |
+| `/internal/provider-webhooks` | internal | authenticated provider webhook skeleton only. |
+| `/internal/payment-webhooks` | internal | authenticated payment webhook foundation; credits wallet on succeeded status. |
+| `/health` | public ops | live/ready checks. |
 
-## 11. Risk Map
+## 11. Mock, Manual, Real, Deferred
 
-| Risk | Priority | Why dangerous | Where in code | Fix direction |
-|---|---|---|---|---|
-| Buyer API exposes `provider_cost` | P0 | Leaks margin and supplier/provider economics | Buyer price schema, `/api/v1/prices` | DONE |
-| External provider reservation before wallet hold | P0 | Can reserve provider number without successful payment hold | `services/orders.py::create_order` | DONE |
-| No order creation idempotency | P0 | API retry can buy multiple numbers | `/api/v1/orders`, `services/orders.py` | DONE |
-| Supplier pool fake phone numbers | P0 | Marketplace supplier flow is not real production inventory | `services/suppliers.py::_fake_supplier_phone` | PARTIAL: reservation callback implemented; fake path is legacy/dev-only and blocked in production-like environments. |
-| In-memory rate limiting | P0 | Breaks with multiple backend workers and restarts | `core/middleware.py::RateLimitMiddleware` | DONE |
-| No DB money constraints | P0 | Service bug could create negative balances | `models/entities.py`, migrations | DONE |
-| No explicit order state machine | P0 | Invalid transitions become easy as system grows | `services/order_state.py`, `order_events` | DONE |
-| No generic SMS message table | P0 | External provider SMS is not persistently modeled like supplier SMS | `sms_messages` | DONE |
-| Nullable operator unique constraints | P0 | PostgreSQL can allow duplicate rows where operator is NULL | `prices`, `supplier_inventory` | DONE |
-| Default admin credentials and default secret | P0 | Production takeover risk | `core/config.py` | DONE |
-| Supplier endpoints not request-logged | P1 | Reduced auditability for supplier writes | `core/middleware.py` | DONE |
-| No payment/deposit model | P1 | Manual deposits cannot support real users safely | `payment_intents`, `/internal/payment-webhooks/{provider}` | PARTIAL: model/API and status-only webhook skeleton exist; wallet crediting and real provider integrations are not implemented. |
-| No supplier payout lifecycle | P1 | Suppliers cannot withdraw through system | Not found in current codebase | Add payout requests, holds, admin approval, ledger events. |
-| Provider adapters mostly placeholders | P1 | Real stock/order lifecycle not implemented | `providers/five_sim.py`, `sms_activate.py`, `sms_man.py` | Implement after secrets, abuse controls, sync jobs. |
-| No stats/rate calculation | P1 | Provider/supplier routing cannot optimize quality | Only self-reported `success_rate` | Add stats aggregation from actual orders/activations. |
-| Admin lists lack pagination | P2 | Admin pages will degrade as data grows | `api/admin.py` list endpoints | Add cursor or limit/offset pagination. |
-| Public catalog missing | P2 | Users cannot browse without auth | Not found in current codebase | Add `/public/services`, `/public/countries`, `/public/prices`. |
+Real today:
 
-## 12. Build Plan
+- buyer account/order/wallet ledger foundation
+- supplier API-key cabinet/API
+- supplier reservation callback foundation
+- supplier SMS push path
+- manual/admin operational flows
+- payment intent lifecycle and idempotent wallet crediting
+- request logging, request IDs, risk and reconciliation visibility
 
-### Phase 1: Stabilize Core P0
+Mock/manual/local today:
 
-- Remove `provider_cost` from buyer API. DONE
-- Add explicit order state machine. DONE
-- Add order transition history (order_events). DONE
-- Fix order creation, wallet hold, and provider reservation ordering. DONE
-- Add buyer order creation idempotency. DONE
-- Replace in-memory rate limiting with Redis rate limiting. DONE
-- Add DB constraints for non-negative wallet and supplier balances. DONE
-- Add generic SMS messages table. DONE
-- Decide supplier real number strategy:
-  - exact phone inventory, or
-  - supplier reservation callback. DONE (Option B implemented; exact inventory not implemented)
-- Fix nullable `operator` uniqueness risk in `prices` and `supplier_inventory`. DONE
-- Add production guard for default secret and default admin password. DONE
-- Add internal provider webhook namespace. DONE (skeleton only)
-- Add liveness/readiness health endpoints. DONE
+- `mock` provider
+- `manual_test` payment provider
+- fake supplier server for local integration testing
+- admin manual payment completion
+- admin mark-paid supplier payout
 
-### Phase 2: Marketplace Accounting P1
+Deferred:
 
-- Add real payment/deposit flow:
-  - payment intent table (partial foundation exists)
-  - payment provider references
-  - signed internal payment webhook (status-only shared-secret skeleton exists)
-  - idempotent deposit crediting
-- Add supplier payout flow:
-  - payout request
-  - supplier balance hold
-  - admin approval/rejection
-  - mark paid
-  - supplier transaction ledger entries
-- Add supplier/provider stats:
-  - success rate
-  - SMS received rate
-  - completion rate
-  - average SMS time
-  - service/country/operator/provider breakdown
-- Add buyer wallet transaction endpoint.
-- Add API key management:
-  - multiple keys
-  - labels
-  - scopes
-  - last used time
-  - safe rotation.
+- real external SMS provider adapters
+- real external payment provider verification and payment UX
+- real external supplier payout execution
+- provider webhook processing
+- provider price/stock sync freshness
+- formal legal/KYC/support/public launch processes
 
-### Phase 3: Polish P2
+## 12. Main Remaining Architecture Risks
 
-- Add public catalog endpoints.
-- Improve API docs and examples.
-- Add pagination/filtering to admin and buyer list endpoints.
-- Improve frontend workflows after backend lifecycle and accounting are stable.
-- Add better operational dashboards and reconciliation views.
+1. Supplier-pool callback reservation happens before wallet hold; fix or add strict compensation before real suppliers.
+2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
+3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
+4. Refresh tokens are stateless; logout/session revocation is incomplete.
+5. Admin and supplier list pagination/filtering is still uneven.
+6. Risk monitoring is read-only/manual-review only; no automated abuse prevention.
+7. Metrics are useful for ops, but not production accounting.
 
-## 13. Glossary
-
-`buyer`
-
-A user who buys a temporary phone number and waits for SMS. In current code this is a `User` with role `user`.
-
-`supplier`
-
-A marketplace partner that provides number stock and SMS messages through `/supplier/v1`. In current code this is a separate `Supplier` model authenticated by supplier API key.
-
-`provider`
-
-An external SMS activation source or internal supplier pool. Current provider rows live in `providers`. Examples: `mock`, `supplier_pool`, future `5sim`, `sms_activate`, `sms_man`.
-
-`order`
-
-Buyer purchase of one phone number for one service/country/operator. Stored in `orders`.
-
-`activation`
-
-Supplier-side reservation connected to an order. Stored in `supplier_activations`. It maps supplier work to buyer order.
-
-`wallet hold`
-
-Temporary reservation of buyer money. It moves amount from `wallets.balance` to `wallets.held_balance` and creates `WalletTransaction(type='hold')`.
-
-`capture`
-
-Final charge of held money after successful order completion. It decreases `held_balance` and creates `WalletTransaction(type='capture')`.
-
-`refund`
-
-Return held money to available balance when order is cancelled, expired, or refunded before capture. It creates `WalletTransaction(type='refund')`.
-
-`provider_cost`
-
-Internal cost paid to provider or supplier. This is margin-sensitive and must not be shown to buyers.
-
-`final_price`
-
-Customer-facing price charged to buyer. Stored on `prices.final_price` and frozen on `orders.price`.
-
-`available_count`
-
-Number of available activations for a service/country/operator. For external providers it is cached provider stock. For suppliers it is count reported in `supplier_inventory`.
-
-`delivery_rate`
-
-Expected or measured chance of receiving SMS successfully. Current code stores it on `prices.delivery_rate`; supplier pool uses average supplier-reported success rates.
-
-`state machine`
-
-Central rule set that defines allowed order status transitions, such as `waiting_sms -> sms_received -> completed` or `waiting_sms -> cancelled`.
-
-`idempotency`
-
-Property that repeating the same request does not duplicate side effects. Wallet capture/refund, buyer order creation, supplier SMS push, and supplier reservation/release callbacks are idempotency-aware. Deposits still need idempotency.
-
-`webhook`
-
-Server-to-server callback from provider/payment system to this backend. Current code has an internal provider webhook skeleton and supplier callback support, but does not process real external provider webhook payloads yet.
-
-Note: There is now an internal provider webhook namespace skeleton at `/internal/provider-webhooks/{provider_code}`, but it is placeholder-only and does not process provider events yet.

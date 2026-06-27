@@ -326,6 +326,70 @@ def test_supplier_sms_links_by_returned_reservation_activation_id(client, admin_
     assert fetched.json()["sms_code"] == "777888"
 
 
+def test_supplier_sms_without_activation_id_transitions_order_by_phone(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+
+    monkeypatch.setattr(
+        "app.services.suppliers.reserve_supplier_number",
+        lambda supplier_entity, request, *, idempotency_key: SupplierReservationResult(
+            supplier_activation_id="real-act-phone-only",
+            phone_number="+628222333444",
+        ),
+    )
+
+    order = buy_order(client, user_token)
+    payload = {
+        "supplier_sms_id": "real-sms-phone-only",
+        "phone_number": "+628222333444",
+        "phone_from": "Telegram",
+        "text": "Your Telegram code is 12345",
+    }
+    first = client.post("/supplier/v1/sms", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+    second = client.post("/supplier/v1/sms", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+
+    assert first.status_code == 200, first.text
+    assert first.json() == {"status": "SUCCESS", "duplicate": False}
+    assert second.status_code == 200, second.text
+    assert second.json() == {"status": "SUCCESS", "duplicate": True}
+
+    fetched = client.get(f"/api/v1/orders/{order['public_id']}", headers={"Authorization": f"Bearer {user_token}"})
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["status"] == "sms_received"
+    assert fetched.json()["sms_code"] == "12345"
+    assert fetched.json()["sms_text"] == "Your Telegram code is 12345"
+
+    db = SessionLocal()
+    try:
+        order_entity = db.scalar(select(Order).where(Order.public_id == order["public_id"]))
+        assert order_entity.status == "sms_received"
+        activation = db.scalar(select(SupplierActivation).where(SupplierActivation.order_id == order_entity.id))
+        assert activation.supplier_activation_id == "real-act-phone-only"
+        assert activation.status == "sms_received"
+        supplier_sms = db.scalar(select(SupplierSms).where(SupplierSms.supplier_sms_id == "real-sms-phone-only"))
+        assert supplier_sms.order_id == order_entity.id
+        messages = list(db.scalars(select(SmsMessage).where(SmsMessage.order_id == order_entity.id)))
+        assert len(messages) == 1
+        events = list(
+            db.scalars(
+                select(OrderEvent).where(
+                    OrderEvent.order_id == order_entity.id,
+                    OrderEvent.old_status == "waiting_sms",
+                    OrderEvent.new_status == "sms_received",
+                )
+            )
+        )
+        assert len(events) == 1
+    finally:
+        db.close()
+
+
 def test_reservation_failure_does_not_create_fake_activation_or_hold(client, admin_token, user_token, monkeypatch):
     supplier = create_supplier(client, admin_token)
     assert client.patch(
