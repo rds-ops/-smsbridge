@@ -203,7 +203,7 @@ curl -sS "$BASE_URL/supplier/v1/transactions?limit=50&offset=0" \
 
 ## Supplier Reservation / Release Callbacks (Supplier-side expectations)
 
-These are outbound calls from smsbridge to the supplier (supplier must host the endpoints). The detailed contract is documented in `docs/API_CALLBACKS.md`.
+These are outbound calls from smsbridge to the supplier (supplier must host the endpoints). The detailed contract and operator runbook are documented in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`; callback summaries are also in `docs/API_CALLBACKS.md`.
 
 High level:
 - Reservation callback is used when a supplier is configured with `reservation_enabled=true` (admin configuration).

@@ -18,6 +18,7 @@ SMSBridge has a broad local/closed-beta API foundation:
 - supplier API-key auth
 - supplier inventory, activation history, SMS push, payout requests, and transaction history
 - supplier reservation callbacks, release callbacks, and release retry queue
+- supplier integration contract/runbook documented in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`
 - admin payment, payout, risk, reliability, logs, metrics, and ops endpoints
 - request logging with request IDs and identity attribution
 - health/readiness endpoints
@@ -166,6 +167,7 @@ Implemented:
 - supplier reservation callback client and integration
 - supplier reservation failure policy: clear failures rollback locally; ambiguous malformed responses with a usable external reference create failed activation plus release retry
 - supplier release callback with retry queue
+- supplier integration contract and operator runbook
 - generic `sms_messages` table for supplier and external/mock SMS
 - polling with skip-locked row locking where supported
 
@@ -221,6 +223,7 @@ Not implemented:
 | Supplier payout reconciliation | PARTIAL, read-only |
 | Supplier release retry queue | DONE |
 | Supplier reservation timeout/ambiguous response policy | DONE for local rollback and referenced ambiguous responses |
+| Supplier integration contract/operator runbook | DONE |
 | Buyer wallet transaction history | DONE |
 | Managed buyer API keys/scopes/usage | DONE |
 | Admin risk monitoring/actions | PARTIAL, manual-review only |
@@ -240,7 +243,7 @@ Blocker before real suppliers:
 - define supplier onboarding, API-key issuance, and support runbook
 - add supplier-facing activation history UI and operational onboarding runbook
 - define payout policy and minimum/KYC requirements
-- finalize supplier callback timeout/ambiguity handling
+- run supplier sandbox contract signoff for reservation/release/SMS idempotency
 
 Blocker before real payments:
 

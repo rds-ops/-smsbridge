@@ -1,6 +1,7 @@
 # Architecture Map
 
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+Supplier reservation/release contract and operator handling are documented in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 
 This document describes the implemented architecture as of the current MVP state. It is an internal source of truth for how SMSBridge is wired today, not a future design.
 
@@ -343,6 +344,7 @@ Supplier reservation callback:
 - Malformed or non-reserved responses that include both a valid supplier activation id and phone are treated as ambiguous external reservations: the order fails locally, a failed activation is retained, and a release retry is queued.
 - Release callback is best-effort and failed releases are persisted to `supplier_release_retries` for retry.
 - Suppliers can view their own activation/reservation history at `GET /supplier/v1/activations`; the response is supplier-scoped and omits buyer private data, provider cost, and internal margin fields.
+- The supplier contract and operator runbook live in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 
 Legacy fake supplier phone:
 
@@ -477,7 +479,7 @@ Deferred:
 
 ## 12. Main Remaining Architecture Risks
 
-1. Supplier callback timeout escalation for no-reference timeouts and supplier onboarding controls still need to be finalized before real suppliers.
+1. Supplier onboarding controls, sandbox signoff, and supplier UI polish still need to be finalized before real suppliers.
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Refresh tokens are stateless; logout/session revocation is incomplete.

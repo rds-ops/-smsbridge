@@ -3,6 +3,7 @@
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
 
 This document describes callback/webhook-style HTTP contracts currently implemented or planned in this repo.
+The detailed supplier onboarding contract and operator runbook are in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 
 Status legend:
 - Implemented: present in code and used by current flows.

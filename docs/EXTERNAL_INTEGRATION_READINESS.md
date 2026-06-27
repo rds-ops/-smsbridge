@@ -9,7 +9,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Local demo | Ready | Mock/manual systems, fake supplier server, manual_test payments, and local smoke script exist. Run verification before each demo. |
 | Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; needs fresh full build/test/smoke pass and a few docs/copy clarifications. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. |
-| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, wallet hold now precedes supplier callback reservation, activation history exists, and malformed ambiguous responses with external references enqueue release retry; onboarding policy, supplier UI polish, and timeout escalation runbooks remain. |
+| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, and the integration contract/runbook is documented. Onboarding/KYC, supplier UI polish, payout policy, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. |
@@ -88,6 +88,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 - reservation config on suppliers
 - release callback
 - release retry queue
+- supplier integration contract and operator runbook in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`
 - fake supplier server for local/dev
 - legacy fake phone blocked in production-like environments
 
@@ -150,11 +151,8 @@ This document is the current source of truth for SMSBridge readiness before invo
 - Define supplier onboarding/KYC/contract/support policy.
 - Define supplier API key issuance and rotation process.
 - Add supplier activation history to the supplier UI and document how suppliers should use it operationally.
-- Define operational escalation for reservation callback timeouts with no external reference:
-  - how long operators wait before contacting supplier
-  - what evidence suppliers must provide for late/duplicate reservations
-  - when to manually escalate repeated timeout patterns
 - Define manual payout policy, minimum payout, payout method rules, and support runbook.
+- Run supplier sandbox signoff against `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 - Decide whether count-based callback remains the production strategy or exact inventory is required for some suppliers.
 
 ### Nice-to-have
@@ -234,9 +232,9 @@ These are practical estimates, not precision metrics.
 |---|---:|---|
 | Backend core MVP | 80% | Strong local/manual foundations; real integrations deferred. |
 | Frontend buyer MVP | 75% | Storefront and account flows exist; needs smoke/mobile verification. |
-| Supplier MVP | 70% | API/cabinet/callbacks/payout skeleton and backend activation transparency exist; onboarding and supplier UI polish remain. |
-| Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and external runbooks missing. |
-| Docs | 70% | Main docs now reconciled; provider/payment-specific runbooks still needed. |
+| Supplier MVP | 75% | API/cabinet/callbacks/payout skeleton, backend activation transparency, and supplier integration runbook exist; onboarding and supplier UI polish remain. |
+| Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and payment/provider production runbooks missing. |
+| Docs | 75% | Main docs and supplier contract/runbook are reconciled; provider/payment-specific runbooks still needed. |
 | Real payments | 25% | Intent/webhook/crediting base exists; provider verification absent. |
 | Real SMS providers | 20% | Adapter skeletons exist; real integration absent. |
 | Production launch | 35% | Good MVP base; needs integrations, legal, security, monitoring, and ops maturity. |
@@ -246,7 +244,7 @@ These are practical estimates, not precision metrics.
 | Task | Area | Priority | Complexity | Why it matters | Suggested verification |
 |---|---|---|---|---|---|
 | Run full verification and record results | tests | blocker | medium | Establishes whether current MVP actually passes after many changes. | Backend pytest, frontend build, local E2E smoke. |
-| Write supplier timeout escalation runbook | ops/docs | blocker | small | Code handles local rollback and referenced ambiguous reservations; operators still need a process for timeouts with no external reference. | Runbook review with supplier sandbox cases. |
+| Run supplier sandbox contract signoff | ops/tests/docs | blocker | medium | Code and runbook exist, but a real supplier must prove idempotent reservation, release, SMS, and timeout behavior before onboarding. | Execute contract checklist from `SUPPLIER_INTEGRATION_CONTRACT.md`. |
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
 | Add supplier activation history to supplier UI | frontend | beta-useful | medium | Backend activation history exists; real suppliers still need it surfaced in the cabinet. | `/supplier` UI and browser smoke. |
@@ -261,8 +259,8 @@ These are practical estimates, not precision metrics.
 1. Run full verification and record exact results.
    - Highest leverage because docs now claim many features are implemented and need a clean current pass.
 
-2. Write supplier timeout escalation runbook.
-   - Highest remaining supplier operations blocker now that code handles rollback and referenced ambiguous reservations.
+2. Run supplier sandbox contract signoff.
+   - Highest remaining supplier operations blocker now that the contract and timeout/release runbook are documented.
 
 3. Clarify manual_test payment behavior in buyer-facing copy/docs and verify the browser purchase/deposit flow.
    - Highest product blocker before friendly buyer testing.
@@ -272,5 +270,5 @@ These are practical estimates, not precision metrics.
 - Full backend test status was not re-run during this docs reconciliation.
 - Frontend build status was not re-run during this docs reconciliation.
 - Browser/mobile behavior was not visually verified during this docs reconciliation.
-- Supplier reservation timeout escalation for no-reference timeouts needs runbook confirmation before real supplier contracts.
+- Supplier reservation/release behavior still needs sandbox signoff with the first real supplier.
 - Real payment and SMS provider choices are not decided in the repo.
