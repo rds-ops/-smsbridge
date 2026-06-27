@@ -129,7 +129,7 @@ Missing/deferred:
 
 | Area | Status | Notes |
 |---|---|---|
-| Local demo buyer flow | Mostly ready | Needs fresh smoke/browser verification. |
+| Local demo buyer flow | Mostly ready | RC-1 frontend build, route availability, and local E2E smoke passed; true visual browser/mobile QA remains. |
 | Buyer wallet/manual deposit flow | Mostly ready | `manual_test` creation exists; admin completion remains admin-only. |
 | Managed API keys | Mostly ready | Create/list/revoke/scopes/usage implemented. |
 | Supplier cabinet MVP | Mostly ready | Profile/inventory/SMS/payouts/transactions implemented; activation history backend exists but UI is missing. |
@@ -142,8 +142,7 @@ Missing/deferred:
 
 Beta blockers or near-blockers:
 
-- run and record frontend build plus browser smoke test
-- verify marketplace purchase after latest layout/auth changes
+- complete true visual browser/mobile QA after latest layout/auth changes
 - clarify `/deposit` copy so buyers understand admin/manual completion
 - verify auth false redirects and token refresh behavior in browser
 - mobile storefront QA
@@ -177,3 +176,19 @@ Later:
 | Real payment provider UX | frontend/backend | later | large | Deferred until provider implementation. |
 | Provider operations UI | frontend/backend | later | large | Depends on real provider adapter/sync work. |
 | Dark mode polish for dense admin/supplier pages | frontend | later | small | Visual polish, not core readiness. |
+
+## 8. RC-1 UI Verification Record
+
+Date: 2026-06-27
+
+Passed:
+
+- `docker compose build frontend`
+- `docker run --rm smsbridge-frontend npm run build`
+- `docker compose up -d frontend`
+- HTTP route availability checks for `/`, `/buy`, `/dashboard`, `/orders`, `/deposit`, `/api-docs`, `/supplier`, and `/admin`; all returned HTTP 200.
+- `python tools/local_e2e_smoke.py` passed the local manual/mock E2E flow, including manual_test payment completion, supplier reservation, supplier SMS, order finish, wallet ledger, and supplier reward.
+
+Not completed:
+
+- True visual browser QA for desktop/mobile and light/dark mode. The in-app browser connector failed during setup, so RC-1 records route availability but not a visual pass.

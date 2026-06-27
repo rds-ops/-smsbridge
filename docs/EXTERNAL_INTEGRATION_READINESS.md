@@ -6,9 +6,9 @@ This document is the current source of truth for SMSBridge readiness before invo
 
 | Target | Status | Summary |
 |---|---|---|
-| Local demo | Ready | Mock/manual systems, fake supplier server, manual_test payments, and local smoke script exist. Run verification before each demo. |
-| Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; needs fresh full build/test/smoke pass and a few docs/copy clarifications. |
-| Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. |
+| Local demo | Ready | RC-1 full backend tests, frontend build, migrations, health checks, and local E2E smoke passed on 2026-06-27. |
+| Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; RC-1 build/test/smoke passed. True visual browser/mobile QA still needs a recorded pass. |
+| Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. RC-1 technical checks passed; browser/mobile QA remains. |
 | Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
@@ -128,11 +128,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 
 ### Blockers
 
-- Run full verification:
-  - backend tests
-  - frontend build
-  - local E2E smoke script
-- Verify the storefront order flow in a browser after recent UI shell/auth changes.
+- Complete and record true visual browser QA for the storefront order flow after recent UI shell/auth changes.
 - Clarify buyer copy/docs around `manual_test`: creating an intent does not fund wallet; admin/manual completion or internal webhook success does.
 - Verify auth modal, token refresh, logout, and false redirect behavior.
 - Confirm buyer-facing prices never expose `provider_cost`.
@@ -230,7 +226,7 @@ These are practical estimates, not precision metrics.
 | Area | Estimate | Notes |
 |---|---:|---|
 | Backend core MVP | 80% | Strong local/manual foundations; real integrations deferred. |
-| Frontend buyer MVP | 75% | Storefront and account flows exist; needs smoke/mobile verification. |
+| Frontend buyer MVP | 78% | Storefront and account flows exist; frontend build and route availability passed in RC-1; true visual/mobile QA remains. |
 | Supplier MVP | 80% | API/cabinet/callbacks/manual payout skeleton, admin API key issuance, backend activation transparency, and supplier integration/payout runbook exist; KYC, external payout execution, and supplier UI polish remain. |
 | Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and payment/provider production runbooks missing. |
 | Docs | 75% | Main docs and supplier contract/runbook are reconciled; provider/payment-specific runbooks still needed. |
@@ -242,7 +238,7 @@ These are practical estimates, not precision metrics.
 
 | Task | Area | Priority | Complexity | Why it matters | Suggested verification |
 |---|---|---|---|---|---|
-| Run full verification and record results | tests | blocker | medium | Establishes whether current MVP actually passes after many changes. | Backend pytest, frontend build, local E2E smoke. |
+| Complete browser visual QA and record results | frontend/tests | blocker | medium | RC-1 build/smoke passed, but true desktop/mobile/light/dark visual QA was not completed due browser tooling failure. | Browser pass across `/`, `/buy`, `/dashboard`, `/orders`, `/deposit`, `/api-docs`, `/supplier`, `/admin`. |
 | Run supplier sandbox contract signoff | ops/tests/docs | blocker | medium | Code and runbook exist, but a real supplier must prove idempotent reservation, release, SMS, and timeout behavior before onboarding. | Execute contract checklist from `SUPPLIER_INTEGRATION_CONTRACT.md`. |
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
@@ -255,8 +251,8 @@ These are practical estimates, not precision metrics.
 
 ## 10. Immediate Next 3 Tasks
 
-1. Run full verification and record exact results.
-   - Highest leverage because docs now claim many features are implemented and need a clean current pass.
+1. Complete browser visual QA and record exact results.
+   - Highest remaining friendly-buyer blocker after RC-1 backend/frontend/smoke verification passed.
 
 2. Run supplier sandbox contract signoff.
    - Highest remaining supplier operations blocker now that the contract and timeout/release runbook are documented.
@@ -266,9 +262,7 @@ These are practical estimates, not precision metrics.
 
 ## 11. Current Uncertainties
 
-- Full backend test status was not re-run during this docs reconciliation.
-- Frontend build status was not re-run during this docs reconciliation.
-- Browser/mobile behavior was not visually verified during this docs reconciliation.
+- True browser/mobile visual behavior was not verified during RC-1 because the in-app browser connector failed during setup. Route availability was checked over HTTP.
 - Supplier reservation/release behavior still needs sandbox signoff with the first real supplier.
 - Real payment and SMS provider choices are not decided in the repo.
 
@@ -278,7 +272,7 @@ This snapshot separates backend readiness from UI polish, external contracts, an
 
 | Area | Backend readiness | Notes |
 |---|---|---|
-| Friendly buyers with manual/mock systems | Mostly ready | Buyer auth, orders, idempotency, wallet ledger, manual_test deposits, wallet history, API keys/scopes, and rate limits exist. Requires fresh full verification and browser smoke before inviting buyers. |
+| Friendly buyers with manual/mock systems | Mostly ready | Buyer auth, orders, idempotency, wallet ledger, manual_test deposits, wallet history, API keys/scopes, and rate limits exist. RC-1 backend/frontend/smoke verification passed; true browser/mobile visual QA remains before inviting buyers. |
 | First real supplier sandbox | Mostly ready | Reservation callback, wallet-hold-before-reservation, release retry, activation history, admin API key issuance, config validation, supplier SMS, and manual payout accounting are implemented. Requires KYC/contract policy, supplier sandbox signoff, and external payout execution process before production onboarding. |
 | Real payments | Not ready | Payment intent lifecycle and idempotent wallet crediting exist, but real provider signature verification, provider-specific webhook mapping, checkout UX, and chargeback/refund policy are not implemented. |
 | Real SMS providers | Not ready | Mock/local and supplier-pool paths exist, and the internal provider webhook namespace is skeleton-only. Real provider adapters, price/stock freshness, credential rotation, cancellation semantics, and reconciliation remain. |
@@ -286,6 +280,34 @@ This snapshot separates backend readiness from UI polish, external contracts, an
 
 Remaining backend blockers by severity:
 
-- P0 before external parties: run full verification; run supplier sandbox contract signoff; keep real payments disabled until provider verification is implemented; keep real SMS providers disabled until a real adapter and provider reconciliation are implemented.
+- P0 before external parties: complete true browser/mobile visual QA; run supplier sandbox contract signoff; keep real payments disabled until provider verification is implemented; keep real SMS providers disabled until a real adapter and provider reconciliation are implemented.
 - P1 before broader beta: refresh-token/session revocation; provider price/stock freshness; production incident/deployment runbook; external alerting; operator playbooks for repeated supplier release failures.
 - P2 after beta foundation: automated reconciliation repair; exact phone inventory option; supplier self-service onboarding/API key rotation; richer accounting reports.
+
+## 13. RC-1 Verification Record
+
+Date: 2026-06-27
+
+| Check | Command | Result |
+|---|---|---|
+| Backend image build | `docker compose build backend` | PASS |
+| Backend services | `docker compose up -d postgres redis backend` | PASS |
+| Alembic upgrade | `docker compose exec backend alembic upgrade head` | PASS |
+| Alembic heads | `docker compose exec backend alembic heads` | PASS, single head `0022_obs_index_audit` |
+| Alembic current | `docker compose exec backend alembic current` | PASS, current `0022_obs_index_audit` |
+| Full backend tests | `docker compose exec backend python -m pytest app/tests` | PASS, `283 passed, 1 warning` |
+| Frontend image build | `docker compose build frontend` | PASS |
+| Frontend production build | `docker run --rm smsbridge-frontend npm run build` | PASS |
+| Frontend service | `docker compose up -d frontend` | PASS |
+| Fake supplier service | `docker compose --profile dev up -d fake-supplier` | PASS |
+| Local E2E smoke | `python tools/local_e2e_smoke.py` with local Docker URLs | PASS, covered health, manual_test payment completion, supplier reservation, supplier SMS, finish, wallet ledger, supplier reward |
+| Backend health endpoints | `GET /health/live`, `GET /health/ready` | PASS, live `ok`, ready database/Redis `ok` |
+| Frontend route availability | HTTP checks for `/`, `/buy`, `/dashboard`, `/orders`, `/deposit`, `/api-docs`, `/supplier`, `/admin` | PASS, all returned HTTP 200 |
+| Visual browser QA | in-app browser connector setup | NOT COMPLETED, connector failed before navigation; desktop/mobile/light/dark visual pass still required |
+
+RC-1 conclusion:
+
+- Backend release-candidate verification passed.
+- Frontend build and route availability passed.
+- Local manual/mock E2E smoke passed.
+- True visual browser QA remains the main unrecorded friendly-buyer readiness item.
