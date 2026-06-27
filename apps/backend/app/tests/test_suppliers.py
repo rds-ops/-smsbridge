@@ -24,7 +24,11 @@ from app.models import (
 )
 from app.services import orders as order_service
 from app.services.supplier_release_retries import process_due_release_retries
-from app.services.supplier_reservations import SupplierReservationResult, SupplierReservationUnavailable
+from app.services.supplier_reservations import (
+    SupplierReservationAmbiguousResponse,
+    SupplierReservationResult,
+    SupplierReservationUnavailable,
+)
 
 
 def create_supplier(client, admin_token, status: str = "active") -> dict:
@@ -619,6 +623,73 @@ def test_supplier_reservation_failure_after_hold_refunds_if_committed(client, ad
         assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
         inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
         assert inventory.available_count == 5
+    finally:
+        db.close()
+
+
+def test_ambiguous_supplier_reservation_creates_failed_activation_and_release_retry(client, admin_token, user_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    db = SessionLocal()
+    try:
+        mock_provider = db.scalar(select(Provider).where(Provider.code == "mock"))
+        mock_provider.status = "inactive"
+        db.commit()
+    finally:
+        db.close()
+
+    def ambiguous_reservation(supplier_entity, request, *, idempotency_key):
+        raise SupplierReservationAmbiguousResponse(
+            "supplier returned malformed reserved response",
+            supplier_activation_id="ambiguous-act-1",
+            phone_number="+628199999999",
+        )
+
+    monkeypatch.setattr("app.services.suppliers.reserve_supplier_number", ambiguous_reservation)
+
+    response = client.post(
+        "/api/v1/orders",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={"service_code": "telegram", "country_iso2": "ID"},
+    )
+
+    assert response.status_code == 502
+    balance = client.get("/api/v1/balance", headers={"Authorization": f"Bearer {user_token}"}).json()
+    assert balance["balance"] == "25.0000"
+    assert balance["held_balance"] == "0.0000"
+
+    db = SessionLocal()
+    try:
+        user = db.get(User, 2)
+        db.refresh(user.wallet)
+        assert user.wallet.balance == Decimal("25.0000")
+        assert user.wallet.held_balance == Decimal("0.0000")
+
+        failed_order = db.scalar(select(Order).where(Order.user_id == user.id, Order.status == "failed"))
+        assert failed_order is not None
+        assert failed_order.provider_order_id == "ambiguous-act-1"
+        assert failed_order.phone_number == "+628199999999"
+        activation = db.scalar(select(SupplierActivation).where(SupplierActivation.order_id == failed_order.id))
+        assert activation is not None
+        assert activation.status == "failed"
+        assert activation.supplier_activation_id == "ambiguous-act-1"
+        assert activation.phone_number == "+628199999999"
+        retry = db.scalar(select(SupplierReleaseRetry).where(SupplierReleaseRetry.supplier_activation_id == activation.id))
+        assert retry is not None
+        assert retry.status == "pending"
+        assert retry.reason == "failed"
+        assert "malformed reserved response" in retry.last_error
+        assert db.scalar(select(WalletTransaction).where(WalletTransaction.order_id == failed_order.id)) is None
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.available_count == 5
+        assert inventory.failed_reservation_count == 1
+        assert inventory.failed_release_count == 1
     finally:
         db.close()
 

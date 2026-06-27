@@ -193,10 +193,11 @@ Supplier-pool path:
 6. If `reservation_enabled=false`, use legacy fake phone only in local/dev/test; production-like environments block this path.
 7. Transition to `waiting_sms`.
 8. If supplier reservation is unavailable after the hold, refund the hold, mark the local attempt failed, restore inventory, and continue/fail cleanly.
+9. If the supplier returns a malformed/non-reserved response that still contains a valid supplier activation id and phone, treat it as an ambiguous external reservation: create a failed local activation, enqueue supplier release retry, refund the hold, restore inventory, and fail/continue cleanly.
 
 Known risk:
 
-- Supplier-pool reservation no longer happens before wallet hold. Remaining real-supplier risks are callback timeout ambiguity, supplier onboarding/contract policy, supplier-facing activation UI polish, and operational escalation for repeated release failures.
+- Supplier-pool reservation no longer happens before wallet hold. Clear callback failures roll back locally; referenced ambiguous callback responses are queued for release retry. Remaining real-supplier risks are timeout escalation when no external reference is returned, supplier onboarding/contract policy, supplier-facing activation UI polish, and operational escalation for repeated release failures.
 
 ### Order lifecycle
 
@@ -338,6 +339,8 @@ Supplier reservation callback:
   - `reservation_timeout_seconds`
 - Standalone client validates reservation responses.
 - Reservation-enabled suppliers must return a real phone number and supplier activation id.
+- Timeout, connection, HTTP error, invalid JSON, and malformed success without a usable external reference are clear local failures: buyer hold is refunded, inventory is restored, no active activation is created, and no release retry is needed.
+- Malformed or non-reserved responses that include both a valid supplier activation id and phone are treated as ambiguous external reservations: the order fails locally, a failed activation is retained, and a release retry is queued.
 - Release callback is best-effort and failed releases are persisted to `supplier_release_retries` for retry.
 - Suppliers can view their own activation/reservation history at `GET /supplier/v1/activations`; the response is supplier-scoped and omits buyer private data, provider cost, and internal margin fields.
 
@@ -474,7 +477,7 @@ Deferred:
 
 ## 12. Main Remaining Architecture Risks
 
-1. Supplier callback timeout ambiguity and supplier onboarding controls still need to be finalized before real suppliers.
+1. Supplier callback timeout escalation for no-reference timeouts and supplier onboarding controls still need to be finalized before real suppliers.
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Refresh tokens are stateless; logout/session revocation is incomplete.

@@ -9,7 +9,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Local demo | Ready | Mock/manual systems, fake supplier server, manual_test payments, and local smoke script exist. Run verification before each demo. |
 | Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; needs fresh full build/test/smoke pass and a few docs/copy clarifications. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. |
-| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, wallet hold now precedes supplier callback reservation, and supplier activation history exists; onboarding policy, supplier UI polish, and callback timeout ambiguity remain. |
+| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, wallet hold now precedes supplier callback reservation, activation history exists, and malformed ambiguous responses with external references enqueue release retry; onboarding policy, supplier UI polish, and timeout escalation runbooks remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. |
@@ -82,6 +82,9 @@ This document is the current source of truth for SMSBridge readiness before invo
 ### Supplier callbacks
 
 - reservation callback client
+- explicit reservation failure policy:
+  - clear timeout/connection/HTTP/invalid responses fail locally, refund the buyer hold, restore inventory, and do not create activation/retry
+  - malformed/non-reserved responses that still include a valid supplier activation id and phone are treated as ambiguous external reservations and enqueue release retry
 - reservation config on suppliers
 - release callback
 - release retry queue
@@ -147,10 +150,10 @@ This document is the current source of truth for SMSBridge readiness before invo
 - Define supplier onboarding/KYC/contract/support policy.
 - Define supplier API key issuance and rotation process.
 - Add supplier activation history to the supplier UI and document how suppliers should use it operationally.
-- Define timeout ambiguity handling for reservation callback:
-  - timeout after supplier reserved number
-  - duplicate/retry behavior
-  - release retry escalation
+- Define operational escalation for reservation callback timeouts with no external reference:
+  - how long operators wait before contacting supplier
+  - what evidence suppliers must provide for late/duplicate reservations
+  - when to manually escalate repeated timeout patterns
 - Define manual payout policy, minimum payout, payout method rules, and support runbook.
 - Decide whether count-based callback remains the production strategy or exact inventory is required for some suppliers.
 
@@ -243,7 +246,7 @@ These are practical estimates, not precision metrics.
 | Task | Area | Priority | Complexity | Why it matters | Suggested verification |
 |---|---|---|---|---|---|
 | Run full verification and record results | tests | blocker | medium | Establishes whether current MVP actually passes after many changes. | Backend pytest, frontend build, local E2E smoke. |
-| Add supplier callback timeout ambiguity policy and escalation | backend/ops/docs | blocker | medium | Real suppliers need clear handling when a callback times out but may have reserved a number. | Timeout fixture tests and supplier runbook review. |
+| Write supplier timeout escalation runbook | ops/docs | blocker | small | Code handles local rollback and referenced ambiguous reservations; operators still need a process for timeouts with no external reference. | Runbook review with supplier sandbox cases. |
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
 | Add supplier activation history to supplier UI | frontend | beta-useful | medium | Backend activation history exists; real suppliers still need it surfaced in the cabinet. | `/supplier` UI and browser smoke. |
@@ -258,8 +261,8 @@ These are practical estimates, not precision metrics.
 1. Run full verification and record exact results.
    - Highest leverage because docs now claim many features are implemented and need a clean current pass.
 
-2. Define supplier callback timeout ambiguity handling and escalation.
-   - Highest remaining technical/policy blocker before real supplier onboarding.
+2. Write supplier timeout escalation runbook.
+   - Highest remaining supplier operations blocker now that code handles rollback and referenced ambiguous reservations.
 
 3. Clarify manual_test payment behavior in buyer-facing copy/docs and verify the browser purchase/deposit flow.
    - Highest product blocker before friendly buyer testing.
@@ -269,5 +272,5 @@ These are practical estimates, not precision metrics.
 - Full backend test status was not re-run during this docs reconciliation.
 - Frontend build status was not re-run during this docs reconciliation.
 - Browser/mobile behavior was not visually verified during this docs reconciliation.
-- Supplier reservation timeout ambiguity needs design confirmation before real supplier contracts.
+- Supplier reservation timeout escalation for no-reference timeouts needs runbook confirmation before real supplier contracts.
 - Real payment and SMS provider choices are not decided in the repo.

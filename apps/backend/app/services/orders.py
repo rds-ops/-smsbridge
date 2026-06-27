@@ -167,11 +167,14 @@ def create_order_idempotent_transactional(
         db.commit()
         db.refresh(order)
         suppliers.pop_pending_reservation_failures(db)
+        suppliers.pop_pending_ambiguous_reservation_failures(db)
         return order
     except Exception:
         reservation_failures = suppliers.pop_pending_reservation_failures(db)
+        ambiguous_reservation_failures = suppliers.pop_pending_ambiguous_reservation_failures(db)
         db.rollback()
         suppliers.persist_reservation_failures(db, reservation_failures)
+        suppliers.persist_ambiguous_reservation_failures(db, ambiguous_reservation_failures)
         raise
 
 

@@ -28,6 +28,7 @@ from app.providers.mock import COUNTRY_PREFIX
 from app.services import sms_messages
 from app.services.order_state import OrderStatus, can_transition, is_terminal, transition_order
 from app.services.supplier_reservations import (
+    SupplierReservationAmbiguousResponse,
     SupplierReservationError,
     SupplierReservationRequest,
     SupplierReleaseRequest,
@@ -42,6 +43,7 @@ RELEASE_ACTIVATION_STATUSES = {OrderStatus.CANCELLED, OrderStatus.EXPIRED, Order
 
 logger = logging.getLogger(__name__)
 RESERVATION_FAILURES_KEY = "supplier_reservation_failures"
+AMBIGUOUS_RESERVATION_FAILURES_KEY = "supplier_ambiguous_reservation_failures"
 
 
 def normalize_operator(operator: str | None) -> str | None:
@@ -261,6 +263,40 @@ def _remember_reservation_failure(db: Session, inventory: SupplierInventory, err
     failures.append((inventory.id, _sanitize_supplier_error(error)))
 
 
+def _remember_ambiguous_reservation_failure(
+    db: Session,
+    *,
+    order: Order,
+    supplier: Supplier,
+    inventory: SupplierInventory,
+    operator: str | None,
+    supplier_reward: Decimal,
+    supplier_activation_id: str,
+    phone_number: str,
+    error: Exception | str,
+) -> None:
+    failures = db.info.setdefault(AMBIGUOUS_RESERVATION_FAILURES_KEY, [])
+    failures.append(
+        {
+            "user_id": order.user_id,
+            "provider_id": order.provider_id,
+            "public_id": order.public_id,
+            "service_code": order.service_code,
+            "country_iso2": order.country_iso2,
+            "operator": normalize_operator(operator),
+            "price": order.price,
+            "provider_cost": supplier_reward,
+            "expires_at": order.expires_at,
+            "supplier_id": supplier.id,
+            "inventory_id": inventory.id,
+            "supplier_reward": supplier_reward,
+            "supplier_activation_id": supplier_activation_id,
+            "phone_number": phone_number,
+            "error": _sanitize_supplier_error(error),
+        }
+    )
+
+
 def _record_release_success(inventory: SupplierInventory) -> None:
     inventory.last_release_at = datetime.now(timezone.utc)
     inventory.last_release_error = None
@@ -275,6 +311,10 @@ def pop_pending_reservation_failures(db: Session) -> list[tuple[int, str]]:
     return list(db.info.pop(RESERVATION_FAILURES_KEY, []))
 
 
+def pop_pending_ambiguous_reservation_failures(db: Session) -> list[dict]:
+    return list(db.info.pop(AMBIGUOUS_RESERVATION_FAILURES_KEY, []))
+
+
 def persist_reservation_failures(db: Session, failures: list[tuple[int, str]]) -> None:
     if not failures:
         return
@@ -282,6 +322,66 @@ def persist_reservation_failures(db: Session, failures: list[tuple[int, str]]) -
         inventory = db.get(SupplierInventory, inventory_id)
         if inventory:
             _record_reservation_failure(inventory, error)
+    db.commit()
+
+
+def persist_ambiguous_reservation_failures(db: Session, failures: list[dict]) -> None:
+    if not failures:
+        return
+    for failure in failures:
+        existing_activation = db.scalar(
+            select(SupplierActivation).where(
+                SupplierActivation.supplier_id == failure["supplier_id"],
+                SupplierActivation.supplier_activation_id == failure["supplier_activation_id"],
+            )
+        )
+        if existing_activation:
+            retry_order = existing_activation.order
+            if retry_order:
+                enqueue_release_retry(
+                    db,
+                    order=retry_order,
+                    activation=existing_activation,
+                    reason=OrderStatus.FAILED,
+                    error=failure["error"],
+                )
+            continue
+
+        order = Order(
+            user_id=failure["user_id"],
+            provider_id=failure["provider_id"],
+            public_id=failure["public_id"],
+            service_code=failure["service_code"],
+            country_iso2=failure["country_iso2"],
+            operator=failure["operator"],
+            status=OrderStatus.CREATED,
+            price=failure["price"],
+            provider_cost=failure["provider_cost"],
+            provider_order_id=failure["supplier_activation_id"],
+            phone_number=failure["phone_number"],
+            expires_at=failure["expires_at"],
+        )
+        db.add(order)
+        db.flush()
+        transition_order(order, OrderStatus.FAILED, db=db, actor_type="system", reason="supplier_reservation_ambiguous")
+        activation = SupplierActivation(
+            supplier_id=failure["supplier_id"],
+            order_id=order.id,
+            supplier_activation_id=failure["supplier_activation_id"],
+            phone_number=failure["phone_number"],
+            service_code=failure["service_code"],
+            country_iso2=failure["country_iso2"],
+            operator=failure["operator"],
+            status=OrderStatus.FAILED,
+            client_price=failure["price"],
+            supplier_reward=failure["supplier_reward"],
+        )
+        db.add(activation)
+        db.flush()
+        enqueue_release_retry(db, order=order, activation=activation, reason=OrderStatus.FAILED, error=failure["error"])
+        inventory = db.get(SupplierInventory, failure["inventory_id"])
+        if inventory:
+            _record_release_failure(inventory, failure["error"])
     db.commit()
 
 
@@ -328,6 +428,35 @@ def reserve_supplier_activation(db: Session, order: Order, price: Price, operato
                 ),
                 idempotency_key=request_id,
             )
+        except SupplierReservationAmbiguousResponse as exc:
+            inventory.available_count += 1
+            _record_reservation_failure(inventory, exc)
+            _remember_reservation_failure(db, inventory, exc)
+            _remember_ambiguous_reservation_failure(
+                db,
+                order=order,
+                supplier=supplier,
+                inventory=inventory,
+                operator=operator,
+                supplier_reward=supplier_reward,
+                supplier_activation_id=exc.supplier_activation_id,
+                phone_number=exc.phone_number,
+                error=exc,
+            )
+            activation = _create_failed_ambiguous_activation(
+                db,
+                order=order,
+                supplier=supplier,
+                inventory=inventory,
+                operator=operator,
+                supplier_reward=supplier_reward,
+                supplier_activation_id=exc.supplier_activation_id,
+                phone_number=exc.phone_number,
+                error=exc,
+            )
+            enqueue_release_retry(db, order=order, activation=activation, reason=OrderStatus.FAILED, error=exc)
+            sync_supplier_pool_price(db, order.service_code, order.country_iso2, normalize_operator(operator))
+            return None
         except SupplierReservationError as exc:
             inventory.available_count += 1
             _record_reservation_failure(inventory, exc)
@@ -365,6 +494,39 @@ def reserve_supplier_activation(db: Session, order: Order, price: Price, operato
     order.phone_number = activation.phone_number
     order.provider_cost = supplier_reward
     sync_supplier_pool_price(db, order.service_code, order.country_iso2, activation.operator)
+    db.flush()
+    return activation
+
+
+def _create_failed_ambiguous_activation(
+    db: Session,
+    *,
+    order: Order,
+    supplier: Supplier,
+    inventory: SupplierInventory,
+    operator: str | None,
+    supplier_reward: Decimal,
+    supplier_activation_id: str,
+    phone_number: str,
+    error: Exception,
+) -> SupplierActivation:
+    activation = SupplierActivation(
+        supplier_id=supplier.id,
+        order_id=order.id,
+        supplier_activation_id=supplier_activation_id,
+        phone_number=phone_number,
+        service_code=order.service_code,
+        country_iso2=order.country_iso2,
+        operator=normalize_operator(operator),
+        status=OrderStatus.FAILED,
+        client_price=order.price,
+        supplier_reward=supplier_reward,
+    )
+    db.add(activation)
+    order.provider_order_id = supplier_activation_id
+    order.phone_number = phone_number
+    order.provider_cost = supplier_reward
+    _record_release_failure(inventory, error)
     db.flush()
     return activation
 

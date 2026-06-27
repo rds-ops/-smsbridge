@@ -7,6 +7,7 @@ import pytest
 
 from app.models import Supplier
 from app.services.supplier_reservations import (
+    SupplierReservationAmbiguousResponse,
     SupplierReservationError,
     SupplierReservationInvalidResponse,
     SupplierReservationRequest,
@@ -153,6 +154,32 @@ def test_invalid_response_raises_supplier_reservation_invalid_response(response)
 
     with pytest.raises(SupplierReservationInvalidResponse):
         reserve_supplier_number(supplier(), reservation_request(), idempotency_key="idem-1", client=client_for(handler))
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, json={"status": "error", "supplier_activation_id": "sup_ambiguous", "phone_number": "+628123456789"}),
+        httpx.Response(
+            200,
+            json={
+                "status": "reserved",
+                "supplier_activation_id": "sup_ambiguous",
+                "phone_number": "+628123456789",
+                "expires_at": 123,
+            },
+        ),
+    ],
+)
+def test_ambiguous_response_with_external_reference_raises_ambiguous_response(response):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return response
+
+    with pytest.raises(SupplierReservationAmbiguousResponse) as exc_info:
+        reserve_supplier_number(supplier(), reservation_request(), idempotency_key="idem-1", client=client_for(handler))
+
+    assert exc_info.value.supplier_activation_id == "sup_ambiguous"
+    assert exc_info.value.phone_number == "+628123456789"
 
 
 def test_missing_reservation_url_raises_clear_error():

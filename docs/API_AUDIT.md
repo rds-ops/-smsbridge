@@ -164,6 +164,7 @@ Implemented:
 - local mock provider
 - supplier-pool provider path
 - supplier reservation callback client and integration
+- supplier reservation failure policy: clear failures rollback locally; ambiguous malformed responses with a usable external reference create failed activation plus release retry
 - supplier release callback with retry queue
 - generic `sms_messages` table for supplier and external/mock SMS
 - polling with skip-locked row locking where supported
@@ -219,6 +220,7 @@ Not implemented:
 | Supplier payout request lifecycle | PARTIAL, no external payout provider |
 | Supplier payout reconciliation | PARTIAL, read-only |
 | Supplier release retry queue | DONE |
+| Supplier reservation timeout/ambiguous response policy | DONE for local rollback and referenced ambiguous responses |
 | Buyer wallet transaction history | DONE |
 | Managed buyer API keys/scopes/usage | DONE |
 | Admin risk monitoring/actions | PARTIAL, manual-review only |

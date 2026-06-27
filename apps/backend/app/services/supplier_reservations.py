@@ -24,6 +24,13 @@ class SupplierReservationInvalidResponse(SupplierReservationError):
     pass
 
 
+class SupplierReservationAmbiguousResponse(SupplierReservationInvalidResponse):
+    def __init__(self, message: str, *, supplier_activation_id: str, phone_number: str):
+        super().__init__(message)
+        self.supplier_activation_id = supplier_activation_id
+        self.phone_number = phone_number
+
+
 class SupplierReservationUnavailable(SupplierReservationError):
     pass
 
@@ -186,7 +193,15 @@ def _release_url(reservation_url: str) -> str:
 def _parse_reservation_response(data: Any) -> SupplierReservationResult:
     if not isinstance(data, dict):
         raise SupplierReservationInvalidResponse("Supplier reservation response must be a JSON object")
+    external_reference = _valid_external_reference(data)
     if data.get("status") != "reserved":
+        if external_reference:
+            supplier_activation_id, phone_number = external_reference
+            raise SupplierReservationAmbiguousResponse(
+                "Supplier reservation response status was not reserved but included an external reservation reference",
+                supplier_activation_id=supplier_activation_id,
+                phone_number=phone_number,
+            )
         raise SupplierReservationInvalidResponse("Supplier reservation response status must be reserved")
 
     supplier_activation_id = data.get("supplier_activation_id")
@@ -201,10 +216,24 @@ def _parse_reservation_response(data: Any) -> SupplierReservationResult:
     parsed_expires_at = None
     if expires_at is not None:
         if not isinstance(expires_at, str):
+            if external_reference:
+                ref_activation_id, ref_phone = external_reference
+                raise SupplierReservationAmbiguousResponse(
+                    "Supplier reservation response has invalid expires_at but included an external reservation reference",
+                    supplier_activation_id=ref_activation_id,
+                    phone_number=ref_phone,
+                )
             raise SupplierReservationInvalidResponse("Supplier reservation response has invalid expires_at")
         try:
             parsed_expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
         except ValueError as exc:
+            if external_reference:
+                ref_activation_id, ref_phone = external_reference
+                raise SupplierReservationAmbiguousResponse(
+                    "Supplier reservation response has invalid expires_at but included an external reservation reference",
+                    supplier_activation_id=ref_activation_id,
+                    phone_number=ref_phone,
+                ) from exc
             raise SupplierReservationInvalidResponse("Supplier reservation response has invalid expires_at") from exc
 
     return SupplierReservationResult(
@@ -212,3 +241,17 @@ def _parse_reservation_response(data: Any) -> SupplierReservationResult:
         phone_number=phone_number,
         expires_at=parsed_expires_at,
     )
+
+
+def _valid_external_reference(data: dict[str, Any]) -> tuple[str, str] | None:
+    supplier_activation_id = data.get("supplier_activation_id")
+    phone_number = data.get("phone_number")
+    if (
+        isinstance(supplier_activation_id, str)
+        and supplier_activation_id.strip()
+        and isinstance(phone_number, str)
+        and phone_number.strip()
+        and phone_number.startswith("+")
+    ):
+        return supplier_activation_id, phone_number
+    return None
