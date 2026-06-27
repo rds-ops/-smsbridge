@@ -1,4 +1,5 @@
 from __future__ import annotations
+from decimal import Decimal
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
     api_request_log_retention_days: int = 90
     payment_webhook_event_retention_days: int = 180
     supplier_release_retry_retention_days: int = 180
+    supplier_payout_min_amount: Decimal = Decimal("1.0000")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

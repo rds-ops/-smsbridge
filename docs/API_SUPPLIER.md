@@ -181,8 +181,14 @@ Body:
 
 Current behavior:
 - This is an internal accounting skeleton only. No external money is sent.
+- Supplier must be active.
+- `amount` must be at least `SUPPLIER_PAYOUT_MIN_AMOUNT`; default is `1.0000`.
+- `payout_method` and `payout_address` are required.
 - The backend locks the supplier row, requires sufficient available balance, moves the amount from `balance` to `held_balance`, creates a `SupplierTransaction(type="payout_hold")`, and creates a payout request with `status="requested"`.
 - Admin can later approve, reject, or mark the request paid.
+- Rejected payout requests release held funds back to available balance.
+- `approved` means approved for manual payment, not externally paid.
+- `paid` must only be set by an admin after manual external transfer is complete.
 
 Example:
 ```bash

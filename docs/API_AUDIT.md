@@ -149,6 +149,7 @@ Implemented:
 - idempotent payment-intent deposit crediting
 - supplier reward ledger
 - supplier payout hold/release/paid ledger
+- supplier payout minimum amount and destination validation
 - payment and payout read-only reconciliation checks
 
 Not implemented:
@@ -222,6 +223,7 @@ Not implemented:
 | Payment wallet crediting from succeeded intents | DONE |
 | Payment reconciliation visibility | PARTIAL, read-only |
 | Supplier payout request lifecycle | PARTIAL, no external payout provider |
+| Supplier manual payout policy/accounting readiness | DONE for manual/admin flow |
 | Supplier payout reconciliation | PARTIAL, read-only |
 | Supplier release retry queue | DONE |
 | Supplier reservation timeout/ambiguous response policy | DONE for local rollback and referenced ambiguous responses |
@@ -245,7 +247,8 @@ Blocker before real suppliers:
 
 - define supplier KYC/contract/support policy
 - add supplier-facing activation history UI and operational onboarding runbook
-- define payout policy and minimum/KYC requirements
+- define supplier KYC/contract/support policy
+- define real external payout execution process before automating payouts
 - run supplier sandbox contract signoff for reservation/release/SMS idempotency
 
 Blocker before real payments:

@@ -468,6 +468,7 @@ Codex не должен напрямую делать крупный refactor б
 - admin payout approval. DONE
 - mark-paid flow. DONE (manual/admin-only; no external payout provider)
 - payout ledger. DONE
+- manual payout policy/minimum/destination validation. DONE
 - payout accounting reconciliation visibility. DONE (admin read-only; no auto-repair or external provider reconciliation)
 - real external payout provider integration
 - payout verification/reconciliation

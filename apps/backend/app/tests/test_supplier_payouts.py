@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 
 from app.db.session import SessionLocal
-from app.models import Supplier, SupplierPayoutRequest, SupplierTransaction
+from app.models import AuditLog, Supplier, SupplierPayoutRequest, SupplierTransaction
 
 
 def create_supplier(client, admin_token, status: str = "active") -> dict:
@@ -78,6 +78,63 @@ def test_supplier_payout_request_rejects_insufficient_balance(client, admin_toke
     response = _create_payout(client, api_key, "1.0000")
     assert response.status_code == 400
     assert response.json()["detail"] == "Insufficient supplier balance"
+
+
+def test_supplier_payout_request_requires_minimum_amount(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+
+    response = _create_payout(client, api_key, "0.5000")
+
+    assert response.status_code == 400
+    assert "Minimum payout amount" in response.json()["detail"]
+    with SessionLocal() as db:
+        supplier_row = db.get(Supplier, supplier["id"])
+        assert supplier_row.balance == Decimal("10.0000")
+        assert supplier_row.held_balance == Decimal("0.0000")
+        assert db.scalar(select(SupplierTransaction).where(SupplierTransaction.type == "payout_hold")) is None
+
+
+def test_supplier_payout_request_requires_method_and_address(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+
+    missing_method = client.post(
+        "/supplier/v1/payout-requests",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"amount": "4.0000", "payout_address": "test-address"},
+    )
+    missing_address = client.post(
+        "/supplier/v1/payout-requests",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"amount": "4.0000", "payout_method": "manual_test"},
+    )
+
+    assert missing_method.status_code == 400
+    assert missing_method.json()["detail"] == "Payout method is required"
+    assert missing_address.status_code == 400
+    assert missing_address.json()["detail"] == "Payout address is required"
+    with SessionLocal() as db:
+        supplier_row = db.get(Supplier, supplier["id"])
+        assert supplier_row.balance == Decimal("10.0000")
+        assert supplier_row.held_balance == Decimal("0.0000")
+        assert db.scalar(select(SupplierPayoutRequest).where(SupplierPayoutRequest.supplier_id == supplier["id"])) is None
+
+
+def test_blocked_supplier_cannot_create_payout_request(client, admin_token):
+    supplier = create_supplier(client, admin_token, status="blocked")
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    _fund_supplier(client, admin_token, supplier["id"])
+
+    response = _create_payout(client, api_key, "4.0000")
+
+    assert response.status_code == 403
+    with SessionLocal() as db:
+        supplier_row = db.get(Supplier, supplier["id"])
+        assert supplier_row.balance == Decimal("10.0000")
+        assert supplier_row.held_balance == Decimal("0.0000")
 
 
 def test_supplier_sees_only_own_payout_requests(client, admin_token):
@@ -282,6 +339,52 @@ def test_admin_mark_paid_decreases_held_balance_once(client, admin_token):
             )
         )
         assert len(paid_txs) == 1
+
+
+def test_admin_payout_actions_are_audit_logged(client, admin_token):
+    first_supplier = create_supplier(client, admin_token)
+    first_key = supplier_key(client, admin_token, first_supplier["id"])
+    _fund_supplier(client, admin_token, first_supplier["id"])
+    approved_payout = _create_payout(client, first_key, "4.0000").json()
+
+    second_supplier = create_supplier(client, admin_token)
+    second_key = supplier_key(client, admin_token, second_supplier["id"])
+    _fund_supplier(client, admin_token, second_supplier["id"])
+    rejected_payout = _create_payout(client, second_key, "4.0000").json()
+
+    third_supplier = create_supplier(client, admin_token)
+    third_key = supplier_key(client, admin_token, third_supplier["id"])
+    _fund_supplier(client, admin_token, third_supplier["id"])
+    paid_payout = _create_payout(client, third_key, "4.0000").json()
+
+    assert client.post(
+        f"/admin/supplier-payout-requests/{approved_payout['id']}/approve",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"admin_note": "approved"},
+    ).status_code == 200
+    assert client.post(
+        f"/admin/supplier-payout-requests/{rejected_payout['id']}/reject",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": "bad address"},
+    ).status_code == 200
+    assert client.post(
+        f"/admin/supplier-payout-requests/{paid_payout['id']}/mark-paid",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"admin_note": "paid"},
+    ).status_code == 200
+
+    with SessionLocal() as db:
+        actions = set(
+            db.scalars(
+                select(AuditLog.action).where(
+                    AuditLog.entity_type == "supplier_payout",
+                    AuditLog.entity_id.in_(
+                        [str(approved_payout["id"]), str(rejected_payout["id"]), str(paid_payout["id"])]
+                    ),
+                )
+            )
+        )
+        assert actions == {"supplier_payout.approve", "supplier_payout.reject", "supplier_payout.mark_paid"}
 
 
 def test_non_admin_blocked_from_supplier_payout_admin_endpoints(client, admin_token, user_token):

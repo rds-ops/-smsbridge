@@ -802,6 +802,13 @@ def create_supplier_payout_request(
     amount = Decimal(str(amount)).quantize(Decimal("0.0001"))
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Payout amount must be positive")
+    minimum_amount = Decimal(str(settings.supplier_payout_min_amount)).quantize(Decimal("0.0001"))
+    if amount < minimum_amount:
+        raise HTTPException(status_code=400, detail=f"Minimum payout amount is {minimum_amount}")
+    if not payout_method or not payout_method.strip():
+        raise HTTPException(status_code=400, detail="Payout method is required")
+    if not payout_address or not payout_address.strip():
+        raise HTTPException(status_code=400, detail="Payout address is required")
     if supplier.balance < amount:
         raise HTTPException(status_code=400, detail="Insufficient supplier balance")
 
@@ -812,8 +819,8 @@ def create_supplier_payout_request(
         amount=amount,
         currency=supplier.currency,
         status="requested",
-        payout_method=payout_method,
-        payout_address=payout_address,
+        payout_method=payout_method.strip(),
+        payout_address=payout_address.strip(),
     )
     db.add(payout)
     db.flush()
@@ -821,7 +828,7 @@ def create_supplier_payout_request(
         db,
         payout,
         "payout_hold",
-        {"payout_method": payout_method},
+        {"payout_method": payout_method.strip()},
     )
     db.flush()
     return payout

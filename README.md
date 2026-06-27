@@ -256,7 +256,7 @@ curl -X POST http://localhost:8000/supplier/v1/payout-requests \
   }'
 ```
 
-Supplier payout requests are an accounting skeleton. Creating a request moves supplier funds from `balance` to `held_balance` and writes a supplier ledger transaction. Admin can approve, reject, or mark paid, but no external payout provider is integrated yet.
+Supplier payout requests are an accounting skeleton. Creating a request requires an active supplier, sufficient balance, `payout_method`, `payout_address`, and at least `SUPPLIER_PAYOUT_MIN_AMOUNT` (default `1.0000`). Creating a request moves supplier funds from `balance` to `held_balance` and writes a supplier ledger transaction. Admin can approve, reject, or mark paid, but no external payout provider is integrated yet.
 
 ## Supplier Pool Provider
 

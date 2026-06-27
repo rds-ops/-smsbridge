@@ -428,7 +428,89 @@ Buyer-safe messaging:
 - wallet hold was refunded or no charge was made
 - support can investigate with order public id
 
-## 10. Pre-Onboarding Checklist
+## 10. Manual Supplier Payout Policy
+
+Current status:
+
+- Supplier payouts are manual/admin-only.
+- No external payout provider is integrated.
+- Creating a payout request does not send money externally.
+
+Supplier request rules:
+
+- Supplier must be `active`.
+- `amount` must be positive and at least `SUPPLIER_PAYOUT_MIN_AMOUNT`.
+- Default `SUPPLIER_PAYOUT_MIN_AMOUNT` is `1.0000`.
+- `payout_method` is required.
+- `payout_address` is required.
+- Supplier must have enough available `balance`.
+
+Accounting behavior:
+
+- Creating a request locks the supplier row.
+- Requested amount moves from `suppliers.balance` to `suppliers.held_balance`.
+- A `SupplierTransaction(type="payout_hold")` ledger row is created.
+- Rejecting a request moves held funds back to available balance and creates `payout_release`.
+- Marking paid decreases held balance and creates `payout_paid`.
+- Repeated reject/mark-paid calls are idempotent where safe and must not double-mutate balances.
+- Database constraints protect supplier balance and held balance from becoming negative.
+
+Status policy:
+
+- `requested`: supplier has requested payout and funds are held.
+- `approved`: admin approved the request, but no external payment has been confirmed.
+- `rejected`: funds were released back to supplier balance.
+- `paid`: admin confirms manual external payment was completed.
+- `failed`: reserved for future failure handling.
+- `cancelled`: reserved for supplier/admin cancellation flows where supported.
+
+Manual payout schedule:
+
+- Default MVP policy is manual batch review by operators.
+- Suggested operating cadence before real automation: daily or weekly batch, decided by business policy.
+- Payouts should not be marked paid until the operator has verified external transfer completion.
+
+Allowed payout methods:
+
+- Current local/dev placeholder: `manual_test`.
+- Real methods must be approved in supplier contract before use.
+- Crypto/bank/card/provider payouts are not implemented in SMSBridge yet.
+
+KYC/payment-account requirements:
+
+- Real suppliers must pass business/KYC review before payout eligibility.
+- Operators must verify payout address/account ownership outside SMSBridge before marking paid.
+- SMSBridge currently stores the submitted payout method/address on the payout request; do not store private keys, seed phrases, or raw secrets.
+
+Disputes and rejection:
+
+- If payout details are invalid or supplier is under review, reject the request with an admin note/reason.
+- Rejection returns held funds to supplier available balance.
+- Do not mark disputed payouts paid.
+
+Approved but not paid:
+
+- `approved` means ready for manual payment, not externally settled.
+- Funds remain in held balance.
+- Operator should either complete external transfer and mark paid, or reject with a reason.
+
+Operator checklist before mark-paid:
+
+1. Confirm payout status is `requested` or `approved`.
+2. Confirm supplier identity/KYC and payout destination were reviewed.
+3. Confirm supplier held balance covers the payout.
+4. Confirm external transfer was actually completed outside SMSBridge.
+5. Confirm amount/currency match the payout request.
+6. Record a concise admin note/reference.
+7. Mark paid once; repeated calls should not create duplicate ledger movement.
+
+Operational visibility:
+
+- Supplier can list payout requests and supplier transaction history.
+- Admin can list/detail payout requests and run payout reconciliation.
+- Reconciliation is read-only; it does not repair balances automatically.
+
+## 11. Pre-Onboarding Checklist
 
 Before enabling a real supplier:
 
@@ -442,7 +524,8 @@ Before enabling a real supplier:
 - operator has generated the supplier API key and delivered it through a secure channel
 - supplier has confirmed API key receipt and storage
 - admin has set supplier `status=active` only after sandbox signoff
-- operator has payout policy and support contact
+- operator has payout policy, minimum amount, approved payout methods, and support contact
+- supplier has confirmed payout method/address requirements
 - supplier has passed local/sandbox reservation, release, SMS, cancel, expire, and duplicate retry tests
 
 Still not implemented by SMSBridge:

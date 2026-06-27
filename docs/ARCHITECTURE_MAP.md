@@ -306,6 +306,7 @@ Implemented:
 - supplier reward is credited when a supplier-backed order is completed
 - supplier transaction ledger
 - supplier payout request creation
+- payout request minimum amount and destination validation
 - payout hold moves supplier balance to held balance
 - admin approve/reject/mark-paid
 - payout release and paid ledger entries
@@ -316,6 +317,7 @@ Not implemented:
 - external payout provider execution
 - supplier KYC/payment-account verification
 - automated payout reconciliation with external payment rails
+- automatic payout scheduling or settlement
 
 ## 6. Supplier Flow
 

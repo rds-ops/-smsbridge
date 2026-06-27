@@ -9,7 +9,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Local demo | Ready | Mock/manual systems, fake supplier server, manual_test payments, and local smoke script exist. Run verification before each demo. |
 | Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; needs fresh full build/test/smoke pass and a few docs/copy clarifications. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. |
-| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, payout policy, and sandbox signoff remain. |
+| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. |
@@ -150,8 +150,8 @@ This document is the current source of truth for SMSBridge readiness before invo
 
 - Define supplier onboarding/KYC/contract/support policy.
 - Add supplier activation history to the supplier UI and document how suppliers should use it operationally.
-- Define manual payout policy, minimum payout, payout method rules, and support runbook.
 - Run supplier sandbox signoff against `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
+- Define real payout provider/external settlement process if payouts will move beyond manual admin mark-paid.
 - Decide whether count-based callback remains the production strategy or exact inventory is required for some suppliers.
 
 ### Nice-to-have
@@ -231,7 +231,7 @@ These are practical estimates, not precision metrics.
 |---|---:|---|
 | Backend core MVP | 80% | Strong local/manual foundations; real integrations deferred. |
 | Frontend buyer MVP | 75% | Storefront and account flows exist; needs smoke/mobile verification. |
-| Supplier MVP | 78% | API/cabinet/callbacks/payout skeleton, admin API key issuance, backend activation transparency, and supplier integration runbook exist; KYC/payout policy and supplier UI polish remain. |
+| Supplier MVP | 80% | API/cabinet/callbacks/manual payout skeleton, admin API key issuance, backend activation transparency, and supplier integration/payout runbook exist; KYC, external payout execution, and supplier UI polish remain. |
 | Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and payment/provider production runbooks missing. |
 | Docs | 75% | Main docs and supplier contract/runbook are reconciled; provider/payment-specific runbooks still needed. |
 | Real payments | 25% | Intent/webhook/crediting base exists; provider verification absent. |
