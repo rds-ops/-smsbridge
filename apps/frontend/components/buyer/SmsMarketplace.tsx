@@ -507,7 +507,7 @@ function StepPanel({active, children, done, number, title}: {active: boolean; ch
   return (
     <section className={`mt-3 rounded-2xl border p-3 transition-all duration-200 first:mt-0 ${
       active
-        ? "border-blue-200 bg-white shadow-md shadow-blue-100/50 ring-1 ring-blue-100"
+        ? "border-blue-300 bg-white shadow-md shadow-blue-100/50 ring-1 ring-blue-200"
         : done
           ? "border-slate-200 bg-slate-50/80"
           : "border-slate-200 bg-white"
@@ -552,10 +552,10 @@ function PickerBlock({
   return (
     <div>
       <label className="relative block">
-        <span className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-neutral-400">
+        <span className="pointer-events-none absolute inset-y-0 left-3 flex w-4 items-center justify-center text-neutral-400">
           <Search size={16} />
         </span>
-        <input className="field min-h-10 !pl-11" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
+        <input className="field min-h-10 !pl-11 !pr-3" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
       </label>
       <div className="mt-2 grid gap-1.5">
         {loading ? (
@@ -564,7 +564,7 @@ function PickerBlock({
           <button
             className={`group flex min-h-[3.35rem] items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all duration-200 ${
               selected === row.code
-                ? "border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white text-slate-950 shadow-sm ring-1 ring-blue-100 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
+                ? "border-blue-400 bg-blue-50 text-slate-950 shadow-sm ring-1 ring-blue-200 dark:bg-slate-800"
                 : "border-transparent bg-white hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-200/70"
             }`}
             key={row.code}
@@ -572,13 +572,13 @@ function PickerBlock({
             type="button"
           >
             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-semibold transition-all duration-200 ${
-              selected === row.code ? "bg-white text-accent shadow-sm ring-1 ring-blue-100" : "bg-slate-100 text-slate-700 group-hover:bg-white group-hover:text-accent"
+              selected === row.code ? "bg-white text-blue-700 shadow-sm ring-1 ring-blue-200" : "bg-slate-100 text-slate-700 group-hover:bg-white group-hover:text-blue-700"
             }`}>{row.badge}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{row.name}</span>
               <span className="block text-xs text-neutral-500">{row.count.toLocaleString()} {t("buy.availableShort")}</span>
             </span>
-            <span className="min-w-[5.5rem] text-right text-xs font-semibold text-accent transition-colors group-hover:text-blue-700">{row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
+            <span className="min-w-[5.5rem] text-right text-xs font-semibold text-blue-700 transition-colors group-hover:text-blue-800">{row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
           </button>
         )) : (
           <EmptyState title={t("common.noRowsFound")} />
@@ -597,16 +597,16 @@ function SelectedPickerRow({onChange, row}: {onChange: () => void; row: PickerRo
   const {t} = useTranslation();
   return (
     <button
-      className="group flex min-h-[3.35rem] w-full items-center gap-3 rounded-xl border border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white px-3 py-2 text-left shadow-sm ring-1 ring-blue-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-100/60 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
+      className="group flex min-h-[3.35rem] w-full items-center gap-3 rounded-xl border border-blue-400 bg-blue-50 px-3 py-2 text-left shadow-sm ring-1 ring-blue-200 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-100/60 dark:bg-slate-800"
       onClick={onChange}
       type="button"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-semibold text-accent shadow-sm ring-1 ring-blue-100">{row.badge}</span>
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-200">{row.badge}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-slate-950">{row.name}</span>
         <span className="block truncate text-xs text-neutral-500">{row.count.toLocaleString()} {t("buy.availableShort")} · {row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
       </span>
-      <span className="shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-xs font-semibold text-accent transition-colors group-hover:bg-blue-50">
+      <span className="shrink-0 rounded-lg border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-700 transition-colors group-hover:bg-blue-50">
         {t("buy.change")}
       </span>
     </button>
@@ -626,7 +626,7 @@ function OfferPicker({loading, onSelect, options, selectedOfferId}: {loading: bo
           <button
             className={`rounded-xl border p-3 text-left transition-all duration-200 ${
               selected
-                ? "border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white shadow-sm ring-1 ring-blue-100 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
+                ? "border-blue-400 bg-blue-50 shadow-sm ring-1 ring-blue-200 dark:bg-slate-800"
                 : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-200 hover:bg-slate-50 hover:shadow-md hover:shadow-blue-100/40"
             }`}
             key={id}
@@ -635,10 +635,10 @@ function OfferPicker({loading, onSelect, options, selectedOfferId}: {loading: bo
           >
             <div className="flex items-center justify-between gap-3">
               <span className="flex min-w-0 items-center gap-2">
-                <Radio size={15} className="shrink-0 text-accent" />
+                <Radio size={15} className="shrink-0 text-blue-700 dark:text-cyan-300" />
                 <span className="truncate text-sm font-semibold text-slate-950">{option.operator || t("buy.anyOperator")}</span>
               </span>
-              <span className="shrink-0 text-sm font-semibold text-accent">{money(option.final_price)}</span>
+              <span className="shrink-0 text-sm font-semibold text-blue-700 dark:text-cyan-200">{money(option.final_price)}</span>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-500">
               <span>{option.available_count} {t("buy.availableShort")}</span>
@@ -655,16 +655,16 @@ function SelectedOfferRow({onChange, price}: {onChange: () => void; price: Price
   const {t} = useTranslation();
   return (
     <button
-      className="group w-full rounded-xl border border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white p-3 text-left shadow-sm ring-1 ring-blue-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-100/60 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
+      className="group w-full rounded-xl border border-blue-400 bg-blue-50 p-3 text-left shadow-sm ring-1 ring-blue-200 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-100/60 dark:bg-slate-800"
       onClick={onChange}
       type="button"
     >
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
-          <Radio size={15} className="shrink-0 text-accent" />
+          <Radio size={15} className="shrink-0 text-blue-700 dark:text-cyan-300" />
           <span className="truncate text-sm font-semibold text-slate-950">{price.operator || t("buy.anyOperator")}</span>
         </span>
-        <span className="shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-xs font-semibold text-accent">{t("buy.change")}</span>
+        <span className="shrink-0 rounded-lg border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-700">{t("buy.change")}</span>
       </div>
       <p className="mt-2 text-xs text-neutral-500">{money(price.final_price)} · {price.available_count} {t("buy.availableShort")} · {percent(price.delivery_rate)}</p>
     </button>
@@ -687,8 +687,7 @@ function MarketplaceHomeContent({
   const {t} = useTranslation();
   return (
     <>
-      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.97)_0%,rgba(239,246,255,0.9)_54%,rgba(236,254,255,0.70)_100%)] p-4 shadow-[0_16px_44px_rgba(37,99,235,0.10)] backdrop-blur transition-all duration-300 dark:border-cyan-900/40 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.96)_0%,rgba(8,47,73,0.82)_52%,rgba(2,6,23,0.96)_100%)] dark:shadow-cyan-950/25 md:p-5">
-        <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-blue-300/20 blur-3xl dark:bg-cyan-500/10" />
+      <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-[linear-gradient(135deg,rgba(255,255,255,0.98)_0%,rgba(239,246,255,0.92)_58%,rgba(236,254,255,0.76)_100%)] p-5 text-left shadow-[0_16px_44px_rgba(37,99,235,0.10)] backdrop-blur transition-all duration-300 dark:border-cyan-900/50 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.96)_0%,rgba(8,47,73,0.82)_52%,rgba(2,6,23,0.96)_100%)] dark:shadow-cyan-950/20 md:p-6">
         <div className="relative max-w-3xl">
           <h1 className="text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">{t("buy.marketplaceTitle")}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700 md:text-base">{t("buy.marketplaceSubtitle")}</p>
@@ -717,11 +716,11 @@ function PrinciplesRow() {
     {icon: <Wallet size={16} />, label: t("buy.principleSupplier")}
   ];
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm md:p-4">
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => (
           <div className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-950 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/40" key={item.label}>
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-accent ring-1 ring-blue-100">{item.icon}</span>
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200">{item.icon}</span>
             <span className="min-w-0 truncate">{item.label}</span>
           </div>
         ))}
@@ -741,7 +740,7 @@ function PurchaseRoadmap() {
     {number: 4, title: t("buy.roadmapBuy")}
   ];
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm md:p-4">
       <h2 className="text-base font-semibold text-slate-950">{t("buy.roadmapTitle")}</h2>
       <div className="mt-2 grid gap-2 md:grid-cols-3 md:gap-x-5 md:gap-y-2">
         {steps.map((step, index) => (
@@ -757,12 +756,12 @@ function RoadmapStep({index, number, title}: {index: number; number: number; tit
   const showBottomLeftArrow = index === 4 || index === 5;
   const showDownArrow = index === 2;
   return (
-    <div className="relative flex min-h-14 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/40">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-sm font-semibold text-accent shadow-sm ring-1 ring-slate-200">{number}</span>
+    <div className="relative flex min-h-12 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/40">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-sm font-semibold text-blue-700 shadow-sm ring-1 ring-slate-200">{number}</span>
       <h3 className="min-w-0 text-sm font-semibold leading-5 text-slate-950">{title}</h3>
-      {showTopRightArrow && <ArrowRight className="absolute -right-7 top-1/2 hidden -translate-y-1/2 text-blue-600 drop-shadow-sm dark:text-cyan-300 md:block" size={34} strokeWidth={1.9} />}
-      {showBottomLeftArrow && <ArrowLeft className="absolute -left-7 top-1/2 hidden -translate-y-1/2 text-blue-600 drop-shadow-sm dark:text-cyan-300 md:block" size={34} strokeWidth={1.9} />}
-      {showDownArrow && <ArrowDown className="absolute -bottom-6 left-1/2 hidden -translate-x-1/2 text-blue-600 drop-shadow-sm dark:text-cyan-300 md:block" size={34} strokeWidth={1.9} />}
+      {showTopRightArrow && <ArrowRight className="absolute -right-7 top-1/2 hidden -translate-y-1/2 text-blue-700 drop-shadow-sm dark:text-cyan-300 md:block" size={30} strokeWidth={2} />}
+      {showBottomLeftArrow && <ArrowLeft className="absolute -left-7 top-1/2 hidden -translate-y-1/2 text-blue-700 drop-shadow-sm dark:text-cyan-300 md:block" size={30} strokeWidth={2} />}
+      {showDownArrow && <ArrowDown className="absolute -bottom-6 left-1/2 hidden -translate-x-1/2 text-blue-700 drop-shadow-sm dark:text-cyan-300 md:block" size={30} strokeWidth={2} />}
     </div>
   );
 }

@@ -52,7 +52,7 @@ export function Nav({children}: {children?: React.ReactNode}) {
           setUser(null);
           setBalance(null);
         }
-        if (!isPublic) router.replace("/login");
+        if (!isPublic) router.replace("/");
         return;
       }
       try {
@@ -66,7 +66,7 @@ export function Nav({children}: {children?: React.ReactNode}) {
           setUser(null);
           setBalance(null);
         }
-        if (!isPublic) router.replace("/login");
+        if (!isPublic) router.replace("/");
       }
     };
     syncAuth();
@@ -109,7 +109,7 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
   const linkClass = (href: string) => {
     const active = pathname === href || (href !== "/" && pathname.startsWith(href));
     return `inline-flex min-w-[5.5rem] items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
-      active ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-800 dark:text-cyan-300" : "text-neutral-600 hover:-translate-y-px hover:bg-slate-50 hover:text-blue-700 hover:shadow-sm dark:hover:bg-slate-900 dark:hover:text-cyan-300"
+      active ? "bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200 dark:bg-cyan-950/45 dark:text-cyan-100 dark:ring-cyan-900/70" : "text-slate-700 hover:-translate-y-px hover:bg-blue-50 hover:text-blue-800 hover:shadow-sm dark:text-slate-200 dark:hover:bg-slate-900 dark:hover:text-cyan-100"
     }`;
   };
   const openAuth = (mode: AuthMode) => {

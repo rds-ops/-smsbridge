@@ -13,12 +13,12 @@
   --muted-foreground: 215 16% 47%;
   --border: 214 32% 89%;
   --input: 214 32% 89%;
-  --ring: 212 95% 45%;
-  --primary: 217 91% 55%;
+  --ring: 215 92% 46%;
+  --primary: 217 91% 48%;
   --primary-foreground: 0 0% 100%;
   --secondary: 214 32% 94%;
   --secondary-foreground: 222 47% 11%;
-  --accent: 212 95% 45%;
+  --accent: 215 92% 46%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -83,7 +83,7 @@ textarea {
 }
 
 .btn-primary {
-  @apply bg-gradient-to-r from-blue-600 to-cyan-500 text-primary-foreground shadow-blue-100 hover:-translate-y-px hover:from-blue-700 hover:to-cyan-600 hover:shadow-md hover:shadow-blue-200 active:translate-y-0;
+  @apply bg-blue-700 text-primary-foreground shadow-blue-100 hover:-translate-y-px hover:bg-blue-800 hover:shadow-md hover:shadow-blue-200 active:translate-y-0;
 }
 
 .btn-secondary {
