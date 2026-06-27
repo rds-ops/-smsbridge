@@ -9,7 +9,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Local demo | Ready | Mock/manual systems, fake supplier server, manual_test payments, and local smoke script exist. Run verification before each demo. |
 | Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; needs fresh full build/test/smoke pass and a few docs/copy clarifications. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. |
-| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists and wallet hold now precedes supplier callback reservation, but onboarding policy, activation visibility, and callback timeout ambiguity remain. |
+| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, wallet hold now precedes supplier callback reservation, and supplier activation history exists; onboarding policy, supplier UI polish, and callback timeout ambiguity remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. |
@@ -74,6 +74,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 - supplier API-key auth
 - supplier profile
 - inventory list/update
+- activation/reservation history
 - SMS push
 - payout request create/list
 - supplier transaction history
@@ -145,7 +146,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 
 - Define supplier onboarding/KYC/contract/support policy.
 - Define supplier API key issuance and rotation process.
-- Add supplier activation history or equivalent supplier-facing reservation transparency.
+- Add supplier activation history to the supplier UI and document how suppliers should use it operationally.
 - Define timeout ambiguity handling for reservation callback:
   - timeout after supplier reserved number
   - duplicate/retry behavior
@@ -230,7 +231,7 @@ These are practical estimates, not precision metrics.
 |---|---:|---|
 | Backend core MVP | 80% | Strong local/manual foundations; real integrations deferred. |
 | Frontend buyer MVP | 75% | Storefront and account flows exist; needs smoke/mobile verification. |
-| Supplier MVP | 65% | API/cabinet/callbacks/payout skeleton exist; onboarding and activation transparency missing. |
+| Supplier MVP | 70% | API/cabinet/callbacks/payout skeleton and backend activation transparency exist; onboarding and supplier UI polish remain. |
 | Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and external runbooks missing. |
 | Docs | 70% | Main docs now reconciled; provider/payment-specific runbooks still needed. |
 | Real payments | 25% | Intent/webhook/crediting base exists; provider verification absent. |
@@ -245,7 +246,7 @@ These are practical estimates, not precision metrics.
 | Add supplier callback timeout ambiguity policy and escalation | backend/ops/docs | blocker | medium | Real suppliers need clear handling when a callback times out but may have reserved a number. | Timeout fixture tests and supplier runbook review. |
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
-| Add supplier activation history for suppliers | backend/frontend | beta-useful | medium | Real suppliers need reservation/SMS transparency. | Supplier endpoint tests and `/supplier` UI. |
+| Add supplier activation history to supplier UI | frontend | beta-useful | medium | Backend activation history exists; real suppliers still need it surfaced in the cabinet. | `/supplier` UI and browser smoke. |
 | Add refresh-token/session revocation | backend | beta-useful | medium | Needed for compromised token/logout control. | Auth tests for revoke/logout. |
 | Choose and implement first payment provider verification | backend | blocker for real payments | large | Real payments cannot launch on shared-secret skeleton. | Provider webhook fixture tests and reconciliation tests. |
 | Choose and implement first real SMS provider adapter | backend | blocker for real SMS | large | Marketplace cannot use real external SMS stock without it. | Adapter contract tests and sandbox integration. |

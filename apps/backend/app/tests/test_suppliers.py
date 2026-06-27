@@ -181,6 +181,110 @@ def test_supplier_can_update_inventory(client, admin_token):
     assert inventory.json()[0]["available_count"] == 25
 
 
+def test_supplier_can_list_own_activations_with_sms_summary(client, admin_token, user_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    order = buy_order(client, user_token)
+    db = SessionLocal()
+    try:
+        activation = db.scalar(select(SupplierActivation).join(Order, SupplierActivation.order_id == Order.id).where(Order.public_id == order["public_id"]))
+        supplier_activation_id = activation.supplier_activation_id
+    finally:
+        db.close()
+
+    sms = client.post(
+        "/supplier/v1/sms",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "supplier_sms_id": "activation-list-sms",
+            "phone_number": order["phone_number"],
+            "phone_from": "Telegram",
+            "text": "Telegram code: 112233",
+            "supplier_activation_id": supplier_activation_id,
+        },
+    )
+    assert sms.status_code == 200, sms.text
+
+    response = client.get("/supplier/v1/activations", headers={"Authorization": f"Bearer {api_key}"})
+
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["supplier_activation_id"] == supplier_activation_id
+    assert row["phone_number"] == order["phone_number"]
+    assert row["service_code"] == "telegram"
+    assert row["country_iso2"] == "ID"
+    assert row["status"] == "sms_received"
+    assert row["order_public_id"] == order["public_id"]
+    assert row["sms_count"] == 1
+    assert row["latest_sms_at"] is not None
+    assert "client_price" not in row
+    assert "supplier_reward" not in row
+    assert "sms_text" not in row
+    assert "sms_code" not in row
+    assert "provider_cost" not in row
+
+
+def test_supplier_activation_list_is_supplier_scoped(client, admin_token, user_token):
+    first_supplier = create_supplier(client, admin_token)
+    first_key = supplier_key(client, admin_token, first_supplier["id"])
+    assert update_inventory(client, first_key, count=5).status_code == 200
+    order = buy_order(client, user_token)
+
+    second_supplier = create_supplier(client, admin_token)
+    second_key = supplier_key(client, admin_token, second_supplier["id"])
+
+    first_response = client.get("/supplier/v1/activations", headers={"Authorization": f"Bearer {first_key}"})
+    second_response = client.get("/supplier/v1/activations", headers={"Authorization": f"Bearer {second_key}"})
+
+    assert first_response.status_code == 200, first_response.text
+    assert [row["order_public_id"] for row in first_response.json()] == [order["public_id"]]
+    assert second_response.status_code == 200, second_response.text
+    assert second_response.json() == []
+
+
+def test_supplier_activation_list_pagination_and_status_filter(client, admin_token):
+    supplier = create_supplier(client, admin_token)
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    db = SessionLocal()
+    try:
+        for index, status in enumerate(["waiting_sms", "sms_received", "cancelled", "expired"]):
+            db.add(
+                SupplierActivation(
+                    supplier_id=supplier["id"],
+                    supplier_activation_id=f"manual-act-{index}",
+                    phone_number=f"+62810000000{index}",
+                    service_code="telegram",
+                    country_iso2="ID",
+                    operator=None,
+                    status=status,
+                    client_price=Decimal("0.5000"),
+                    supplier_reward=Decimal("0.3500"),
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    page = client.get("/supplier/v1/activations?limit=2&offset=1", headers={"Authorization": f"Bearer {api_key}"})
+    filtered = client.get("/supplier/v1/activations?status=cancelled", headers={"Authorization": f"Bearer {api_key}"})
+
+    assert page.status_code == 200, page.text
+    assert len(page.json()) == 2
+    assert filtered.status_code == 200, filtered.text
+    assert len(filtered.json()) == 1
+    assert filtered.json()[0]["status"] == "cancelled"
+    assert filtered.json()[0]["supplier_activation_id"] == "manual-act-2"
+
+
+def test_supplier_activation_list_requires_auth(client):
+    response = client.get("/supplier/v1/activations")
+
+    assert response.status_code in {401, 403}
+
+
 def test_supplier_can_push_sms_and_duplicate_is_idempotent(client, admin_token, user_token):
     supplier = create_supplier(client, admin_token)
     api_key = supplier_key(client, admin_token, supplier["id"])

@@ -73,14 +73,14 @@ Implemented:
 
 Partially implemented:
 
-- supplier activation history remains missing because there is no supplier-facing activation list endpoint.
+- supplier activation history backend endpoint now exists, but it is not surfaced in the `/supplier` UI yet.
 - supplier API key handling is MVP-style paste-and-store; not a full supplier login/session flow.
 - reservation/release health is mostly visible to admins, not suppliers.
 
 Missing/deferred:
 
 - supplier login/JWT or stronger partner auth UX
-- supplier activation history
+- supplier activation history UI
 - supplier onboarding/KYC/contract flow
 - richer payout/accounting explanations
 
@@ -132,7 +132,7 @@ Missing/deferred:
 | Local demo buyer flow | Mostly ready | Needs fresh smoke/browser verification. |
 | Buyer wallet/manual deposit flow | Mostly ready | `manual_test` creation exists; admin completion remains admin-only. |
 | Managed API keys | Mostly ready | Create/list/revoke/scopes/usage implemented. |
-| Supplier cabinet MVP | Mostly ready | Profile/inventory/SMS/payouts/transactions implemented; activations missing. |
+| Supplier cabinet MVP | Mostly ready | Profile/inventory/SMS/payouts/transactions implemented; activation history backend exists but UI is missing. |
 | Admin operations | Mostly ready | Ops/risk/payments/payouts/reliability/logs implemented. |
 | Real payment UX | Not ready | Real providers deferred. |
 | Real supplier onboarding UX | Not ready | No onboarding/KYC/session flow. |
@@ -151,7 +151,7 @@ Beta blockers or near-blockers:
 Beta useful:
 
 - buyer-safe order event timeline after backend endpoint exists
-- supplier activation history after backend endpoint exists
+- supplier activation history UI
 - improved admin pagination/filtering on high-volume tables
 - better supplier payout/accounting explanations
 - docs links from UI to local E2E/manual_test flows
@@ -171,10 +171,9 @@ Later:
 | Mobile storefront QA/fixes | frontend | beta-useful | medium | Marketplace-first home must work on phones. |
 | Clarify manual_test funding copy | frontend/docs | blocker | small | Avoids misleading friendly buyers. |
 | Buyer order event timeline | backend/frontend | later | medium | Requires buyer-safe event endpoint first. |
-| Supplier activation history | backend/frontend | beta-useful | medium | Real suppliers need visibility into reservations. |
+| Supplier activation history UI | frontend | beta-useful | medium | Backend endpoint exists; real suppliers need visibility in the cabinet. |
 | Admin high-volume pagination polish | frontend/backend | beta-useful | medium | Keeps ops pages usable as data grows. |
 | Supplier onboarding UX | product/frontend | later | large | Needed before real supplier acquisition. |
 | Real payment provider UX | frontend/backend | later | large | Deferred until provider implementation. |
 | Provider operations UI | frontend/backend | later | large | Depends on real provider adapter/sync work. |
 | Dark mode polish for dense admin/supplier pages | frontend | later | small | Visual polish, not core readiness. |
-

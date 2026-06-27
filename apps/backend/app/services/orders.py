@@ -53,6 +53,7 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
             db.add(order)
             db.flush()
             wallet.hold(db, user.id, order.id, order.price)
+            db.flush()
             try:
                 activation = suppliers.reserve_supplier_activation(db, order, price, operator)
             except Exception as exc:

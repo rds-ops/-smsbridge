@@ -132,6 +132,21 @@ class SupplierActivationOut(ORMModel):
     updated_at: datetime
 
 
+class SupplierActivationSafeOut(BaseModel):
+    id: int
+    supplier_activation_id: str | None = None
+    phone_number: str
+    service_code: str
+    country_iso2: str
+    operator: str | None = None
+    status: str
+    order_public_id: str | None = None
+    sms_count: int = 0
+    latest_sms_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class SupplierSmsIn(BaseModel):
     supplier_sms_id: str = Field(min_length=1, max_length=120)
     phone_number: str = Field(min_length=5, max_length=40)

@@ -16,7 +16,7 @@ SMSBridge has a broad local/closed-beta API foundation:
 - centralized order state transitions and order events
 - wallet holds, captures, refunds, and payment-intent deposits
 - supplier API-key auth
-- supplier inventory, SMS push, payout requests, and transaction history
+- supplier inventory, activation history, SMS push, payout requests, and transaction history
 - supplier reservation callbacks, release callbacks, and release retry queue
 - admin payment, payout, risk, reliability, logs, metrics, and ops endpoints
 - request logging with request IDs and identity attribution
@@ -81,6 +81,7 @@ Buyer API gaps:
 | `GET` | `/supplier/v1/me` | implemented | Supplier profile, balances, reward percent, status. |
 | `GET` | `/supplier/v1/inventory` | implemented | Supplier-scoped inventory. |
 | `POST` | `/supplier/v1/inventory/update` | implemented | Upserts count-based inventory. |
+| `GET` | `/supplier/v1/activations` | implemented | Supplier-scoped activation/reservation history with SMS summary fields. |
 | `POST` | `/supplier/v1/payout-requests` | implemented | Moves supplier balance to held balance and writes payout hold ledger. |
 | `GET` | `/supplier/v1/payout-requests` | implemented | Supplier-scoped payout requests. |
 | `GET` | `/supplier/v1/transactions` | implemented | Supplier-safe ledger history. |
@@ -88,7 +89,6 @@ Buyer API gaps:
 
 Supplier API gaps:
 
-- no supplier-facing activation history endpoint
 - no supplier onboarding/KYC/API-key issuance workflow beyond admin
 - no exact phone inventory model
 - no external payout provider execution
@@ -236,7 +236,7 @@ Blocker before friendly buyers:
 Blocker before real suppliers:
 
 - define supplier onboarding, API-key issuance, and support runbook
-- add supplier-facing activation history or equivalent transparency
+- add supplier-facing activation history UI and operational onboarding runbook
 - define payout policy and minimum/KYC requirements
 - finalize supplier callback timeout/ambiguity handling
 

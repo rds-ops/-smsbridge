@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_supplier, require_active_supplier
 from app.db.session import get_db
-from app.models import Order, Supplier, SupplierInventory, SupplierPayoutRequest, SupplierTransaction
+from app.models import Order, SmsMessage, Supplier, SupplierActivation, SupplierInventory, SupplierPayoutRequest, SupplierTransaction
 from app.schemas.supplier import (
+    SupplierActivationSafeOut,
     SupplierInventoryOut,
     SupplierInventoryUpdateIn,
     SupplierInventoryUpdateOut,
@@ -78,6 +79,61 @@ def payout_requests(db: Session = Depends(get_db), supplier: Supplier = Depends(
             .limit(200)
         )
     )
+
+
+@router.get("/activations", response_model=list[SupplierActivationSafeOut])
+def activations(
+    status: str | None = Query(default=None, max_length=40),
+    service: str | None = Query(default=None, max_length=50),
+    country: str | None = Query(default=None, min_length=2, max_length=2),
+    phone: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    supplier: Supplier = Depends(get_current_supplier),
+):
+    stmt = (
+        select(
+            SupplierActivation,
+            Order.public_id,
+            func.count(SmsMessage.id).label("sms_count"),
+            func.max(SmsMessage.created_at).label("latest_sms_at"),
+        )
+        .outerjoin(Order, SupplierActivation.order_id == Order.id)
+        .outerjoin(SmsMessage, SmsMessage.supplier_activation_id == SupplierActivation.id)
+        .where(SupplierActivation.supplier_id == supplier.id)
+        .group_by(SupplierActivation.id, Order.public_id)
+    )
+    if status:
+        stmt = stmt.where(SupplierActivation.status == status)
+    if service:
+        stmt = stmt.where(SupplierActivation.service_code == service)
+    if country:
+        stmt = stmt.where(SupplierActivation.country_iso2 == country.upper())
+    if phone:
+        stmt = stmt.where(SupplierActivation.phone_number == phone)
+    rows = db.execute(
+        stmt.order_by(SupplierActivation.created_at.desc(), SupplierActivation.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [
+        SupplierActivationSafeOut(
+            id=activation.id,
+            supplier_activation_id=activation.supplier_activation_id,
+            phone_number=activation.phone_number,
+            service_code=activation.service_code,
+            country_iso2=activation.country_iso2,
+            operator=activation.operator,
+            status=activation.status,
+            order_public_id=order_public_id,
+            sms_count=int(sms_count or 0),
+            latest_sms_at=latest_sms_at,
+            created_at=activation.created_at,
+            updated_at=activation.updated_at,
+        )
+        for activation, order_public_id, sms_count, latest_sms_at in rows
+    ]
 
 
 @router.get("/transactions", response_model=list[SupplierTransactionSafeOut])

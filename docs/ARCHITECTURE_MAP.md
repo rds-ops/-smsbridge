@@ -196,7 +196,7 @@ Supplier-pool path:
 
 Known risk:
 
-- Supplier-pool reservation no longer happens before wallet hold. Remaining real-supplier risks are callback timeout ambiguity, supplier onboarding/contract policy, supplier-facing activation visibility, and operational escalation for repeated release failures.
+- Supplier-pool reservation no longer happens before wallet hold. Remaining real-supplier risks are callback timeout ambiguity, supplier onboarding/contract policy, supplier-facing activation UI polish, and operational escalation for repeated release failures.
 
 ### Order lifecycle
 
@@ -322,6 +322,7 @@ Supplier API endpoints:
 - `GET /supplier/v1/me`
 - `GET /supplier/v1/inventory`
 - `POST /supplier/v1/inventory/update`
+- `GET /supplier/v1/activations`
 - `POST /supplier/v1/payout-requests`
 - `GET /supplier/v1/payout-requests`
 - `GET /supplier/v1/transactions`
@@ -338,6 +339,7 @@ Supplier reservation callback:
 - Standalone client validates reservation responses.
 - Reservation-enabled suppliers must return a real phone number and supplier activation id.
 - Release callback is best-effort and failed releases are persisted to `supplier_release_retries` for retry.
+- Suppliers can view their own activation/reservation history at `GET /supplier/v1/activations`; the response is supplier-scoped and omits buyer private data, provider cost, and internal margin fields.
 
 Legacy fake supplier phone:
 
