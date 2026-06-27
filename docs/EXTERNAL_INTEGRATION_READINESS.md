@@ -9,7 +9,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Local demo | Ready | Mock/manual systems, fake supplier server, manual_test payments, and local smoke script exist. Run verification before each demo. |
 | Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; needs fresh full build/test/smoke pass and a few docs/copy clarifications. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. |
-| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, but onboarding policy, activation visibility, and supplier reservation/wallet compensation risk remain. |
+| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists and wallet hold now precedes supplier callback reservation, but onboarding policy, activation visibility, and callback timeout ambiguity remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. |
@@ -143,7 +143,6 @@ This document is the current source of truth for SMSBridge readiness before invo
 
 ### Blockers
 
-- Fix or formally compensate supplier-pool reservation-before-wallet-hold risk.
 - Define supplier onboarding/KYC/contract/support policy.
 - Define supplier API key issuance and rotation process.
 - Add supplier activation history or equivalent supplier-facing reservation transparency.
@@ -243,7 +242,7 @@ These are practical estimates, not precision metrics.
 | Task | Area | Priority | Complexity | Why it matters | Suggested verification |
 |---|---|---|---|---|---|
 | Run full verification and record results | tests | blocker | medium | Establishes whether current MVP actually passes after many changes. | Backend pytest, frontend build, local E2E smoke. |
-| Fix supplier-pool reservation/hold ordering or strict compensation | backend | blocker | medium | Prevents real supplier number leak if wallet/DB step fails after reservation. | Targeted supplier/order wallet tests plus E2E supplier flow. |
+| Add supplier callback timeout ambiguity policy and escalation | backend/ops/docs | blocker | medium | Real suppliers need clear handling when a callback times out but may have reserved a number. | Timeout fixture tests and supplier runbook review. |
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
 | Add supplier activation history for suppliers | backend/frontend | beta-useful | medium | Real suppliers need reservation/SMS transparency. | Supplier endpoint tests and `/supplier` UI. |
@@ -258,8 +257,8 @@ These are practical estimates, not precision metrics.
 1. Run full verification and record exact results.
    - Highest leverage because docs now claim many features are implemented and need a clean current pass.
 
-2. Fix or formally compensate supplier-pool reservation-before-wallet-hold risk.
-   - Highest technical blocker before real supplier onboarding.
+2. Define supplier callback timeout ambiguity handling and escalation.
+   - Highest remaining technical/policy blocker before real supplier onboarding.
 
 3. Clarify manual_test payment behavior in buyer-facing copy/docs and verify the browser purchase/deposit flow.
    - Highest product blocker before friendly buyer testing.
@@ -271,4 +270,3 @@ These are practical estimates, not precision metrics.
 - Browser/mobile behavior was not visually verified during this docs reconciliation.
 - Supplier reservation timeout ambiguity needs design confirmation before real supplier contracts.
 - Real payment and SMS provider choices are not decided in the repo.
-

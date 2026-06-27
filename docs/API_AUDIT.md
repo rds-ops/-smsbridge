@@ -235,7 +235,6 @@ Blocker before friendly buyers:
 
 Blocker before real suppliers:
 
-- fix or strictly compensate supplier-pool reservation-before-wallet-hold risk
 - define supplier onboarding, API-key issuance, and support runbook
 - add supplier-facing activation history or equivalent transparency
 - define payout policy and minimum/KYC requirements
@@ -266,4 +265,3 @@ Blocker before real SMS providers:
 - Keep `manual_test` clearly local/dev/internal.
 - Treat internal provider webhooks as skeleton-only until real processing is implemented.
 - Keep supplier fake phone path local/dev/test only.
-

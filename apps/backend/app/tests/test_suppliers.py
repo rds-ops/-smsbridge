@@ -2,7 +2,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import func, select
+from sqlalchemy.orm import object_session
 
 from app.db.session import SessionLocal
 from app.jobs.tasks import poll_waiting_orders
@@ -17,7 +19,10 @@ from app.models import (
     SupplierReleaseRetry,
     SupplierSms,
     SupplierTransaction,
+    User,
+    WalletTransaction,
 )
+from app.services import orders as order_service
 from app.services.supplier_release_retries import process_due_release_retries
 from app.services.supplier_reservations import SupplierReservationResult, SupplierReservationUnavailable
 
@@ -233,6 +238,16 @@ def test_reservation_enabled_supplier_uses_callback_phone_and_activation(client,
     seen = {}
 
     def fake_reserve(supplier_entity, request, *, idempotency_key):
+        session = object_session(supplier_entity)
+        order_entity = session.scalar(select(Order).where(Order.public_id == request.order_public_id))
+        hold = session.scalar(
+            select(WalletTransaction).where(
+                WalletTransaction.order_id == order_entity.id,
+                WalletTransaction.type == "hold",
+                WalletTransaction.status == "completed",
+            )
+        )
+        seen["hold_before_callback"] = hold is not None
         seen["supplier_id"] = supplier_entity.id
         seen["request"] = request
         seen["idempotency_key"] = idempotency_key
@@ -249,6 +264,7 @@ def test_reservation_enabled_supplier_uses_callback_phone_and_activation(client,
     assert seen["request"].client_price
     assert seen["request"].supplier_reward
     assert seen["idempotency_key"] == f"sb-order-{order['public_id']}"
+    assert seen["hold_before_callback"] is True
 
     db = SessionLocal()
     try:
@@ -432,6 +448,73 @@ def test_reservation_failure_does_not_create_fake_activation_or_hold(client, adm
         assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
         assert db.scalar(select(Order).where(Order.user_id == 2)) is None
         assert db.scalar(select(OrderEvent)) is None
+    finally:
+        db.close()
+
+
+def test_supplier_reservation_failure_after_hold_refunds_if_committed(client, admin_token, monkeypatch):
+    supplier = create_supplier(client, admin_token)
+    assert client.patch(
+        f"/admin/suppliers/{supplier['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reservation_enabled": True, "reservation_url": "https://supplier.example.test/reserve"},
+    ).status_code == 200
+    api_key = supplier_key(client, admin_token, supplier["id"])
+    assert update_inventory(client, api_key, count=5).status_code == 200
+    db = SessionLocal()
+    try:
+        mock_provider = db.scalar(select(Provider).where(Provider.code == "mock"))
+        mock_provider.status = "inactive"
+        db.commit()
+    finally:
+        db.close()
+
+    def fail_reservation(supplier_entity, request, *, idempotency_key):
+        session = object_session(supplier_entity)
+        order_entity = session.scalar(select(Order).where(Order.public_id == request.order_public_id))
+        assert session.scalar(
+            select(WalletTransaction).where(
+                WalletTransaction.order_id == order_entity.id,
+                WalletTransaction.type == "hold",
+                WalletTransaction.status == "completed",
+            )
+        )
+        raise SupplierReservationUnavailable("supplier unavailable after hold")
+
+    monkeypatch.setattr("app.services.suppliers.reserve_supplier_number", fail_reservation)
+
+    db = SessionLocal()
+    try:
+        user = db.get(User, 2)
+        try:
+            order_service.create_order(db, user, "telegram", "ID")
+        except HTTPException as exc:
+            assert exc.status_code == 502
+        else:
+            raise AssertionError("supplier reservation failure should raise")
+
+        db.commit()
+        db.refresh(user.wallet)
+        assert user.wallet.balance == Decimal("25.0000")
+        assert user.wallet.held_balance == Decimal("0.0000")
+
+        failed_order = db.scalar(select(Order).where(Order.user_id == user.id, Order.status == "failed"))
+        assert failed_order is not None
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(
+                WalletTransaction.order_id == failed_order.id,
+                WalletTransaction.type == "hold",
+            )
+        ) == 1
+        assert db.scalar(
+            select(func.count(WalletTransaction.id)).where(
+                WalletTransaction.order_id == failed_order.id,
+                WalletTransaction.type == "refund",
+            )
+        ) == 1
+        assert db.scalar(select(SupplierActivation).where(SupplierActivation.supplier_id == supplier["id"])) is None
+        inventory = db.scalar(select(SupplierInventory).where(SupplierInventory.supplier_id == supplier["id"]))
+        assert inventory.available_count == 5
     finally:
         db.close()
 

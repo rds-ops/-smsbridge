@@ -414,6 +414,7 @@ Codex не должен напрямую делать крупный refactor б
   - exact inventory
   - reservation callback. DONE
 - supplier release callback retry queue. DONE
+- supplier-pool wallet hold before supplier reservation callback. DONE
 - fix operator uniqueness issues. DONE
 - improve inventory locking
 

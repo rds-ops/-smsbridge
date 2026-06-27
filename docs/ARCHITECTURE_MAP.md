@@ -186,16 +186,17 @@ External/mock provider path:
 Supplier-pool path:
 
 1. Create local order in `created`.
-2. Select supplier inventory with row lock.
-3. Decrement supplier inventory.
-4. If `reservation_enabled=true`, call supplier reservation callback and store returned real phone and supplier activation id.
-5. If `reservation_enabled=false`, use legacy fake phone only in local/dev/test; production-like environments block this path.
-6. Transition to `waiting_sms`.
-7. Create wallet hold.
+2. Create buyer wallet hold.
+3. Select supplier inventory with row lock.
+4. Decrement supplier inventory.
+5. If `reservation_enabled=true`, call supplier reservation callback and store returned real phone and supplier activation id.
+6. If `reservation_enabled=false`, use legacy fake phone only in local/dev/test; production-like environments block this path.
+7. Transition to `waiting_sms`.
+8. If supplier reservation is unavailable after the hold, refund the hold, mark the local attempt failed, restore inventory, and continue/fail cleanly.
 
 Known risk:
 
-- Supplier-pool reservation currently happens before wallet hold. If a reservation-enabled supplier returns a real number and a later wallet/DB step fails, compensation relies on cleanup/release behavior rather than the stricter external-provider ordering. This should be fixed or formally compensated before real supplier onboarding.
+- Supplier-pool reservation no longer happens before wallet hold. Remaining real-supplier risks are callback timeout ambiguity, supplier onboarding/contract policy, supplier-facing activation visibility, and operational escalation for repeated release failures.
 
 ### Order lifecycle
 
@@ -471,11 +472,10 @@ Deferred:
 
 ## 12. Main Remaining Architecture Risks
 
-1. Supplier-pool callback reservation happens before wallet hold; fix or add strict compensation before real suppliers.
+1. Supplier callback timeout ambiguity and supplier onboarding controls still need to be finalized before real suppliers.
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Refresh tokens are stateless; logout/session revocation is incomplete.
 5. Admin and supplier list pagination/filtering is still uneven.
 6. Risk monitoring is read-only/manual-review only; no automated abuse prevention.
 7. Metrics are useful for ops, but not production accounting.
-

@@ -52,13 +52,20 @@ def create_order(db: Session, user: User, service_code: str, country_iso2: str, 
             )
             db.add(order)
             db.flush()
-            activation = suppliers.reserve_supplier_activation(db, order, price, operator)
+            wallet.hold(db, user.id, order.id, order.price)
+            try:
+                activation = suppliers.reserve_supplier_activation(db, order, price, operator)
+            except Exception as exc:
+                wallet.refund(db, user.id, order.id, order.price)
+                transition_order(order, OrderStatus.FAILED, db=db, actor_type="system", reason="supplier_reservation_failed")
+                last_error = exc
+                continue
             if not activation:
-                db.delete(order)
+                wallet.refund(db, user.id, order.id, order.price)
+                transition_order(order, OrderStatus.FAILED, db=db, actor_type="system", reason="supplier_reservation_unavailable")
                 last_error = RuntimeError("No active supplier inventory")
                 continue
             transition_order(order, OrderStatus.WAITING_SMS, db=db, actor_type="system", reason="supplier_pool_reserved")
-            wallet.hold(db, user.id, order.id, order.price)
             return order
         order = Order(
             user_id=user.id,
