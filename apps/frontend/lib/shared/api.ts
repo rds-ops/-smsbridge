@@ -49,7 +49,6 @@ export function clearAuthTokens() {
 
 export function logout() {
   clearAuthTokens();
-  if (typeof window !== "undefined") window.location.href = "/login";
 }
 
 function isAuthEndpoint(path: string) {

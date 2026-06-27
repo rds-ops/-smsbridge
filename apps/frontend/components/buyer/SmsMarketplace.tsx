@@ -2,7 +2,7 @@
 
 import {useEffect, useMemo, useRef, useState} from "react";
 import Link from "next/link";
-import {ArrowDown, ArrowRight, CheckCircle2, Code2, Loader2, MapPin, Radio, RotateCcw, Search, ShieldCheck, Sparkles, Wallet} from "lucide-react";
+import {ArrowDown, ArrowLeft, ArrowRight, CheckCircle2, Code2, Loader2, Radio, RotateCcw, Search, Sparkles, Wallet} from "lucide-react";
 import {AuthModal} from "@/components/shared/auth-modal";
 import {Alert, CopyButton, EmptyState, StatusBadge, Toast} from "@/components/shared/ui";
 import {cancelOrder, createOrder, finishOrder, getBalance, getCountries, getOrder, getPrices, getServices} from "@/lib/client/api";
@@ -12,7 +12,7 @@ import type {Country, Order, Price, Service, User, Wallet as WalletType} from "@
 import {useTranslation} from "@/lib/i18n";
 import type {Locale} from "@/lib/i18n";
 
-const selectionStorageKey = "smsbridge_marketplace_selection";
+const selectionStorageKey = "smsbridge_marketplace_selection_v2";
 const visibleLimit = 7;
 
 const previewServices: Service[] = [
@@ -88,8 +88,8 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
   const [countries, setCountries] = useState<Country[]>(previewCountries);
   const [prices, setPrices] = useState<Price[]>(previewPrices);
   const [balance, setBalance] = useState<WalletType | null>(null);
-  const [service, setService] = useState("telegram");
-  const [country, setCountry] = useState("ID");
+  const [service, setService] = useState("");
+  const [country, setCountry] = useState("");
   const [operator, setOperator] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [countrySearch, setCountrySearch] = useState("");
@@ -152,8 +152,8 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
       setCountries(countryRows);
       setPrices(priceRows);
       setBalance(wallet);
-      if (serviceRows.length && !serviceRows.some((item) => item.code === service)) setService(serviceRows[0].code);
-      if (countryRows.length && !countryRows.some((item) => item.iso2 === country)) setCountry(countryRows[0].iso2);
+      if (service && serviceRows.length && !serviceRows.some((item) => item.code === service)) setService("");
+      if (country && countryRows.length && !countryRows.some((item) => item.iso2 === country)) setCountry("");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("buy.loadFailed"));
     } finally {
@@ -162,7 +162,7 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
   }
 
   const serviceRows = useMemo(() => services.map((item) => {
-    const rows = prices.filter((price) => price.service_code === item.code);
+    const rows = prices.filter((price) => price.service_code === item.code && (!country || price.country_iso2 === country));
     return {
       code: item.code,
       name: locale === "ru" ? item.name_ru : item.name_en,
@@ -170,10 +170,10 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
       count: sumAvailable(rows),
       price: minPrice(rows)
     };
-  }), [locale, prices, services]);
+  }), [country, locale, prices, services]);
 
   const countryRows = useMemo(() => countries.map((item) => {
-    const rows = prices.filter((price) => price.country_iso2 === item.iso2 && price.service_code === service);
+    const rows = prices.filter((price) => price.country_iso2 === item.iso2 && (!service || price.service_code === service));
     return {
       code: item.iso2,
       name: locale === "ru" ? item.name_ru : item.name_en,
@@ -183,7 +183,10 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
     };
   }), [countries, locale, prices, service]);
 
-  const selectedPrices = useMemo(() => prices.filter((price) => price.service_code === service && price.country_iso2 === country), [country, prices, service]);
+  const selectedPrices = useMemo(() => {
+    if (!service || !country) return [];
+    return prices.filter((price) => price.service_code === service && price.country_iso2 === country);
+  }, [country, prices, service]);
   const selected = useMemo(() => {
     const requestedOperator = operator.trim().toLowerCase();
     if (requestedOperator) {
@@ -193,28 +196,31 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
     return selectedPrices.find((price) => !price.operator || price.operator === "any") || selectedPrices[0];
   }, [operator, selectedPrices]);
 
-  const hasPrice = Boolean(selected);
+  const hasRequiredSelection = Boolean(service && country);
+  const hasPrice = Boolean(hasRequiredSelection && selected);
   const availableBalance = Number(balance?.balance || 0);
   const requiredPrice = Number(selected?.final_price || 0);
   const hasFunds = Boolean(!user || (hasPrice && availableBalance >= requiredPrice));
-  const canBuy = Boolean(hasPrice && hasFunds && !buying && !loading);
+  const canBuy = Boolean(hasRequiredSelection && hasPrice && hasFunds && !buying && !loading);
   const filteredServices = filterRows(serviceRows, serviceSearch);
   const filteredCountries = filterRows(countryRows, countrySearch);
-  const selectedServiceRow = serviceRows.find((row) => row.code === service) || serviceRows[0];
-  const selectedCountryRow = countryRows.find((row) => row.code === country) || countryRows[0];
+  const selectedServiceRow = serviceRows.find((row) => row.code === service);
+  const selectedCountryRow = countryRows.find((row) => row.code === country);
   const offerOptions = selectedPrices.length ? selectedPrices : selected ? [selected] : [];
   const selectedOfferId = offerId(selected);
 
   function selectService(code: string) {
     setService(code);
+    setOperator("");
     setServiceSearch("");
-    setOpenStep("country");
+    setOpenStep(country ? "offer" : "country");
   }
 
   function selectCountry(code: string) {
     setCountry(code);
+    setOperator("");
     setCountrySearch("");
-    setOpenStep("offer");
+    setOpenStep(service ? "offer" : "service");
   }
 
   function selectOffer(priceRow: Price) {
@@ -272,7 +278,7 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
   return (
     <div className="min-h-screen bg-background">
       <Toast type={toast.type} message={toast.message} />
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6">
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6 lg:py-5">
         <MarketplaceStorefront
           balance={balance}
           buying={buying}
@@ -284,6 +290,7 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
           filteredServiceCount={filteredServices.length}
           hasFunds={hasFunds}
           hasPrice={hasPrice}
+          hasRequiredSelection={hasRequiredSelection}
           loading={loading}
           onBuy={buy}
           onCountrySearch={setCountrySearch}
@@ -308,7 +315,7 @@ export function SmsMarketplace({children}: {children?: React.ReactNode}) {
           showAllServices={showAllServices}
           user={user}
         />
-        <section className="grid gap-5">
+        <section className="grid gap-4">
           {error && <Alert type="error">{error}</Alert>}
           {order ? (
             <OrderStatusPanel
@@ -351,6 +358,7 @@ function MarketplaceStorefront({
   filteredServiceCount,
   hasFunds,
   hasPrice,
+  hasRequiredSelection,
   loading,
   onBuy,
   onCountrySearch,
@@ -385,6 +393,7 @@ function MarketplaceStorefront({
   filteredServiceCount: number;
   hasFunds: boolean;
   hasPrice: boolean;
+  hasRequiredSelection: boolean;
   loading: boolean;
   onBuy: () => void;
   onCountrySearch: (value: string) => void;
@@ -411,12 +420,9 @@ function MarketplaceStorefront({
 }) {
   const {t} = useTranslation();
   return (
-    <aside className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur transition-all duration-300 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-      <div className="rounded-2xl bg-gradient-to-r from-blue-50 via-cyan-50 to-sky-50 px-4 py-3 text-center text-sm font-semibold text-accent ring-1 ring-cyan-100">
-        {t("buy.activations")}
-      </div>
-      <StepPanel active={openStep === "service"} done={openStep !== "service"} number={1} title={t("buy.serviceStepTitle")}>
-        {openStep === "service" ? (
+    <aside className="rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur transition-all duration-300 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+      <StepPanel active={openStep === "service" || !selectedServiceRow} done={Boolean(selectedServiceRow && openStep !== "service")} number={1} title={t("buy.serviceStepTitle")}>
+        {openStep === "service" || !selectedServiceRow ? (
           <PickerBlock
             count={filteredServiceCount}
             loading={loading}
@@ -435,10 +441,8 @@ function MarketplaceStorefront({
         ) : null}
       </StepPanel>
 
-      <StepPanel active={openStep === "country"} done={["offer", "review"].includes(openStep)} number={2} title={t("buy.countryStepTitle")}>
-        {openStep === "service" ? (
-          <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.completePreviousStep")}</p>
-        ) : openStep === "country" ? (
+      <StepPanel active={openStep === "country" || !selectedCountryRow} done={Boolean(selectedCountryRow && !["country"].includes(openStep))} number={2} title={t("buy.countryStepTitle")}>
+        {openStep === "country" || !selectedCountryRow ? (
           <PickerBlock
             count={filteredCountryCount}
             loading={loading}
@@ -452,15 +456,13 @@ function MarketplaceStorefront({
             showAll={showAllCountries}
             showAllLabel={t("buy.showAllCountries")}
           />
-        ) : selectedCountryRow ? (
-          <SelectedPickerRow onChange={() => onOpenStep("country")} row={selectedCountryRow} />
         ) : (
-          <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.completePreviousStep")}</p>
+          <SelectedPickerRow onChange={() => onOpenStep("country")} row={selectedCountryRow} />
         )}
       </StepPanel>
 
-      <StepPanel active={openStep === "offer"} done={openStep === "review"} number={3} title={t("buy.offerStepTitle")}>
-        {["service", "country"].includes(openStep) ? (
+      <StepPanel active={openStep === "offer" && hasRequiredSelection} done={openStep === "review"} number={3} title={t("buy.offerStepTitle")}>
+        {!hasRequiredSelection ? (
           <p className="rounded-xl border border-dashed border-slate-200 p-3 text-xs text-neutral-500">{t("buy.completePreviousStep")}</p>
         ) : openStep === "offer" ? (
           <OfferPicker
@@ -476,13 +478,13 @@ function MarketplaceStorefront({
         )}
       </StepPanel>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/60">
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/50">
         <div className="mb-3 flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-cyan-50 text-xs font-semibold text-accent ring-1 ring-cyan-100">4</span>
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-50 text-xs font-semibold text-accent ring-1 ring-blue-100">4</span>
           <h2 className="text-sm font-semibold text-slate-950">{t("buy.reviewStepTitle")}</h2>
         </div>
-        <SummaryRow label={t("common.service")} value={selectedServiceRow?.name || service} />
-        <SummaryRow label={t("common.country")} value={selectedCountryRow?.name || country} />
+        <SummaryRow label={t("common.service")} value={selectedServiceRow?.name || "-"} />
+        <SummaryRow label={t("common.country")} value={selectedCountryRow?.name || "-"} />
         <SummaryRow label={t("common.operator")} value={operator || price?.operator || t("common.any")} />
         <SummaryRow label={t("common.price")} value={hasPrice ? money(price?.final_price) : "-"} strong />
         <SummaryRow label={t("common.availability")} value={price?.available_count ?? "-"} />
@@ -492,7 +494,7 @@ function MarketplaceStorefront({
         {!hasPrice && <p className="mt-3 text-xs leading-5 text-red-700">{t("buy.noPrice")}</p>}
         {user && hasPrice && !hasFunds && <p className="mt-3 text-xs leading-5 text-red-700">{t("buy.insufficient")}</p>}
         {!user && <p className="mt-3 text-xs leading-5 text-neutral-500">{t("buy.previewNotice")}</p>}
-        <button className="btn btn-primary mt-4 w-full" disabled={user ? !canBuy : !hasPrice || openStep !== "review"} onClick={onBuy}>
+        <button className="btn btn-primary mt-4 w-full" disabled={user ? !canBuy || openStep !== "review" : !hasRequiredSelection || !hasPrice || openStep !== "review"} onClick={onBuy}>
           {buying ? <Loader2 size={16} className="animate-spin" /> : null}
           {!user ? t("buy.signInToBuy") : buying ? t("buy.creating") : t("buy.buyButton")}
         </button>
@@ -503,16 +505,16 @@ function MarketplaceStorefront({
 
 function StepPanel({active, children, done, number, title}: {active: boolean; children: React.ReactNode; done: boolean; number: number; title: string}) {
   return (
-    <section className={`mt-4 rounded-2xl border p-3 transition-all duration-200 ${
+    <section className={`mt-3 rounded-2xl border p-3 transition-all duration-200 first:mt-0 ${
       active
-        ? "border-cyan-200 bg-white shadow-md shadow-cyan-100/50 ring-1 ring-cyan-100"
+        ? "border-blue-200 bg-white shadow-md shadow-blue-100/50 ring-1 ring-blue-100"
         : done
           ? "border-slate-200 bg-slate-50/80"
           : "border-slate-200 bg-white"
     }`}>
       <div className="mb-3 flex items-center gap-2">
         <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-          done ? "bg-cyan-50 text-accent ring-1 ring-cyan-100" : active ? "bg-accent text-white" : "bg-slate-100 text-slate-600"
+          done ? "bg-blue-50 text-accent ring-1 ring-blue-100" : active ? "bg-accent text-white" : "bg-slate-100 text-slate-600"
         }`}>{done ? <CheckCircle2 size={14} /> : number}</span>
         <h2 className="min-w-0 truncate text-sm font-semibold text-slate-950">{title}</h2>
       </div>
@@ -550,8 +552,10 @@ function PickerBlock({
   return (
     <div>
       <label className="relative block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-        <input className="field min-h-10 pl-10" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
+        <span className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-neutral-400">
+          <Search size={16} />
+        </span>
+        <input className="field min-h-10 !pl-11" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={placeholder} />
       </label>
       <div className="mt-2 grid gap-1.5">
         {loading ? (
@@ -560,7 +564,7 @@ function PickerBlock({
           <button
             className={`group flex min-h-[3.35rem] items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all duration-200 ${
               selected === row.code
-                ? "border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white text-slate-950 shadow-md shadow-cyan-100/70 ring-1 ring-cyan-100 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
+                ? "border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white text-slate-950 shadow-sm ring-1 ring-blue-100 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
                 : "border-transparent bg-white hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-200/70"
             }`}
             key={row.code}
@@ -568,7 +572,7 @@ function PickerBlock({
             type="button"
           >
             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-semibold transition-all duration-200 ${
-              selected === row.code ? "bg-white text-accent shadow-sm ring-1 ring-cyan-100" : "bg-slate-100 text-slate-700 group-hover:bg-white group-hover:text-accent"
+              selected === row.code ? "bg-white text-accent shadow-sm ring-1 ring-blue-100" : "bg-slate-100 text-slate-700 group-hover:bg-white group-hover:text-accent"
             }`}>{row.badge}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{row.name}</span>
@@ -593,16 +597,16 @@ function SelectedPickerRow({onChange, row}: {onChange: () => void; row: PickerRo
   const {t} = useTranslation();
   return (
     <button
-      className="group flex min-h-[3.35rem] w-full items-center gap-3 rounded-xl border border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white px-3 py-2 text-left shadow-sm ring-1 ring-cyan-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-cyan-100/70 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
+      className="group flex min-h-[3.35rem] w-full items-center gap-3 rounded-xl border border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white px-3 py-2 text-left shadow-sm ring-1 ring-blue-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-100/60 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
       onClick={onChange}
       type="button"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-semibold text-accent shadow-sm ring-1 ring-cyan-100">{row.badge}</span>
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-semibold text-accent shadow-sm ring-1 ring-blue-100">{row.badge}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-slate-950">{row.name}</span>
         <span className="block truncate text-xs text-neutral-500">{row.count.toLocaleString()} {t("buy.availableShort")} · {row.price ? t("buy.fromPrice", {price: money(row.price)}) : row.code}</span>
       </span>
-      <span className="shrink-0 rounded-lg border border-cyan-100 bg-white px-2 py-1 text-xs font-semibold text-accent transition-colors group-hover:bg-cyan-50">
+      <span className="shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-xs font-semibold text-accent transition-colors group-hover:bg-blue-50">
         {t("buy.change")}
       </span>
     </button>
@@ -622,8 +626,8 @@ function OfferPicker({loading, onSelect, options, selectedOfferId}: {loading: bo
           <button
             className={`rounded-xl border p-3 text-left transition-all duration-200 ${
               selected
-                ? "border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white shadow-sm ring-1 ring-cyan-100 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
-                : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-slate-50 hover:shadow-md"
+                ? "border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white shadow-sm ring-1 ring-blue-100 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
+                : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-200 hover:bg-slate-50 hover:shadow-md hover:shadow-blue-100/40"
             }`}
             key={id}
             onClick={() => onSelect(option)}
@@ -651,7 +655,7 @@ function SelectedOfferRow({onChange, price}: {onChange: () => void; price: Price
   const {t} = useTranslation();
   return (
     <button
-      className="group w-full rounded-xl border border-cyan-200 bg-gradient-to-r from-blue-50 via-cyan-50 to-white p-3 text-left shadow-sm ring-1 ring-cyan-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-cyan-100/70 dark:from-slate-800 dark:via-cyan-950/40 dark:to-slate-900"
+      className="group w-full rounded-xl border border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-white p-3 text-left shadow-sm ring-1 ring-blue-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-100/60 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-900"
       onClick={onChange}
       type="button"
     >
@@ -660,7 +664,7 @@ function SelectedOfferRow({onChange, price}: {onChange: () => void; price: Price
           <Radio size={15} className="shrink-0 text-accent" />
           <span className="truncate text-sm font-semibold text-slate-950">{price.operator || t("buy.anyOperator")}</span>
         </span>
-        <span className="shrink-0 rounded-lg border border-cyan-100 bg-white px-2 py-1 text-xs font-semibold text-accent">{t("buy.change")}</span>
+        <span className="shrink-0 rounded-lg border border-blue-100 bg-white px-2 py-1 text-xs font-semibold text-accent">{t("buy.change")}</span>
       </div>
       <p className="mt-2 text-xs text-neutral-500">{money(price.final_price)} · {price.available_count} {t("buy.availableShort")} · {percent(price.delivery_rate)}</p>
     </button>
@@ -683,19 +687,17 @@ function MarketplaceHomeContent({
   const {t} = useTranslation();
   return (
     <>
-      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(239,246,255,0.9)_46%,rgba(236,254,255,0.72)_100%)] p-6 shadow-[0_22px_70px_rgba(14,116,144,0.12)] backdrop-blur transition-all duration-300 dark:border-cyan-900/40 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.96)_0%,rgba(8,47,73,0.88)_52%,rgba(2,6,23,0.96)_100%)] dark:shadow-cyan-950/30 md:p-9">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-200/30 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 right-10 h-40 w-40 rounded-full bg-blue-300/20 blur-2xl" />
+      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.97)_0%,rgba(239,246,255,0.9)_54%,rgba(236,254,255,0.70)_100%)] p-4 shadow-[0_16px_44px_rgba(37,99,235,0.10)] backdrop-blur transition-all duration-300 dark:border-cyan-900/40 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.96)_0%,rgba(8,47,73,0.82)_52%,rgba(2,6,23,0.96)_100%)] dark:shadow-cyan-950/25 md:p-5">
+        <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-blue-300/20 blur-3xl dark:bg-cyan-500/10" />
         <div className="relative max-w-3xl">
-          <p className="text-sm font-semibold text-blue-700">{t("buy.marketplaceEyebrow")}</p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-normal text-slate-950 md:text-6xl">{t("buy.marketplaceTitle")}</h1>
-          <p className="mt-5 text-base leading-7 text-slate-700">{t("buy.marketplaceSubtitle")}</p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <button className="btn btn-primary px-5" disabled={user ? !canBuy : !hasPrice} onClick={onBuy}>
+          <h1 className="text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">{t("buy.marketplaceTitle")}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700 md:text-base">{t("buy.marketplaceSubtitle")}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button className="btn btn-primary px-4" disabled={user ? !canBuy : !hasPrice} onClick={onBuy} type="button">
               {!user ? t("buy.signInToBuy") : t("buy.buyButton")}
               <ArrowRight size={16} />
             </button>
-            <Link className="btn btn-secondary" href="/api-docs">{t("landing.apiDocs")}</Link>
+            <Link className="btn btn-secondary px-4" href="/api-docs">{t("landing.apiDocs")}</Link>
           </div>
           {user && hasPrice && !hasFunds && <div className="mt-5"><Alert type="error">{t("buy.insufficient")}</Alert></div>}
         </div>
@@ -712,15 +714,14 @@ function PrinciplesRow() {
     {icon: <Sparkles size={16} />, label: t("buy.principleFast")},
     {icon: <RotateCcw size={16} />, label: t("buy.principleRefund")},
     {icon: <Code2 size={16} />, label: t("buy.principleApi")},
-    {icon: <Wallet size={16} />, label: t("buy.principleSupplier")},
-    {icon: <ShieldCheck size={16} />, label: t("buy.principleCompliance")}
+    {icon: <Wallet size={16} />, label: t("buy.principleSupplier")}
   ];
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap gap-2">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => (
-          <div className="flex min-h-11 flex-1 basis-[10rem] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-950 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50" key={item.label}>
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-cyan-50 text-accent ring-1 ring-cyan-100">{item.icon}</span>
+          <div className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-950 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/40" key={item.label}>
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-accent ring-1 ring-blue-100">{item.icon}</span>
             <span className="min-w-0 truncate">{item.label}</span>
           </div>
         ))}
@@ -732,46 +733,36 @@ function PrinciplesRow() {
 function PurchaseRoadmap() {
   const {t} = useTranslation();
   const steps = [
-    {icon: <Sparkles size={17} />, title: t("buy.roadmapService"), desc: t("buy.roadmapServiceDesc")},
-    {icon: <MapPin size={17} />, title: t("buy.roadmapCountry"), desc: t("buy.roadmapCountryDesc")},
-    {icon: <Radio size={17} />, title: t("buy.roadmapOperator"), desc: t("buy.roadmapOperatorDesc")},
-    {icon: <Wallet size={17} />, title: t("buy.roadmapBuy"), desc: t("buy.roadmapBuyDesc")},
-    {icon: <Loader2 size={17} />, title: t("buy.roadmapWait"), desc: t("buy.roadmapWaitDesc")},
-    {icon: <CheckCircle2 size={17} />, title: t("buy.roadmapFinish"), desc: t("buy.roadmapFinishDesc")}
+    {number: 1, title: t("buy.roadmapService")},
+    {number: 2, title: t("buy.roadmapCountry")},
+    {number: 3, title: t("buy.roadmapOperator")},
+    {number: 6, title: t("buy.roadmapFinish")},
+    {number: 5, title: t("buy.roadmapWait")},
+    {number: 4, title: t("buy.roadmapBuy")}
   ];
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-blue-700">{t("buy.roadmapEyebrow")}</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">{t("buy.roadmapTitle")}</h2>
-        </div>
-        <p className="max-w-md text-sm leading-6 text-neutral-600">{t("buy.roadmapDesc")}</p>
-      </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <h2 className="text-base font-semibold text-slate-950">{t("buy.roadmapTitle")}</h2>
+      <div className="mt-2 grid gap-2 md:grid-cols-3 md:gap-x-5 md:gap-y-2">
         {steps.map((step, index) => (
-          <RoadmapStep desc={step.desc} icon={step.icon} index={index} key={step.title} title={step.title} />
+          <RoadmapStep index={index} key={`${step.number}-${step.title}`} number={step.number} title={step.title} />
         ))}
       </div>
     </section>
   );
 }
 
-function RoadmapStep({desc, icon, index, title}: {desc: string; icon: React.ReactNode; index: number; title: string}) {
-  const showRightArrow = index !== 2 && index !== 5;
+function RoadmapStep({index, number, title}: {index: number; number: number; title: string}) {
+  const showTopRightArrow = index === 0 || index === 1;
+  const showBottomLeftArrow = index === 4 || index === 5;
   const showDownArrow = index === 2;
   return (
-    <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50">
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-accent shadow-sm ring-1 ring-slate-200">{icon}</span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase text-neutral-500">{String(index + 1).padStart(2, "0")}</p>
-          <h3 className="mt-1 text-sm font-semibold text-slate-950">{title}</h3>
-          <p className="mt-2 text-xs leading-5 text-neutral-600">{desc}</p>
-        </div>
-      </div>
-      {showRightArrow && <ArrowRight className="absolute -right-4 top-1/2 hidden -translate-y-1/2 text-cyan-500 md:block" size={20} />}
-      {showDownArrow && <ArrowDown className="absolute -bottom-5 left-1/2 hidden -translate-x-1/2 text-cyan-500 md:block" size={20} />}
+    <div className="relative flex min-h-14 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/40">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-sm font-semibold text-accent shadow-sm ring-1 ring-slate-200">{number}</span>
+      <h3 className="min-w-0 text-sm font-semibold leading-5 text-slate-950">{title}</h3>
+      {showTopRightArrow && <ArrowRight className="absolute -right-7 top-1/2 hidden -translate-y-1/2 text-blue-600 drop-shadow-sm dark:text-cyan-300 md:block" size={34} strokeWidth={1.9} />}
+      {showBottomLeftArrow && <ArrowLeft className="absolute -left-7 top-1/2 hidden -translate-y-1/2 text-blue-600 drop-shadow-sm dark:text-cyan-300 md:block" size={34} strokeWidth={1.9} />}
+      {showDownArrow && <ArrowDown className="absolute -bottom-6 left-1/2 hidden -translate-x-1/2 text-blue-600 drop-shadow-sm dark:text-cyan-300 md:block" size={34} strokeWidth={1.9} />}
     </div>
   );
 }
@@ -790,14 +781,14 @@ function OrderStatusPanel({busy, onAction, onBackToMarket, order}: {busy: boolea
         <StatusBadge status={order.status} />
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/50">
           <p className="text-sm text-neutral-500">{t("orderDetail.phoneNumber")}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-2xl font-semibold">{order.phone_number || "-"}</p>
             <CopyButton value={order.phone_number} />
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-cyan-200 hover:bg-white hover:shadow-md hover:shadow-cyan-100/50">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:border-blue-200 hover:bg-white hover:shadow-md hover:shadow-blue-100/50">
           <p className="text-sm text-neutral-500">{t("common.smsCode")}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-2xl font-semibold">{order.sms_code || "-"}</p>
@@ -835,7 +826,7 @@ function SummaryRow({label, strong = false, value}: {label: string; strong?: boo
 
 function SummaryBox({label, value}: {label: string; value: React.ReactNode}) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:border-cyan-200 hover:bg-white">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-200 hover:border-blue-200 hover:bg-white">
       <p className="text-xs uppercase text-neutral-500">{label}</p>
       <div className="mt-1 break-all font-semibold text-slate-950">{value}</div>
     </div>
@@ -858,8 +849,8 @@ function restoreSelection(): Selection | null {
     const raw = localStorage.getItem(selectionStorageKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<Selection>;
-    if (!parsed.service || !parsed.country) return null;
-    return {service: parsed.service, country: parsed.country, operator: parsed.operator || ""};
+    if (!parsed.service && !parsed.country) return null;
+    return {service: parsed.service || "", country: parsed.country || "", operator: parsed.operator || ""};
   } catch {
     return null;
   }

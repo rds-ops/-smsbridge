@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {usePathname, useRouter} from "next/navigation";
-import {BookOpen, ChevronDown, ClipboardList, HelpCircle, LogOut, Settings, ShieldCheck, Truck, UserCircle, Wallet} from "lucide-react";
+import {ChevronDown, ClipboardList, LogOut, Settings, ShieldCheck, Truck, UserCircle, Wallet} from "lucide-react";
 import {useEffect, useState} from "react";
 import {AuthModal, type AuthMode} from "@/components/shared/auth-modal";
 import {ThemeToggle} from "@/components/shared/theme-toggle";
@@ -91,6 +91,7 @@ export function Nav({children}: {children?: React.ReactNode}) {
 
 function TopNavigation({balance, pathname, user}: {balance: WalletType | null; pathname: string; user: User | null}) {
   const {t} = useTranslation();
+  const router = useRouter();
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [navUser, setNavUser] = useState<User | null>(user);
@@ -107,8 +108,8 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
 
   const linkClass = (href: string) => {
     const active = pathname === href || (href !== "/" && pathname.startsWith(href));
-    return `inline-flex min-w-[5.75rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
-      active ? "bg-cyan-50 text-accent shadow-sm ring-1 ring-cyan-100" : "text-neutral-600 hover:-translate-y-px hover:bg-slate-50 hover:text-slate-950 hover:shadow-sm"
+    return `inline-flex min-w-[5.5rem] items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
+      active ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-800 dark:text-cyan-300" : "text-neutral-600 hover:-translate-y-px hover:bg-slate-50 hover:text-blue-700 hover:shadow-sm dark:hover:bg-slate-900 dark:hover:text-cyan-300"
     }`;
   };
   const openAuth = (mode: AuthMode) => {
@@ -131,21 +132,21 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
 
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
           <Link className={linkClass("/")} href="/">{t("common.publicHome")}</Link>
-          <Link className={linkClass("/api-docs")} href="/api-docs"><BookOpen size={16} />{t("nav.api")}</Link>
-          <Link className={linkClass("/suppliers")} href="/suppliers"><Truck size={16} />{t("nav.suppliers")}</Link>
-          <Link className={linkClass("/faq")} href="/faq"><HelpCircle size={16} />{t("nav.faq")}</Link>
+          <Link className={linkClass("/api-docs")} href="/api-docs">{t("nav.api")}</Link>
+          <Link className={linkClass("/suppliers")} href="/suppliers">{t("nav.suppliers")}</Link>
+          <Link className={linkClass("/faq")} href="/faq">{t("nav.faq")}</Link>
         </nav>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">
           {isSignedIn ? (
             <>
-              <div className="hidden min-w-[8.75rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-cyan-200 hover:bg-white hover:shadow-md sm:flex sm:text-sm">
+              <div className="hidden min-w-[8.75rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-blue-200 hover:bg-white hover:shadow-md sm:flex sm:text-sm">
                 <Wallet size={15} className="text-accent" />
                 <strong>{money(currentBalance?.balance, currentBalance?.currency)}</strong>
               </div>
               <div className="hidden sm:block"><LanguageSwitcher compact /></div>
               <ThemeToggle />
-              <AccountMenu user={currentUser} />
+              <AccountMenu pathname={pathname} router={router} user={currentUser} />
             </>
           ) : (
             <>
@@ -171,8 +172,13 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
   );
 }
 
-function AccountMenu({user}: {user: User | null}) {
+function AccountMenu({pathname, router, user}: {pathname: string; router: {replace: (href: string) => void}; user: User | null}) {
   const {t} = useTranslation();
+  const publicLogoutStayRoutes = new Set(["/", "/buy", "/api-docs", "/suppliers", "/faq", "/abuse"]);
+  const handleLogout = () => {
+    logout();
+    if (!publicLogoutStayRoutes.has(pathname)) router.replace("/");
+  };
 
   return (
     <DropdownMenu>
@@ -207,7 +213,7 @@ function AccountMenu({user}: {user: User | null}) {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={logout}>
+        <DropdownMenuItem onSelect={handleLogout}>
           <LogOut size={15} />{t("nav.logout")}
         </DropdownMenuItem>
       </DropdownMenuContent>
