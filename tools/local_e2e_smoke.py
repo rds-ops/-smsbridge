@@ -102,6 +102,36 @@ def find_payment_id(payment_rows: list[dict[str, Any]], public_id: str) -> int:
     raise SmokeError(f"admin payment-intents list did not include payment intent {public_id}")
 
 
+def endpoint_available(url: str) -> bool:
+    try:
+        request("GET", url)
+    except SmokeError:
+        return False
+    return True
+
+
+def find_activation_by_phone(activation_rows: list[dict[str, Any]], phone_number: str) -> dict[str, Any]:
+    for row in activation_rows:
+        if row.get("phone_number") == phone_number:
+            return row
+    raise SmokeError(f"supplier activations did not include phone number {phone_number}; order was not supplier-backed")
+
+
+def block_existing_active_suppliers(admin_token: str) -> int:
+    blocked = 0
+    for supplier in request("GET", "/admin/suppliers", token=admin_token):
+        if supplier.get("status") != "active":
+            continue
+        request(
+            "PATCH",
+            f"/admin/suppliers/{supplier['id']}",
+            token=admin_token,
+            payload={"status": "blocked"},
+        )
+        blocked += 1
+    return blocked
+
+
 def main() -> int:
     print(f"BASE_URL={BASE_URL}")
     print(f"FAKE_SUPPLIER_URL={FAKE_SUPPLIER_URL}")
@@ -120,27 +150,64 @@ def main() -> int:
         buyer = request("GET", "/auth/me", token=buyer_token)
         print("buyer:", {"id": buyer["id"], "email": buyer["email"]})
 
-    with step("create reservation-enabled supplier"):
+    with step("raise local buyer test limits"):
+        limits = request(
+            "PATCH",
+            f"/admin/users/{buyer['id']}/limits",
+            token=admin_token,
+            payload={
+                "tier": "verified",
+                "max_orders_per_minute": 60,
+                "max_orders_per_day": 1000,
+                "max_active_orders": 1000,
+                "max_daily_spend": "10000.0000",
+            },
+        )
+        print("limits:", {"tier": limits["tier"], "max_active_orders": limits["limit"]["max_active_orders"]})
+
+    with step("check fake supplier availability"):
+        fake_supplier_available = endpoint_available(f"{FAKE_SUPPLIER_URL}/openapi.json")
+        mode = "reservation callback" if fake_supplier_available else "local supplier fallback"
+        print("fake supplier:", {"available": fake_supplier_available, "mode": mode})
+
+    with step("isolate smoke supplier"):
+        blocked_suppliers = block_existing_active_suppliers(admin_token)
+        print("blocked existing active suppliers:", blocked_suppliers)
+
+    with step("create supplier"):
+        supplier_payload = {
+            "name": f"Local Fake Supplier {RUN_ID}",
+            "email": f"fake-supplier-{RUN_ID}@example.test",
+            "status": "active",
+            "reward_percent": "70.00",
+        }
+        if fake_supplier_available:
+            supplier_payload.update(
+                {
+                    "reservation_enabled": True,
+                    "reservation_url": RESERVATION_URL_FOR_BACKEND,
+                    "reservation_auth_type": "none",
+                    "reservation_timeout_seconds": 5,
+                }
+            )
         supplier = request(
             "POST",
             "/admin/suppliers",
             token=admin_token,
-            payload={
-                "name": f"Local Fake Supplier {RUN_ID}",
-                "email": f"fake-supplier-{RUN_ID}@example.test",
-                "status": "active",
-                "reward_percent": "70.00",
-                "reservation_enabled": True,
-                "reservation_url": RESERVATION_URL_FOR_BACKEND,
-                "reservation_auth_type": "none",
-                "reservation_timeout_seconds": 5,
-            },
+            payload=supplier_payload,
         )
         supplier_id = supplier["id"]
         key_response = request("POST", f"/admin/suppliers/{supplier_id}/api-key/regenerate", token=admin_token)
         supplier_key = key_response["api_key"]
         require(bool(supplier_key), "supplier API key was not returned")
-        print("supplier:", {"id": supplier_id, "reservation_url": supplier["reservation_url"]})
+        print(
+            "supplier:",
+            {
+                "id": supplier_id,
+                "reservation_enabled": supplier["reservation_enabled"],
+                "reservation_url": supplier["reservation_url"],
+            },
+        )
 
     with step("update supplier inventory"):
         inventory = request(
@@ -188,7 +255,17 @@ def main() -> int:
         )
         require(order["status"] == "waiting_sms", f"expected waiting_sms order, got {order['status']}")
         require(bool(order.get("phone_number")), "order did not include a phone number")
-        print("order:", {"public_id": order["public_id"], "status": order["status"], "phone_number": order["phone_number"]})
+        activations = request("GET", f"/admin/suppliers/{supplier_id}/activations", token=admin_token)
+        activation = find_activation_by_phone(activations, order["phone_number"])
+        print(
+            "order:",
+            {
+                "public_id": order["public_id"],
+                "status": order["status"],
+                "phone_number": order["phone_number"],
+                "supplier_activation_id": activation.get("supplier_activation_id"),
+            },
+        )
 
     sms_payload = {
         "supplier_sms_id": f"local-e2e-sms-{RUN_ID}",
@@ -197,11 +274,14 @@ def main() -> int:
         "text": "Your Telegram code is 12345",
     }
     with step("push supplier SMS"):
-        try:
-            fake_sms = request("POST", f"{FAKE_SUPPLIER_URL}/v1/send-sms", payload=sms_payload)
-            print("fake supplier sms helper:", fake_sms.get("status"))
-        except Exception as exc:
-            print(f"fake supplier sms helper failed; posting SMS directly. reason={_safe_snippet(str(exc))}")
+        if fake_supplier_available:
+            try:
+                fake_sms = request("POST", f"{FAKE_SUPPLIER_URL}/v1/send-sms", payload=sms_payload)
+                print("fake supplier sms helper:", fake_sms.get("status"))
+            except Exception as exc:
+                print(f"fake supplier sms helper failed; posting SMS directly. reason={_safe_snippet(str(exc))}")
+        else:
+            print("fake supplier sms helper skipped; using direct supplier API push")
         sms = request("POST", "/supplier/v1/sms", token=supplier_key, payload=sms_payload)
         print("supplier sms:", sms)
 
