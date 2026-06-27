@@ -84,7 +84,7 @@ Buyer API gaps:
 | `GET` | `/supplier/v1/inventory` | implemented | Supplier-scoped inventory. |
 | `POST` | `/supplier/v1/inventory/update` | implemented | Upserts count-based inventory. |
 | `GET` | `/supplier/v1/activations` | implemented | Supplier-scoped activation/reservation history with SMS summary fields. |
-| `POST` | `/supplier/v1/payout-requests` | implemented | Moves supplier balance to held balance and writes payout hold ledger. |
+| `POST` | `/supplier/v1/payout-requests` | implemented | Requires active supplier, minimum amount, payout method, and payout address; moves supplier balance to held balance and writes payout hold ledger. |
 | `GET` | `/supplier/v1/payout-requests` | implemented | Supplier-scoped payout requests. |
 | `GET` | `/supplier/v1/transactions` | implemented | Supplier-safe ledger history. |
 | `POST` | `/supplier/v1/sms` | implemented | Idempotent SMS push; writes `supplier_sms` and `sms_messages`. |
@@ -247,7 +247,6 @@ Blocker before real suppliers:
 
 - define supplier KYC/contract/support policy
 - add supplier-facing activation history UI and operational onboarding runbook
-- define supplier KYC/contract/support policy
 - define real external payout execution process before automating payouts
 - run supplier sandbox contract signoff for reservation/release/SMS idempotency
 

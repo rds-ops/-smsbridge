@@ -489,7 +489,7 @@ Deferred:
 
 ## 12. Main Remaining Architecture Risks
 
-1. Supplier KYC/contract controls, sandbox signoff, payout policy, and supplier UI polish still need to be finalized before real suppliers.
+1. Supplier KYC/contract controls, sandbox signoff, external payout execution policy, and supplier UI polish still need to be finalized before real suppliers.
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Refresh tokens are stateless; logout/session revocation is incomplete.

@@ -271,3 +271,21 @@ These are practical estimates, not precision metrics.
 - Browser/mobile behavior was not visually verified during this docs reconciliation.
 - Supplier reservation/release behavior still needs sandbox signoff with the first real supplier.
 - Real payment and SMS provider choices are not decided in the repo.
+
+## 12. BE-30 Final Backend Audit Snapshot
+
+This snapshot separates backend readiness from UI polish, external contracts, and real third-party integrations.
+
+| Area | Backend readiness | Notes |
+|---|---|---|
+| Friendly buyers with manual/mock systems | Mostly ready | Buyer auth, orders, idempotency, wallet ledger, manual_test deposits, wallet history, API keys/scopes, and rate limits exist. Requires fresh full verification and browser smoke before inviting buyers. |
+| First real supplier sandbox | Mostly ready | Reservation callback, wallet-hold-before-reservation, release retry, activation history, admin API key issuance, config validation, supplier SMS, and manual payout accounting are implemented. Requires KYC/contract policy, supplier sandbox signoff, and external payout execution process before production onboarding. |
+| Real payments | Not ready | Payment intent lifecycle and idempotent wallet crediting exist, but real provider signature verification, provider-specific webhook mapping, checkout UX, and chargeback/refund policy are not implemented. |
+| Real SMS providers | Not ready | Mock/local and supplier-pool paths exist, and the internal provider webhook namespace is skeleton-only. Real provider adapters, price/stock freshness, credential rotation, cancellation semantics, and reconciliation remain. |
+| Operations for closed beta | Mostly ready | Request IDs/logs, audit logs, health, risk actions, ops summary, release retries, reconciliation, and cleanup dry-run exist. External alerting, production incident runbooks, and accounting-grade reporting remain. |
+
+Remaining backend blockers by severity:
+
+- P0 before external parties: run full verification; run supplier sandbox contract signoff; keep real payments disabled until provider verification is implemented; keep real SMS providers disabled until a real adapter and provider reconciliation are implemented.
+- P1 before broader beta: refresh-token/session revocation; provider price/stock freshness; production incident/deployment runbook; external alerting; operator playbooks for repeated supplier release failures.
+- P2 after beta foundation: automated reconciliation repair; exact phone inventory option; supplier self-service onboarding/API key rotation; richer accounting reports.
