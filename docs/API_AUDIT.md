@@ -41,6 +41,8 @@ Remaining auth/security gaps:
 
 - no email verification
 - no per-account login lockout
+- no password reset or forced password rotation flow
+- already-issued access tokens remain valid until expiry after logout or admin session revocation
 - provider API key encryption field exists, but real secret management/provider credential flow is not production-ready
 - internal webhooks do not have provider-specific signatures yet
 - production-like startup rejects wildcard CORS origins, but TrustedHost/reverse-proxy hostname enforcement is still an ops/deployment responsibility
@@ -232,6 +234,7 @@ Not implemented:
 | Buyer wallet transaction history | DONE |
 | Managed buyer API keys/scopes/usage | DONE |
 | Server-side refresh/session revocation | DONE |
+| Admin user refresh session revoke-all | DONE |
 | Admin risk monitoring/actions | PARTIAL, manual-review only |
 | Operational cleanup foundation | PARTIAL |
 | Production backend startup safety guards | DONE for defaults/CORS; broader deployment hardening remains |

@@ -46,6 +46,7 @@ Implemented:
 - refresh token `jti` validation
 - logout for current refresh session
 - logout-all for all current-user refresh sessions
+- admin revoke-all for a specific user's refresh sessions
 - buyer managed API keys with scopes, revoke, usage, and `last_used_at`
 - legacy buyer API key compatibility
 - supplier API keys stored as hashes
@@ -55,13 +56,22 @@ Compatibility note:
 
 - Refresh tokens issued before BE-32 do not contain a `jti` and are rejected by `/auth/refresh`.
 - Access tokens remain stateless and continue to work until expiry.
+- Admin session revocation does not invalidate already-issued access tokens; it prevents future refresh for the target user.
 
 Remaining auth gaps:
 
 - no email verification
 - no per-account login lockout
-- no password reset/session revoke-all admin action yet
+- no password reset or forced password rotation flow
 - refresh tokens are not rotated on every refresh; the active refresh session is reused until logout, logout-all, or expiry
+
+Admin compromised-account process:
+
+1. Confirm the target user id from admin user detail, risk, or request-log views.
+2. Call `POST /admin/users/{user_id}/sessions/revoke-all`.
+3. Record the incident context in internal operator notes or risk actions.
+4. Treat active access tokens as valid until their normal expiry; do not assume immediate access-token invalidation.
+5. If credential compromise is suspected, coordinate an out-of-band password reset/rotation because password reset is not implemented yet.
 
 ## 4. Secret Handling
 

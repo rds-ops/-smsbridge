@@ -23,6 +23,7 @@ from app.models import (
     SupplierReleaseRetry,
     SupplierSms,
     SupplierTransaction,
+    RefreshSession,
     User,
     UserRiskAction,
     WalletTransaction,
@@ -122,6 +123,37 @@ def update_limits(user_id: int, payload: UserLimitsPatch, db: Session = Depends(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/users/{user_id}/sessions/revoke-all")
+def revoke_user_refresh_sessions(user_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.now(timezone.utc)
+    sessions = list(
+        db.scalars(
+            select(RefreshSession).where(
+                RefreshSession.user_id == user.id,
+                RefreshSession.revoked_at.is_(None),
+            )
+        )
+    )
+    for session in sessions:
+        session.revoked_at = now
+
+    revoked_count = len(sessions)
+    add_audit_log(
+        db,
+        "user.sessions.revoke_all",
+        "user",
+        str(user.id),
+        admin.id,
+        {"revoked_sessions": revoked_count},
+    )
+    db.commit()
+    return {"status": "ok", "revoked_sessions": revoked_count}
 
 
 @router.get("/orders", response_model=list[AdminOrderOut])

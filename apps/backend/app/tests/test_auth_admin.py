@@ -100,6 +100,82 @@ def test_logout_all_revokes_only_current_user_sessions(client):
     assert admin_refresh.status_code == 200
 
 
+def test_admin_can_revoke_all_refresh_sessions_for_target_user(client):
+    buyer_login_1 = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"}).json()
+    buyer_login_2 = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"}).json()
+    admin_login = client.post("/auth/login", json={"email": "admin@smsbridge.local", "password": "change-me"}).json()
+
+    response = client.post(
+        "/admin/users/2/sessions/revoke-all",
+        headers={"Authorization": f"Bearer {admin_login['access_token']}"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"status": "ok", "revoked_sessions": 2}
+
+    buyer_refresh_1 = client.post("/auth/refresh", json={"refresh_token": buyer_login_1["refresh_token"]})
+    buyer_refresh_2 = client.post("/auth/refresh", json={"refresh_token": buyer_login_2["refresh_token"]})
+    admin_refresh = client.post("/auth/refresh", json={"refresh_token": admin_login["refresh_token"]})
+    assert buyer_refresh_1.status_code == 401
+    assert buyer_refresh_2.status_code == 401
+    assert admin_refresh.status_code == 200
+
+    db = SessionLocal()
+    try:
+        active_buyer_sessions = list(
+            db.scalars(
+                select(RefreshSession).where(
+                    RefreshSession.user_id == 2,
+                    RefreshSession.revoked_at.is_(None),
+                )
+            )
+        )
+        audit = db.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "user.sessions.revoke_all",
+                AuditLog.entity_id == "2",
+            )
+        )
+        assert active_buyer_sessions == []
+        assert audit is not None
+        assert audit.actor_user_id == 1
+        assert audit.log_metadata["revoked_sessions"] == 2
+    finally:
+        db.close()
+
+
+def test_admin_revoke_user_refresh_sessions_is_idempotent(client):
+    buyer_login = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"}).json()
+    admin_login = client.post("/auth/login", json={"email": "admin@smsbridge.local", "password": "change-me"}).json()
+    headers = {"Authorization": f"Bearer {admin_login['access_token']}"}
+
+    first = client.post("/admin/users/2/sessions/revoke-all", headers=headers)
+    second = client.post("/admin/users/2/sessions/revoke-all", headers=headers)
+
+    assert first.status_code == 200, first.text
+    assert first.json()["revoked_sessions"] == 1
+    assert second.status_code == 200, second.text
+    assert second.json()["revoked_sessions"] == 0
+    refresh = client.post("/auth/refresh", json={"refresh_token": buyer_login["refresh_token"]})
+    assert refresh.status_code == 401
+
+
+def test_non_admin_cannot_revoke_user_refresh_sessions(client, user_token):
+    response = client.post(
+        "/admin/users/1/sessions/revoke-all",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert response.status_code == 403
+
+
+def test_admin_revoke_user_refresh_sessions_missing_user(client, admin_token):
+    response = client.post(
+        "/admin/users/999999/sessions/revoke-all",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+
+
 def test_refresh_rejects_expired_refresh_session(client):
     login = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"})
     refresh_token = login.json()["refresh_token"]

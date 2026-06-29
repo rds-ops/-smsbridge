@@ -330,7 +330,7 @@ Documentation:
 Auth/session conclusion:
 
 - Server-side refresh sessions are implemented in PostgreSQL.
-- Login/register create refresh sessions, refresh validates session `jti`, logout revokes the current refresh session, and logout-all revokes all current-user refresh sessions.
+- Login/register create refresh sessions, refresh validates session `jti`, logout revokes the current refresh session, logout-all revokes all current-user refresh sessions, and admins can revoke all refresh sessions for a target user.
 - Refresh tokens issued before BE-32 do not contain `jti` and are rejected by `/auth/refresh`.
 
 Remaining production blockers:
@@ -353,8 +353,25 @@ Implemented:
 - `/auth/refresh` rejects missing, expired, or revoked refresh sessions.
 - `/auth/logout` revokes the supplied refresh session.
 - `/auth/logout-all` revokes all active refresh sessions for the authenticated user.
+- `/admin/users/{user_id}/sessions/revoke-all` revokes all active refresh sessions for a target user and audit-logs the action.
 
 Compatibility note:
 
 - Old stateless refresh tokens without `jti` are rejected after this migration.
 - Access tokens remain stateless and continue to work until expiry.
+
+## 16. BE-33 Admin User Session Controls
+
+Date: 2026-06-29
+
+Implemented:
+
+- Admin-only target-user refresh session revoke-all endpoint.
+- Idempotent response with newly revoked session count.
+- Audit log entry for each admin revoke-all action.
+- No refresh token values are stored or returned.
+
+Limitations:
+
+- Already-issued access tokens remain valid until their normal expiry.
+- Password reset, login lockout, and forced password rotation remain unimplemented.
