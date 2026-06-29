@@ -1,6 +1,7 @@
 # SMSBridge — Core Rules & Roadmap
 
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+Frontend implementation planning is tracked in `docs/FRONTEND_IMPLEMENTATION_ROADMAP.md`.
 
 Backend internal phase status: complete with P1/P2 follow-ups after BE-38. No P0 backend architecture blocker remains for moving into frontend completion, RC-2 browser QA, UI freeze, and friendly-buyer beta preparation with mock/manual systems. Real payments, real SMS providers, production supplier onboarding, and public launch remain gated by their separate roadmap items and contracts.
 
@@ -445,6 +446,7 @@ Codex не должен напрямую делать крупный refactor б
 - add API docs skeleton (buyer/supplier/callbacks). DONE (draft/internal)
 - final external onboarding roadmap. DONE
 - final backend architecture review before frontend completion phase. DONE (no P0 backend blocker found; next phase is frontend completion/UI freeze)
+- frontend implementation roadmap. DONE (screen-by-screen plan for existing backend capabilities only)
 
 ---
 

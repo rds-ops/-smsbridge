@@ -1,6 +1,7 @@
 # UI Readiness Audit
 
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+Frontend phase implementation planning is tracked in `docs/FRONTEND_IMPLEMENTATION_ROADMAP.md`.
 
 This is the current UI state audit. Older UI milestone labels such as UI-4/UI-8/UI-14 are intentionally not used as the source of truth here.
 
@@ -163,6 +164,8 @@ Later:
 - external observability dashboard integration
 
 ## 7. Top Remaining UI Tasks
+
+Screen-by-screen implementation order is tracked in `docs/FRONTEND_IMPLEMENTATION_ROADMAP.md`. This section remains a short audit summary.
 
 | Task | Area | Priority | Complexity | Why |
 |---|---|---|---|---|
