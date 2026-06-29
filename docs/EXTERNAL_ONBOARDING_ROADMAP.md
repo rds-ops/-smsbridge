@@ -17,13 +17,21 @@ Source documents:
 
 | Area | Status | Snapshot |
 |---|---|---|
-| Backend core | Mostly ready for manual/mock beta | RC-1 passed backend build, migrations, full tests, health checks, and local E2E smoke. Wallet ledger, order lifecycle, idempotency, state transitions, request logs, rate limits, and auth hardening are implemented. |
+| Backend core | Internal phase complete with P1/P2 follow-ups | BE-38 found no P0 backend architecture blocker to moving into frontend completion/UI freeze. RC-1 passed backend build, migrations, full tests, health checks, and local E2E smoke. Wallet ledger, order lifecycle, idempotency, state transitions, request logs, rate limits, and auth hardening are implemented. |
 | Frontend | Mostly ready, visual QA not recorded | Marketplace shell, buyer dashboard, orders, deposit, API keys, supplier cabinet, and admin ops surfaces exist. True browser/mobile/light/dark QA remains. |
 | Buyer readiness | Mostly ready for friendly buyers with manual/mock systems | Buyer auth, API keys/scopes, orders, wallet history, manual_test deposit intents, and local E2E smoke exist. Real payment UX is not implemented. |
 | Supplier readiness | Sandbox-ready only after business signoff | Supplier API, reservation callback, release retry, activation history API, payout requests, transactions, and integration contract exist. KYC/contract policy, supplier UI activation history, and sandbox signoff remain. |
 | Payment readiness | Manual/local only | `manual_test`, payment intents, admin completion, internal webhook foundation, idempotent wallet credit, and reconciliation visibility exist. Real provider checkout, signatures, amount/currency validation, and dispute policy are not implemented. |
 | SMS provider readiness | Mock/local only | Mock provider, supplier-pool path, polling worker, webhook skeleton, and SMS provider contract exist. Real adapters, credential rotation, price/stock freshness, and reconciliation are not implemented. |
 | Operations readiness | Closed-beta foundation | Health endpoints, request IDs, request logs, audit logs, ops summary, risk actions, cleanup dry-run, release retries, and runbooks exist. External alerting, backup/restore drill, incident drill, and accounting-grade reporting remain. |
+
+Backend go/no-go after BE-38:
+
+- Go for frontend completion, RC-2 browser QA, and UI freeze.
+- Go for friendly-buyer closed beta planning with mock/manual systems after RC-2 passes.
+- No-go for real payment processing until provider-specific payment integration work is implemented and verified.
+- No-go for real SMS providers until real adapters, price/stock freshness, cancellation semantics, and reconciliation are implemented and verified.
+- No-go for production supplier onboarding until business/KYC/contract/sandbox signoff is complete.
 
 ## 2. Recommended Order
 

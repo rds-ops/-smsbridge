@@ -27,7 +27,9 @@ SMSBridge has a broad local/closed-beta API foundation:
 - request logging with request IDs and identity attribution
 - health/readiness endpoints
 
-The core is suitable for local demos and internal closed beta with mock/manual systems after RC-1 verification passed on 2026-06-27. It is not ready for real payments, real external SMS providers, or public launch.
+The backend internal phase is complete with P1/P2 follow-ups after the BE-38 architecture review. No P0 backend API or accounting blocker was found for moving into frontend completion, RC-2 browser QA, UI freeze, and friendly-buyer beta preparation with mock/manual systems.
+
+The core is suitable for local demos and internal closed beta planning with mock/manual systems after RC-1 verification passed on 2026-06-27. It is not ready for real payments, real external SMS providers, production supplier onboarding, or public launch.
 
 ## 2. Current Auth Modes
 
