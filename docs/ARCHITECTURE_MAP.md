@@ -425,7 +425,8 @@ Not implemented:
 
 | Table | Purpose | Current state |
 |---|---|---|
-| `users` | buyer/admin accounts | JWT auth, legacy API key compatibility, status/tier fields. No session revocation table. |
+| `users` | buyer/admin accounts | JWT auth, legacy API key compatibility, status/tier fields. |
+| `refresh_sessions` | server-side refresh session tracking | refresh token `jti`, expiry, revocation, and logout-all support. |
 | `buyer_api_keys` | managed buyer API keys | multiple keys, scopes, revoke, usage attribution. |
 | `wallets` | buyer balances | non-negative DB checks. |
 | `wallet_transactions` | buyer ledger | hold/capture/refund/deposit/adjustment/payment intent credit. |
@@ -451,7 +452,7 @@ Not implemented:
 
 | Namespace | Role | Current state |
 |---|---|---|
-| `/auth` | public/user | register, login, refresh, current user. No refresh token revocation table. |
+| `/auth` | public/user | register, login, refresh, logout, logout-all, current user. Refresh tokens are backed by `refresh_sessions`. |
 | `/api/v1` | buyer/API key | catalog, prices, orders, wallet, payment intents, limits, managed API keys. |
 | `/supplier/v1` | supplier | profile, inventory, payout requests, transactions, SMS push. |
 | `/admin` | admin | broad operations/admin API. |
@@ -493,8 +494,7 @@ Deferred:
 1. Supplier KYC/contract controls, sandbox signoff, external payout execution policy, and supplier UI polish still need to be finalized before real suppliers.
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
-4. Refresh tokens are stateless; logout/session revocation is incomplete.
-5. Supplier/provider secrets do not yet have a formal KMS/encryption-at-rest policy for real integrations.
-6. Admin and supplier list pagination/filtering is still uneven.
-7. Risk monitoring is read-only/manual-review only; no automated abuse prevention.
-8. Metrics are useful for ops, but not production accounting.
+4. Supplier/provider secrets do not yet have a formal KMS/encryption-at-rest policy for real integrations.
+5. Admin and supplier list pagination/filtering is still uneven.
+6. Risk monitoring is read-only/manual-review only; no automated abuse prevention.
+7. Metrics are useful for ops, but not production accounting.

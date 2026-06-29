@@ -396,6 +396,7 @@ Codex не должен напрямую делать крупный refactor б
 - production secret guard. DONE
 - production admin password guard. DONE
 - production CORS wildcard guard. DONE
+- server-side refresh/session revocation. DONE
 - validate provider types/statuses. DONE
 - add supplier request logging. DONE
 

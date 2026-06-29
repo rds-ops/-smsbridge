@@ -12,7 +12,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
-| Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. Backend production runbook exists, but operational signoff is not complete. |
+| Public launch | Not ready | Needs legal, monitoring/alerting, production runbooks, provider/payment integrations, support, and load/security verification. Backend production runbook and session revocation exist, but operational signoff is not complete. |
 
 ## 2. What Is Already Done
 
@@ -29,6 +29,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 ### Buyer auth/account
 
 - JWT registration/login/refresh/current user
+- server-side refresh session revocation with logout/logout-all
 - buyer dashboard
 - orders list/detail
 - settings
@@ -207,7 +208,6 @@ This document is the current source of truth for SMSBridge readiness before invo
 - backup/restore verification
 - monitoring and alerting
 - incident response/support contacts
-- session/refresh-token revocation lifecycle
 - rate-limit/load verification
 - provider/payment/supplier support processes
 - production secret management
@@ -244,7 +244,7 @@ These are practical estimates, not precision metrics.
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
 | Add supplier activation history to supplier UI | frontend | beta-useful | medium | Backend activation history exists; real suppliers still need it surfaced in the cabinet. | `/supplier` UI and browser smoke. |
-| Add refresh-token/session revocation | backend | beta-useful | medium | Needed for compromised token/logout control. | Auth tests for revoke/logout. |
+| Run auth/session browser QA | frontend/tests | beta-useful | small | Backend logout/logout-all exists; browser token handling still needs a recorded visual/session pass. | Browser login, refresh, logout, protected-route check. |
 | Choose and implement first payment provider verification | backend | blocker for real payments | large | Real payments cannot launch on shared-secret skeleton. | Provider webhook fixture tests and reconciliation tests. |
 | Choose and implement first real SMS provider adapter | backend | blocker for real SMS | large | Marketplace cannot use real external SMS stock without it. | Adapter contract tests and sandbox integration. |
 | Add provider price/stock sync freshness | backend/ops | beta-useful | medium | Prevents stale pricing/availability. | Sync task tests and admin visibility. |
@@ -282,7 +282,7 @@ This snapshot separates backend readiness from UI polish, external contracts, an
 Remaining backend blockers by severity:
 
 - P0 before external parties: complete true browser/mobile visual QA; run supplier sandbox contract signoff; keep real payments disabled until provider verification is implemented; keep real SMS providers disabled until a real adapter and provider reconciliation are implemented.
-- P1 before broader beta: refresh-token/session revocation; provider price/stock freshness; production deployment/incident drill; external alerting; operator playbooks for repeated supplier release failures.
+- P1 before broader beta: provider price/stock freshness; production deployment/incident drill; external alerting; operator playbooks for repeated supplier release failures.
 - P2 after beta foundation: automated reconciliation repair; exact phone inventory option; supplier self-service onboarding/API key rotation; richer accounting reports.
 
 ## 13. RC-1 Verification Record
@@ -329,14 +329,32 @@ Documentation:
 
 Auth/session conclusion:
 
-- Stateless refresh tokens and client-side logout do not block a small trusted friendly-buyer beta when token lifetimes and monitoring are acceptable.
-- Server-side refresh/session revocation is P1 before broader beta and required before public launch or high-risk external onboarding.
+- Server-side refresh sessions are implemented in PostgreSQL.
+- Login/register create refresh sessions, refresh validates session `jti`, logout revokes the current refresh session, and logout-all revokes all current-user refresh sessions.
+- Refresh tokens issued before BE-32 do not contain `jti` and are rejected by `/auth/refresh`.
 
 Remaining production blockers:
 
 - external monitoring/alerting
 - backup/restore verification
 - incident response/deployment runbook drill
-- server-side refresh/session revocation
 - formal KMS/encryption-at-rest policy for real supplier/provider secrets
 - real payment/provider verification and reconciliation before any real integrations
+
+## 15. BE-32 Refresh Session Revocation
+
+Date: 2026-06-29
+
+Implemented:
+
+- `refresh_sessions` table in PostgreSQL.
+- Refresh JWTs include a session `jti`.
+- `/auth/login` and `/auth/register` create refresh sessions.
+- `/auth/refresh` rejects missing, expired, or revoked refresh sessions.
+- `/auth/logout` revokes the supplied refresh session.
+- `/auth/logout-all` revokes all active refresh sessions for the authenticated user.
+
+Compatibility note:
+
+- Old stateless refresh tokens without `jti` are rejected after this migration.
+- Access tokens remain stateless and continue to work until expiry.

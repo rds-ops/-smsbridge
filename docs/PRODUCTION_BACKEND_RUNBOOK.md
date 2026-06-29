@@ -42,31 +42,26 @@ Do not run production from `.env.example`.
 Implemented:
 
 - JWT access and refresh tokens
+- refresh sessions stored in PostgreSQL
+- refresh token `jti` validation
+- logout for current refresh session
+- logout-all for all current-user refresh sessions
 - buyer managed API keys with scopes, revoke, usage, and `last_used_at`
 - legacy buyer API key compatibility
 - supplier API keys stored as hashes
 - admin role checks
 
-Known gap:
+Compatibility note:
 
-- Refresh tokens are stateless and cannot be revoked server-side.
-- Logout is client-side token deletion only.
+- Refresh tokens issued before BE-32 do not contain a `jti` and are rejected by `/auth/refresh`.
+- Access tokens remain stateless and continue to work until expiry.
 
-Closed beta policy:
+Remaining auth gaps:
 
-- This does not block a small friendly-buyer beta if accounts are trusted, monitored, and tokens are short-lived enough for the risk profile.
-- It should be treated as P1 before broader beta.
-
-Public launch policy:
-
-- Server-side refresh/session revocation is required before public launch or high-risk external onboarding.
-
-Recommended implementation:
-
-- Add durable refresh session table with token id, user id, issued/revoked/expires timestamps.
-- Add logout/revoke endpoint.
-- Rotate refresh tokens on use.
-- Revoke all sessions on password reset/admin action.
+- no email verification
+- no per-account login lockout
+- no password reset/session revoke-all admin action yet
+- refresh tokens are not rotated on every refresh; the active refresh session is reused until logout, logout-all, or expiry
 
 ## 4. Secret Handling
 
@@ -207,4 +202,4 @@ Real SMS providers:
 
 Public launch:
 
-- No-go until session revocation, monitoring/alerting, production runbooks, legal/support processes, load/security verification, and real integration policies are complete.
+- No-go until monitoring/alerting, production runbooks, legal/support processes, load/security verification, and real integration policies are complete.

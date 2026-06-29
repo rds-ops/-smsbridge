@@ -30,7 +30,20 @@ Notes:
 - Returns access + refresh token.
 
 `POST /auth/refresh`
-- Returns new access + refresh token.
+- Validates the refresh token against a server-side refresh session.
+- Returns a new access token and the active refresh token.
+
+`POST /auth/logout`
+- Body: `{"refresh_token": "..."}`
+- Revokes the current refresh session.
+- Reusing the same refresh token after logout returns `401`.
+
+`POST /auth/logout-all`
+- Requires JWT auth.
+- Revokes all active refresh sessions for the current user.
+
+Compatibility note:
+- Refresh tokens issued before server-side refresh sessions were added do not contain a `jti` and are rejected by `/auth/refresh`.
 
 ### API keys (optional)
 

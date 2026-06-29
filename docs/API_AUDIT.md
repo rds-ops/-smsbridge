@@ -39,7 +39,6 @@ The core is suitable for local demos and internal closed beta with mock/manual s
 
 Remaining auth/security gaps:
 
-- no refresh-token/session revocation table
 - no email verification
 - no per-account login lockout
 - provider API key encryption field exists, but real secret management/provider credential flow is not production-ready
@@ -75,7 +74,6 @@ Buyer API gaps:
 - no unauthenticated public catalog namespace
 - no buyer-safe order event/history endpoint
 - no real payment provider checkout UX/API contract
-- no logout/session revocation
 
 ## 4. Supplier API
 
@@ -233,6 +231,7 @@ Not implemented:
 | Supplier admin API key issuance readiness | DONE |
 | Buyer wallet transaction history | DONE |
 | Managed buyer API keys/scopes/usage | DONE |
+| Server-side refresh/session revocation | DONE |
 | Admin risk monitoring/actions | PARTIAL, manual-review only |
 | Operational cleanup foundation | PARTIAL |
 | Production backend startup safety guards | DONE for defaults/CORS; broader deployment hardening remains |
@@ -248,7 +247,6 @@ Blocker before friendly buyers:
 
 Production/security gap before broader beta:
 
-- add server-side refresh/session revocation
 - tune production rate limits and monitor Redis fail-open incidents
 - complete backup/restore and incident response drills
 - enforce trusted host/TLS/body limits at reverse proxy or app edge

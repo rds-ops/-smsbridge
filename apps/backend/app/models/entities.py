@@ -46,6 +46,27 @@ BUYER_API_KEY_STATUSES = ("active", "revoked")
 RISK_ACTIONS = ("watch", "note", "clear_watch", "mark_reviewed")
 
 
+class RefreshSession(Base):
+    __tablename__ = "refresh_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jti: Mapped[str] = mapped_column(String(36), unique=True, default=lambda: str(uuid4()), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ip_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (
+        Index("ix_refresh_sessions_user_created_at", "user_id", "created_at"),
+        Index("ix_refresh_sessions_user_revoked_at", "user_id", "revoked_at"),
+    )
+
+
 class BuyerApiKey(Base):
     __tablename__ = "buyer_api_keys"
 
