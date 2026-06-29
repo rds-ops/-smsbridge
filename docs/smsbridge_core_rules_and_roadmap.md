@@ -441,6 +441,7 @@ Codex не должен напрямую делать крупный refactor б
 - add internal provider webhook architecture. DONE (skeleton only; does not process provider events yet)
 - add health endpoints (/health/live, /health/ready). DONE
 - add API docs skeleton (buyer/supplier/callbacks). DONE (draft/internal)
+- final external onboarding roadmap. DONE
 
 ---
 

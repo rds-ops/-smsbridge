@@ -2,6 +2,8 @@
 
 This document is the current source of truth for SMSBridge readiness before involving external parties. It reflects the implemented backend/frontend state verified from code and docs, not only roadmap intent.
 
+Execution order and go/no-go gates are tracked in `docs/EXTERNAL_ONBOARDING_ROADMAP.md`.
+
 ## 1. Readiness by External Party
 
 | Target | Status | Summary |
@@ -257,7 +259,7 @@ These are practical estimates, not precision metrics.
 
 ## 10. Immediate Next 3 Tasks
 
-1. Complete browser visual QA and record exact results.
+1. Complete RC-2 browser visual QA and record exact results.
    - Highest remaining friendly-buyer blocker after RC-1 backend/frontend/smoke verification passed.
 
 2. Run supplier sandbox contract signoff.
@@ -427,3 +429,17 @@ Limitations:
 - No real SMS provider code was added.
 - 5sim, SMS-Activate, and Sms-man adapters remain placeholders.
 - Provider webhook processing remains skeleton-only and does not mutate orders.
+
+## 20. BE-37 External Onboarding Roadmap
+
+Date: 2026-06-29
+
+Implemented:
+
+- `docs/EXTERNAL_ONBOARDING_ROADMAP.md` defines the recommended sequence: RC-2 browser QA, friendly buyer closed beta, first supplier sandbox, first real payment provider sandbox, first real SMS provider sandbox, then broader beta.
+- The roadmap records entry criteria, allowed/forbidden actions, success criteria, rollback criteria, required docs, required checks, go/no-go gates, and risk register.
+
+Limitations:
+
+- This is a planning/readiness document only.
+- It does not implement real providers, real payments, UI fixes, or production launch processes.

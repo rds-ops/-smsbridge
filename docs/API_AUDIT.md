@@ -1,6 +1,7 @@
 # API Audit
 
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
+External onboarding order and go/no-go gates are tracked in `docs/EXTERNAL_ONBOARDING_ROADMAP.md`.
 
 This audit reflects the implemented API surface today. It intentionally separates implemented MVP foundations from deferred real external integrations.
 
