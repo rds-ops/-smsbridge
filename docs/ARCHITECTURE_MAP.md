@@ -3,6 +3,7 @@
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
 Supplier reservation/release contract and operator handling are documented in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 Future real payment provider contract and operator handling are documented in `docs/PAYMENT_PROVIDER_CONTRACT.md`.
+Future real SMS provider adapter contract and operator handling are documented in `docs/SMS_PROVIDER_CONTRACT.md`.
 
 This document describes the implemented architecture as of the current MVP state. It is an internal source of truth for how SMSBridge is wired today, not a future design.
 
@@ -491,12 +492,13 @@ Deferred:
 - real external supplier payout execution
 - provider webhook processing
 - provider price/stock sync freshness
+- implementation of `docs/SMS_PROVIDER_CONTRACT.md`
 - formal legal/KYC/support/public launch processes
 
 ## 12. Main Remaining Architecture Risks
 
 1. Supplier KYC/contract controls, sandbox signoff, external payout execution policy, and supplier UI polish still need to be finalized before real suppliers.
-2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
+2. Real provider adapters are placeholders and need implementation of the credential, sync, error mapping, cancellation, and reconciliation contract in `docs/SMS_PROVIDER_CONTRACT.md`.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Supplier/provider secrets do not yet have a formal KMS/encryption-at-rest policy for real integrations.
 5. Admin and supplier list pagination/filtering is still uneven.

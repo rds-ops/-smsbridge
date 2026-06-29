@@ -5,6 +5,7 @@ Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_
 This document describes callback/webhook-style HTTP contracts currently implemented or planned in this repo.
 The detailed supplier onboarding contract and operator runbook are in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 The real payment provider contract and operator runbook are in `docs/PAYMENT_PROVIDER_CONTRACT.md`.
+The real SMS provider adapter contract and operator runbook are in `docs/SMS_PROVIDER_CONTRACT.md`.
 
 Status legend:
 - Implemented: present in code and used by current flows.
@@ -124,6 +125,7 @@ Failure:
 ## 3. Internal Provider Webhook Endpoint (Skeleton)
 
 Status: Skeleton only. Does not mutate orders yet. Polling remains the source of truth for provider SMS ingestion.
+Before any real provider webhook processing is connected, follow `docs/SMS_PROVIDER_CONTRACT.md`; the generic shared-secret placeholder is not sufficient for real provider event handling.
 
 Direction: Provider system -> smsbridge (internal-only integration surface)
 

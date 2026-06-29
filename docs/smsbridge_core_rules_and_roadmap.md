@@ -507,6 +507,7 @@ Codex не должен напрямую делать крупный refactor б
 - implement real 5sim adapter
 - implement SMS-Activate adapter
 - implement Sms-man adapter
+- SMS provider integration contract/runbook. DONE
 - provider sync jobs
 - provider stock freshness
 - provider reconciliation

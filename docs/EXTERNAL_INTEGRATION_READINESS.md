@@ -11,7 +11,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. RC-1 technical checks passed; browser/mobile QA remains. |
 | Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists and `docs/PAYMENT_PROVIDER_CONTRACT.md` defines the required provider contract, but real provider signatures, reconciliation, secrets, and UX are deferred. |
-| Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
+| Real SMS provider integration | Not ready | Provider skeleton and mock exist and `docs/SMS_PROVIDER_CONTRACT.md` defines the required adapter/ops contract, but real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, production runbooks, provider/payment integrations, support, and load/security verification. Backend production runbook and session revocation exist, but operational signoff is not complete. |
 
 ## 2. What Is Already Done
@@ -53,6 +53,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 - supplier-pool reservation callback path
 - polling with skip-locked row locking where supported
 - generic `sms_messages` persistence
+- real SMS provider contract/runbook in `docs/SMS_PROVIDER_CONTRACT.md`
 
 ### Wallet
 
@@ -234,7 +235,7 @@ These are practical estimates, not precision metrics.
 | Frontend buyer MVP | 78% | Storefront and account flows exist; frontend build and route availability passed in RC-1; true visual/mobile QA remains. |
 | Supplier MVP | 80% | API/cabinet/callbacks/manual payout skeleton, admin API key issuance, backend activation transparency, and supplier integration/payout runbook exist; KYC, external payout execution, and supplier UI polish remain. |
 | Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and payment/provider production runbooks missing. |
-| Docs | 78% | Main docs, supplier contract/runbook, and payment provider contract are reconciled; real-provider implementation docs remain provider-specific future work. |
+| Docs | 80% | Main docs, supplier contract/runbook, payment provider contract, and SMS provider contract are reconciled; implementation-specific provider docs remain future work. |
 | Real payments | 25% | Intent/webhook/crediting base exists; provider verification absent. |
 | Real SMS providers | 20% | Adapter skeletons exist; real integration absent. |
 | Production launch | 35% | Good MVP base; needs integrations, legal, security, monitoring, and ops maturity. |
@@ -250,7 +251,7 @@ These are practical estimates, not precision metrics.
 | Add supplier activation history to supplier UI | frontend | beta-useful | medium | Backend activation history exists; real suppliers still need it surfaced in the cabinet. | `/supplier` UI and browser smoke. |
 | Run auth/session browser QA | frontend/tests | beta-useful | small | Backend logout/logout-all exists; browser token handling still needs a recorded visual/session pass. | Browser login, refresh, logout, protected-route check. |
 | Choose and implement first payment provider verification | backend | blocker for real payments | large | Real payments cannot launch on shared-secret skeleton; provider-specific signature, checkout, amount/currency validation, and event mapping are required by `PAYMENT_PROVIDER_CONTRACT.md`. | Provider webhook fixture tests and reconciliation tests. |
-| Choose and implement first real SMS provider adapter | backend | blocker for real SMS | large | Marketplace cannot use real external SMS stock without it. | Adapter contract tests and sandbox integration. |
+| Choose and implement first real SMS provider adapter | backend | blocker for real SMS | large | Marketplace cannot use real external SMS stock without a provider adapter that satisfies `SMS_PROVIDER_CONTRACT.md`. | Adapter contract tests and sandbox integration. |
 | Add provider price/stock sync freshness | backend/ops | beta-useful | medium | Prevents stale pricing/availability. | Sync task tests and admin visibility. |
 | Write production runbook | docs/ops | blocker for launch | medium | Operators need deploy, backups, incidents, payments, supplier escalation. | Dry-run deployment checklist. |
 
@@ -280,7 +281,7 @@ This snapshot separates backend readiness from UI polish, external contracts, an
 | Friendly buyers with manual/mock systems | Mostly ready | Buyer auth, orders, idempotency, wallet ledger, manual_test deposits, wallet history, API keys/scopes, and rate limits exist. RC-1 backend/frontend/smoke verification passed; true browser/mobile visual QA remains before inviting buyers. |
 | First real supplier sandbox | Mostly ready | Reservation callback, wallet-hold-before-reservation, release retry, activation history, admin API key issuance, config validation, supplier SMS, and manual payout accounting are implemented. Requires KYC/contract policy, supplier sandbox signoff, and external payout execution process before production onboarding. |
 | Real payments | Not ready | Payment intent lifecycle and idempotent wallet crediting exist, but real provider signature verification, provider-specific webhook mapping, checkout UX, and chargeback/refund policy are not implemented. |
-| Real SMS providers | Not ready | Mock/local and supplier-pool paths exist, and the internal provider webhook namespace is skeleton-only. Real provider adapters, price/stock freshness, credential rotation, cancellation semantics, and reconciliation remain. |
+| Real SMS providers | Not ready | Mock/local and supplier-pool paths exist, the provider contract is documented, and the internal provider webhook namespace is skeleton-only. Real provider adapters, price/stock freshness, credential rotation, cancellation semantics, and reconciliation remain. |
 | Operations for closed beta | Mostly ready | Request IDs/logs, audit logs, health, risk actions, ops summary, release retries, reconciliation, cleanup dry-run, production startup guards, and backend runbook exist. External alerting, incident drill, backup/restore verification, and accounting-grade reporting remain. |
 
 Remaining backend blockers by severity:
@@ -411,3 +412,18 @@ Limitations:
 - No real payment provider code was added.
 - `manual_test` remains the only enabled payment provider.
 - The generic internal webhook skeleton is not sufficient for real providers by itself.
+
+## 19. BE-36 SMS Provider Contract
+
+Date: 2026-06-29
+
+Implemented:
+
+- `docs/SMS_PROVIDER_CONTRACT.md` documents the current provider model and real SMS provider adapter contract.
+- The contract covers `get_prices`, `get_number`, `get_order_status`, `cancel_order`, `finish_order`, status/error mapping, timeout/retry/idempotency policy, price/stock freshness, reconciliation, credential security, and operator runbooks.
+
+Limitations:
+
+- No real SMS provider code was added.
+- 5sim, SMS-Activate, and Sms-man adapters remain placeholders.
+- Provider webhook processing remains skeleton-only and does not mutate orders.
