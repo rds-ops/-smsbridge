@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     internal_webhook_secret: str = "change-me"
     access_token_minutes: int = 60
     refresh_token_minutes: int = 60 * 24 * 14
+    login_max_failed_attempts: int = 5
+    login_lockout_seconds: int = 900
     cors_origins: str = "http://localhost:3000"
     mock_success_rate: float = 0.85
     mock_sms_delay_seconds: int = 10

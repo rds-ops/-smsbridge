@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.security import create_token, decode_token
 from app.db.session import SessionLocal
-from app.models import AuditLog, RefreshSession, User, WalletTransaction
+from app.models import AuditLog, LoginAttempt, RefreshSession, User, WalletTransaction
 
 
 def test_user_registration_login(client):
@@ -35,6 +35,113 @@ def test_login_creates_refresh_session(client):
         assert session.revoked_at is None
         assert session.expires_at is not None
         assert session.ip_hash
+    finally:
+        db.close()
+
+
+def test_failed_login_attempts_trigger_temporary_lockout(client, monkeypatch):
+    monkeypatch.setattr(settings, "login_max_failed_attempts", 2)
+    monkeypatch.setattr(settings, "login_lockout_seconds", 60)
+
+    first = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "bad-password"})
+    second = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "bad-password"})
+    locked = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"})
+
+    assert first.status_code == 401
+    assert second.status_code == 401
+    assert locked.status_code == 401
+    assert locked.json()["detail"] == "Invalid email or password"
+
+    db = SessionLocal()
+    try:
+        sessions = list(db.scalars(select(RefreshSession).where(RefreshSession.user_id == 2)))
+        attempt = db.scalar(
+            select(LoginAttempt).where(
+                LoginAttempt.identifier_hash.is_not(None),
+                LoginAttempt.user_id == 2,
+            )
+        )
+        assert sessions == []
+        assert attempt is not None
+        assert attempt.failed_attempts == 2
+        assert attempt.locked_until is not None
+    finally:
+        db.close()
+
+
+def test_locked_login_succeeds_after_lockout_expires(client, monkeypatch):
+    monkeypatch.setattr(settings, "login_max_failed_attempts", 1)
+    monkeypatch.setattr(settings, "login_lockout_seconds", 60)
+
+    failed = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "bad-password"})
+    assert failed.status_code == 401
+
+    db = SessionLocal()
+    try:
+        attempt = db.scalar(select(LoginAttempt).where(LoginAttempt.user_id == 2))
+        attempt.locked_until = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"})
+    assert response.status_code == 200, response.text
+    assert response.json()["refresh_token"]
+
+
+def test_successful_login_before_threshold_resets_failed_attempts(client, monkeypatch):
+    monkeypatch.setattr(settings, "login_max_failed_attempts", 2)
+    monkeypatch.setattr(settings, "login_lockout_seconds", 60)
+
+    failed = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "bad-password"})
+    assert failed.status_code == 401
+
+    success = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"})
+    assert success.status_code == 200, success.text
+
+    failed_again = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "bad-password"})
+    assert failed_again.status_code == 401
+    still_not_locked = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "change-me"})
+    assert still_not_locked.status_code == 200, still_not_locked.text
+
+
+def test_unknown_user_failed_login_is_generic_and_does_not_create_refresh_session(client, monkeypatch):
+    monkeypatch.setattr(settings, "login_max_failed_attempts", 1)
+    monkeypatch.setattr(settings, "login_lockout_seconds", 60)
+
+    missing = client.post("/auth/login", json={"email": "missing@example.com", "password": "bad-password"})
+    known = client.post("/auth/login", json={"email": "user@smsbridge.local", "password": "bad-password"})
+
+    assert missing.status_code == 401
+    assert known.status_code == 401
+    assert missing.json()["detail"] == known.json()["detail"] == "Invalid email or password"
+
+    db = SessionLocal()
+    try:
+        unknown_attempt = db.scalar(select(LoginAttempt).where(LoginAttempt.user_id.is_(None)))
+        user_sessions = list(db.scalars(select(RefreshSession).where(RefreshSession.user_id == 2)))
+        assert unknown_attempt is not None
+        assert unknown_attempt.locked_until is not None
+        assert user_sessions == []
+    finally:
+        db.close()
+
+
+def test_admin_account_is_protected_by_login_lockout(client, monkeypatch):
+    monkeypatch.setattr(settings, "login_max_failed_attempts", 1)
+    monkeypatch.setattr(settings, "login_lockout_seconds", 60)
+
+    failed = client.post("/auth/login", json={"email": "admin@smsbridge.local", "password": "bad-password"})
+    locked = client.post("/auth/login", json={"email": "admin@smsbridge.local", "password": "change-me"})
+
+    assert failed.status_code == 401
+    assert locked.status_code == 401
+    assert locked.json()["detail"] == "Invalid email or password"
+
+    db = SessionLocal()
+    try:
+        sessions = list(db.scalars(select(RefreshSession).where(RefreshSession.user_id == 1)))
+        assert sessions == []
     finally:
         db.close()
 

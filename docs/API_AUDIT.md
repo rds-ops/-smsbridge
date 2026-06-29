@@ -40,7 +40,6 @@ The core is suitable for local demos and internal closed beta with mock/manual s
 Remaining auth/security gaps:
 
 - no email verification
-- no per-account login lockout
 - no password reset or forced password rotation flow
 - already-issued access tokens remain valid until expiry after logout or admin session revocation
 - provider API key encryption field exists, but real secret management/provider credential flow is not production-ready
@@ -235,6 +234,7 @@ Not implemented:
 | Managed buyer API keys/scopes/usage | DONE |
 | Server-side refresh/session revocation | DONE |
 | Admin user refresh session revoke-all | DONE |
+| Per-login-identifier brute-force lockout | DONE |
 | Admin risk monitoring/actions | PARTIAL, manual-review only |
 | Operational cleanup foundation | PARTIAL |
 | Production backend startup safety guards | DONE for defaults/CORS; broader deployment hardening remains |

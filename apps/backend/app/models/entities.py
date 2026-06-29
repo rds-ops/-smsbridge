@@ -67,6 +67,25 @@ class RefreshSession(Base):
     )
 
 
+class LoginAttempt(Base, TimestampMixin):
+    __tablename__ = "login_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    identifier_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    first_failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
+
+    user: Mapped[Optional[User]] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("failed_attempts >= 0", name="ck_login_attempts_failed_attempts_non_negative"),
+        Index("ix_login_attempts_user_id", "user_id"),
+    )
+
+
 class BuyerApiKey(Base):
     __tablename__ = "buyer_api_keys"
 

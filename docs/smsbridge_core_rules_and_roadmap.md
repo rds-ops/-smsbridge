@@ -398,6 +398,7 @@ Codex не должен напрямую делать крупный refactor б
 - production CORS wildcard guard. DONE
 - server-side refresh/session revocation. DONE
 - admin target-user refresh session revoke-all. DONE
+- login brute-force lockout. DONE
 - validate provider types/statuses. DONE
 - add supplier request logging. DONE
 

@@ -29,7 +29,8 @@ This document is the current source of truth for SMSBridge readiness before invo
 ### Buyer auth/account
 
 - JWT registration/login/refresh/current user
-- server-side refresh session revocation with logout/logout-all
+- server-side refresh session revocation with logout/logout-all/admin target-user revoke-all
+- PostgreSQL-backed login brute-force lockout
 - buyer dashboard
 - orders list/detail
 - settings
@@ -374,4 +375,20 @@ Implemented:
 Limitations:
 
 - Already-issued access tokens remain valid until their normal expiry.
-- Password reset, login lockout, and forced password rotation remain unimplemented.
+- Password reset, MFA, and forced password rotation remain unimplemented.
+
+## 17. BE-34 Login Brute-Force Protection
+
+Date: 2026-06-29
+
+Implemented:
+
+- Durable `login_attempts` table keyed by SHA-256 hash of normalized login identifier.
+- Configurable threshold and lock duration with `LOGIN_MAX_FAILED_ATTEMPTS` and `LOGIN_LOCKOUT_SECONDS`.
+- Generic login failure response for invalid, unknown, and locked identifiers.
+- Successful login resets failed-attempt state.
+- Admin accounts are protected by the same policy.
+
+Limitations:
+
+- This is account/identifier lockout only; it does not add MFA, password reset, or IP/device anomaly detection.

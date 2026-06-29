@@ -47,6 +47,7 @@ Implemented:
 - logout for current refresh session
 - logout-all for all current-user refresh sessions
 - admin revoke-all for a specific user's refresh sessions
+- PostgreSQL-backed per-login-identifier brute-force lockout
 - buyer managed API keys with scopes, revoke, usage, and `last_used_at`
 - legacy buyer API key compatibility
 - supplier API keys stored as hashes
@@ -61,9 +62,17 @@ Compatibility note:
 Remaining auth gaps:
 
 - no email verification
-- no per-account login lockout
 - no password reset or forced password rotation flow
 - refresh tokens are not rotated on every refresh; the active refresh session is reused until logout, logout-all, or expiry
+
+Login lockout policy:
+
+- Failed login attempts are tracked by a SHA-256 hash of the normalized email/login identifier.
+- Default threshold: `LOGIN_MAX_FAILED_ATTEMPTS=5`.
+- Default lock duration: `LOGIN_LOCKOUT_SECONDS=900`.
+- Locked and invalid login responses intentionally use the same generic error.
+- Successful login resets the failed-attempt state.
+- Admin accounts do not bypass lockout.
 
 Admin compromised-account process:
 

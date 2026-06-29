@@ -4,17 +4,19 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
-from app.models import RefreshSession, User, UserLimit, Wallet
+from app.models import LoginAttempt, RefreshSession, User, UserLimit, Wallet
 from app.schemas.auth import AuthOut, LoginIn, RefreshIn, RegisterIn, TokenOut
 from app.schemas.common import UserPublic
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+LOGIN_FAILURE_DETAIL = "Invalid email or password"
 
 
 def _now() -> datetime:
@@ -38,6 +40,88 @@ def _user_agent(request: Request) -> str | None:
     if not value:
         return None
     return value[:255]
+
+
+def _normalized_login_identifier(value: str) -> str:
+    return value.strip().lower()
+
+
+def _login_identifier_hash(value: str) -> str:
+    return hashlib.sha256(_normalized_login_identifier(value).encode("utf-8")).hexdigest()
+
+
+def _lockout_enabled() -> bool:
+    return settings.login_max_failed_attempts > 0 and settings.login_lockout_seconds > 0
+
+
+def _login_attempt(db: Session, identifier_hash: str) -> LoginAttempt | None:
+    stmt = select(LoginAttempt).where(LoginAttempt.identifier_hash == identifier_hash)
+    if db.bind and db.bind.dialect.name != "sqlite":
+        stmt = stmt.with_for_update()
+    return db.scalar(stmt)
+
+
+def _login_locked(attempt: LoginAttempt | None, now: datetime) -> bool:
+    return bool(attempt and attempt.locked_until and _ensure_aware(attempt.locked_until) > now)
+
+
+def _clear_expired_login_lock(attempt: LoginAttempt | None, now: datetime) -> None:
+    if not attempt or not attempt.locked_until:
+        return
+    if _ensure_aware(attempt.locked_until) <= now:
+        attempt.failed_attempts = 0
+        attempt.first_failed_at = None
+        attempt.last_failed_at = None
+        attempt.locked_until = None
+
+
+def _record_failed_login(
+    db: Session,
+    identifier_hash: str,
+    user: User | None,
+    now: datetime,
+    attempt: LoginAttempt | None,
+) -> None:
+    if not _lockout_enabled():
+        return
+    if not attempt:
+        user_id = user.id if user else None
+        attempt = LoginAttempt(identifier_hash=identifier_hash, user_id=user_id)
+        db.add(attempt)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            attempt = _login_attempt(db, identifier_hash)
+            if not attempt:
+                return
+            if user_id and attempt.user_id is None:
+                attempt.user_id = user_id
+    elif user and attempt.user_id is None:
+        attempt.user_id = user.id
+
+    _clear_expired_login_lock(attempt, now)
+    if _login_locked(attempt, now):
+        return
+
+    if attempt.failed_attempts == 0:
+        attempt.first_failed_at = now
+    attempt.failed_attempts += 1
+    attempt.last_failed_at = now
+    if attempt.failed_attempts >= settings.login_max_failed_attempts:
+        attempt.locked_until = now + timedelta(seconds=settings.login_lockout_seconds)
+
+
+def _reset_successful_login(db: Session, identifier_hash: str, user: User, attempt: LoginAttempt | None) -> None:
+    if not _lockout_enabled():
+        return
+    if not attempt:
+        return
+    attempt.user_id = user.id
+    attempt.failed_attempts = 0
+    attempt.first_failed_at = None
+    attempt.last_failed_at = None
+    attempt.locked_until = None
 
 
 def _tokens(db: Session, user: User, request: Request) -> TokenOut:
@@ -74,9 +158,20 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
 
 @router.post("/login", response_model=AuthOut)
 def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == payload.email.lower()))
+    normalized_email = _normalized_login_identifier(payload.email)
+    identifier_hash = _login_identifier_hash(normalized_email)
+    now = _now()
+    attempt = _login_attempt(db, identifier_hash) if _lockout_enabled() else None
+    _clear_expired_login_lock(attempt, now)
+    if _login_locked(attempt, now):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_FAILURE_DETAIL)
+
+    user = db.scalar(select(User).where(User.email == normalized_email))
     if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        _record_failed_login(db, identifier_hash, user, now, attempt)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=LOGIN_FAILURE_DETAIL)
+    _reset_successful_login(db, identifier_hash, user, attempt)
     token = _tokens(db, user, request)
     db.commit()
     return AuthOut(**token.model_dump(), user=UserPublic.model_validate(user))

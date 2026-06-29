@@ -427,6 +427,7 @@ Not implemented:
 |---|---|---|
 | `users` | buyer/admin accounts | JWT auth, legacy API key compatibility, status/tier fields. |
 | `refresh_sessions` | server-side refresh session tracking | refresh token `jti`, expiry, logout, current-user logout-all, and admin target-user revoke-all support. |
+| `login_attempts` | login brute-force lockout state | hashed normalized login identifier, failed-attempt count, and temporary lock expiry. |
 | `buyer_api_keys` | managed buyer API keys | multiple keys, scopes, revoke, usage attribution. |
 | `wallets` | buyer balances | non-negative DB checks. |
 | `wallet_transactions` | buyer ledger | hold/capture/refund/deposit/adjustment/payment intent credit. |
@@ -452,7 +453,7 @@ Not implemented:
 
 | Namespace | Role | Current state |
 |---|---|---|
-| `/auth` | public/user | register, login, refresh, logout, logout-all, current user. Refresh tokens are backed by `refresh_sessions`. |
+| `/auth` | public/user | register, login with per-identifier lockout, refresh, logout, logout-all, current user. Refresh tokens are backed by `refresh_sessions`. |
 | `/api/v1` | buyer/API key | catalog, prices, orders, wallet, payment intents, limits, managed API keys. |
 | `/supplier/v1` | supplier | profile, inventory, payout requests, transactions, SMS push. |
 | `/admin` | admin | broad operations/admin API, including target-user refresh session revoke-all. |
