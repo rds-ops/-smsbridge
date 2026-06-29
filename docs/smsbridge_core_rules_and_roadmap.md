@@ -447,6 +447,7 @@ Codex не должен напрямую делать крупный refactor б
 - final external onboarding roadmap. DONE
 - final backend architecture review before frontend completion phase. DONE (no P0 backend blocker found; next phase is frontend completion/UI freeze)
 - frontend implementation roadmap. DONE (screen-by-screen plan for existing backend capabilities only)
+- RC-2 browser/mobile/light/dark QA. DONE (UI Freeze Candidate after small responsive fixes)
 
 ---
 

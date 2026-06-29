@@ -42,7 +42,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70 ${className}`}>
+    <section className={`min-w-0 rounded-lg border border-line bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70 ${className}`}>
       {(title || description) && (
         <div className="mb-4">
           {title && <h2 className="text-base font-semibold">{title}</h2>}

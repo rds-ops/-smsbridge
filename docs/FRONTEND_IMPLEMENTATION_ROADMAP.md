@@ -14,14 +14,14 @@ Source of truth inputs:
 
 ## 1. Current Frontend Status
 
-Estimated frontend completion for mock/manual closed beta: **80%**.
+Estimated frontend completion for mock/manual closed beta: **85%**.
 
 Meaning:
 
 - Buyer local/demo flows are mostly implemented.
 - Admin operational surfaces are mostly implemented.
 - Supplier cabinet MVP is mostly implemented.
-- Browser/mobile/light/dark QA is not yet recorded.
+- RC-2 browser/mobile/light/dark QA is recorded and passed after small responsive fixes.
 - Several backend-complete capabilities are not fully wired in UI yet.
 - Real payment, real SMS provider, and real supplier onboarding UX remain out of scope until corresponding backend/business gates are opened.
 
@@ -97,6 +97,8 @@ Meaning:
 
 Goal: verify the already implemented frontend against existing backend behavior.
 
+Status: complete. RC-2 browser QA is recorded in `docs/UI_READINESS_AUDIT.md`.
+
 Tasks:
 
 1. Run browser QA for `/`, `/buy`, `/dashboard`, `/orders`, `/deposit`, `/api-docs`, `/supplier`, and `/admin`.
@@ -169,4 +171,4 @@ Can safely wait:
 
 ## 8. Recommended First Frontend Task
 
-Run and record RC-2 browser QA against the implemented routes. Fix only concrete blocking issues from that pass. After RC-2, implement supplier activation history UI before the first supplier sandbox.
+RC-2 is complete. Next recommended frontend task: wire frontend logout to backend logout and add the admin target-user session revoke-all control, then implement supplier activation history UI before the first supplier sandbox.

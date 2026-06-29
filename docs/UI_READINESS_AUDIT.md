@@ -130,11 +130,11 @@ Missing/deferred:
 
 | Area | Status | Notes |
 |---|---|---|
-| Local demo buyer flow | Mostly ready | RC-1 frontend build, route availability, and local E2E smoke passed; true visual browser/mobile QA remains. |
-| Buyer wallet/manual deposit flow | Mostly ready | `manual_test` creation exists; admin completion remains admin-only. |
+| Local demo buyer flow | Ready | RC-1 frontend build/local E2E passed; RC-2 browser QA passed after small responsive fixes. |
+| Buyer wallet/manual deposit flow | Ready for manual/mock beta | `manual_test` creation exists; admin completion remains admin-only and copy is visible. |
 | Managed API keys | Mostly ready | Create/list/revoke/scopes/usage implemented. |
-| Supplier cabinet MVP | Mostly ready | Profile/inventory/SMS/payouts/transactions implemented; activation history backend exists but UI is missing. |
-| Admin operations | Mostly ready | Ops/risk/payments/payouts/reliability/logs implemented. |
+| Supplier cabinet MVP | Mostly ready | Profile/inventory/SMS/payouts/transactions implemented and RC-2 route checks passed; activation history backend exists but UI is missing. |
+| Admin operations | Mostly ready | Ops/risk/payments/payouts/reliability/logs implemented; RC-2 admin route check passed. |
 | Real payment UX | Not ready | Real providers deferred. |
 | Real supplier onboarding UX | Not ready | No onboarding/KYC/session flow. |
 | Real provider operations UI | Not ready | Real adapters/sync not implemented. |
@@ -143,10 +143,8 @@ Missing/deferred:
 
 Beta blockers or near-blockers:
 
-- complete true visual browser/mobile QA after latest layout/auth changes
-- clarify `/deposit` copy so buyers understand admin/manual completion
-- verify auth false redirects and token refresh behavior in browser
-- mobile storefront QA
+- no active RC-2 buyer UI blocker after the recorded browser pass
+- verify token refresh/logout behavior during longer manual sessions
 
 Beta useful:
 
@@ -169,11 +167,10 @@ Screen-by-screen implementation order is tracked in `docs/FRONTEND_IMPLEMENTATIO
 
 | Task | Area | Priority | Complexity | Why |
 |---|---|---|---|---|
-| Browser smoke pass for storefront auth/order/deposit | frontend/tests | blocker | medium | Confirms recent shell/auth changes work together. |
-| Mobile storefront QA/fixes | frontend | beta-useful | medium | Marketplace-first home must work on phones. |
-| Clarify manual_test funding copy | frontend/docs | blocker | small | Avoids misleading friendly buyers. |
-| Buyer order event timeline | backend/frontend | later | medium | Requires buyer-safe event endpoint first. |
+| Longer authenticated session/logout browser pass | frontend/tests | beta-useful | small | Backend logout exists, but frontend logout is still local token clearing. |
 | Supplier activation history UI | frontend | beta-useful | medium | Backend endpoint exists; real suppliers need visibility in the cabinet. |
+| Admin user session revoke-all UI | frontend | beta-useful | small | Backend endpoint exists; useful for operator security workflows. |
+| Buyer order event timeline | backend/frontend | later | medium | Requires buyer-safe event endpoint first. |
 | Admin high-volume pagination polish | frontend/backend | beta-useful | medium | Keeps ops pages usable as data grows. |
 | Supplier onboarding UX | product/frontend | later | large | Needed before real supplier acquisition. |
 | Real payment provider UX | frontend/backend | later | large | Deferred until provider implementation. |
@@ -195,3 +192,66 @@ Passed:
 Not completed:
 
 - True visual browser QA for desktop/mobile and light/dark mode. The in-app browser connector failed during setup, so RC-1 records route availability but not a visual pass.
+
+## 9. RC-2 Browser QA Record
+
+Date: 2026-06-29
+
+Browser/tool used:
+
+- Local Docker Compose services: frontend/backend/postgres/redis.
+- Headless Chrome `149.0.7827.199` driven through Chrome DevTools Protocol.
+- The in-app browser connector failed before opening a page, so local headless Chrome was used as the browser QA fallback.
+
+Routes checked:
+
+- `/`
+- `/buy`
+- `/dashboard`
+- `/orders`
+- `/deposit`
+- `/api-docs`
+- `/supplier`
+- `/admin`
+
+Themes checked:
+
+- light
+- dark
+
+Viewports checked:
+
+- desktop 1440px
+- laptop 1024px
+- mobile 390px
+
+Initial issues found:
+
+- Guest nav actions overflowed mobile width by roughly 27px on public/storefront/supplier pages.
+- `/api-docs` code/example cards overflowed mobile and laptop widths because long code blocks forced grid/card min-width expansion.
+- Repeated scripted admin logins temporarily hit the Redis rate limiter; this was a QA-script side effect, not a UI failure.
+
+Fixes applied:
+
+- Reduced guest nav button minimum width on small screens and tightened the nav action gap.
+- Added `min-w-0` to the shared `Card` wrapper so long tables/code blocks can shrink inside responsive grids.
+
+Verification after fixes:
+
+- `docker-compose build frontend`: PASS
+- `docker run --rm smsbridge-frontend npm run build`: PASS
+- `docker-compose up -d frontend`: PASS
+- Focused post-fix browser checks for `/`, `/buy`, `/api-docs`, and `/supplier` passed on mobile 390px and laptop 1024px in both light and dark themes with no horizontal overflow.
+- Authenticated desktop checks passed for `/dashboard`, `/orders`, `/deposit`, `/api-docs`, and `/admin`.
+- Login modal opens from the public nav.
+
+RC-2 status:
+
+- UI Freeze Candidate for mock/manual closed beta.
+
+Remaining non-blocking gaps:
+
+- Frontend logout still clears local tokens only; backend logout/logout-all endpoints exist and should be wired in Phase B.
+- Supplier activation history UI is still missing and remains Phase C for supplier sandbox.
+- Admin target-user session revoke-all UI is still missing and remains Phase B.
+- Real payment provider UX and real SMS provider operations UI remain deferred until backend integration gates open.

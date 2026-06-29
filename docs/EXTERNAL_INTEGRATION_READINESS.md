@@ -12,15 +12,15 @@ The final backend architecture review did not find a P0 backend blocker to movin
 
 This does not mean real external integrations are ready. Real payments still require provider-specific checkout, signature verification, amount/currency validation, dispute policy, and provider runbooks. Real SMS providers still require real adapters, credential handling, price/stock freshness, cancellation semantics, and reconciliation. Real supplier onboarding still requires business/KYC/contract/sandbox signoff.
 
-Next phase: frontend completion, RC-2 browser/mobile visual QA, and UI freeze before friendly buyer beta.
+Next phase: Phase B frontend security/ops polish and friendly-buyer beta preparation with mock/manual systems.
 
 ## 1. Readiness by External Party
 
 | Target | Status | Summary |
 |---|---|---|
 | Local demo | Ready | RC-1 full backend tests, frontend build, migrations, health checks, and local E2E smoke passed on 2026-06-27. |
-| Internal closed beta with manual/mock systems | Mostly ready | Backend internal phase is complete with P1/P2 follow-ups; RC-1 build/test/smoke passed. True visual browser/mobile QA still needs a recorded pass. |
-| Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. Backend P0 review passed; browser/mobile QA remains. |
+| Internal closed beta with manual/mock systems | Ready with ops signoff | Backend internal phase is complete with P1/P2 follow-ups; RC-1 build/test/smoke passed; RC-2 browser/mobile/light/dark QA passed as UI Freeze Candidate. |
+| Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. Backend P0 review and RC-2 browser QA passed; support/operator signoff remains before invites. |
 | Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists and `docs/PAYMENT_PROVIDER_CONTRACT.md` defines the required provider contract, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist and `docs/SMS_PROVIDER_CONTRACT.md` defines the required adapter/ops contract, but real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |

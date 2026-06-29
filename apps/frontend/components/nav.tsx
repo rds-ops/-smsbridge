@@ -137,7 +137,7 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
           <Link className={linkClass("/faq")} href="/faq">{t("nav.faq")}</Link>
         </nav>
 
-        <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
           {isSignedIn ? (
             <>
               <div className="hidden min-w-[8.75rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-line bg-slate-50 px-2.5 py-1.5 text-xs shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-blue-200 hover:bg-white hover:shadow-md sm:flex sm:text-sm">
@@ -152,10 +152,10 @@ function TopNavigation({balance, pathname, user}: {balance: WalletType | null; p
             <>
               <div className="hidden sm:block"><LanguageSwitcher compact /></div>
               <ThemeToggle />
-              <Button className="min-w-[5.75rem]" onClick={() => openAuth("login")} size="sm" type="button" variant="secondary">
+              <Button className="px-3 sm:min-w-[5.75rem]" onClick={() => openAuth("login")} size="sm" type="button" variant="secondary">
                 {t("nav.login")}
               </Button>
-              <Button className="min-w-[7.5rem]" onClick={() => openAuth("register")} size="sm" type="button">
+              <Button className="px-3 sm:min-w-[7.5rem]" onClick={() => openAuth("register")} size="sm" type="button">
                 {t("nav.register")}
               </Button>
             </>

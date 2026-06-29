@@ -18,8 +18,8 @@ Source documents:
 | Area | Status | Snapshot |
 |---|---|---|
 | Backend core | Internal phase complete with P1/P2 follow-ups | BE-38 found no P0 backend architecture blocker to moving into frontend completion/UI freeze. RC-1 passed backend build, migrations, full tests, health checks, and local E2E smoke. Wallet ledger, order lifecycle, idempotency, state transitions, request logs, rate limits, and auth hardening are implemented. |
-| Frontend | Mostly ready, visual QA not recorded | Marketplace shell, buyer dashboard, orders, deposit, API keys, supplier cabinet, and admin ops surfaces exist. True browser/mobile/light/dark QA remains. |
-| Buyer readiness | Mostly ready for friendly buyers with manual/mock systems | Buyer auth, API keys/scopes, orders, wallet history, manual_test deposit intents, and local E2E smoke exist. Real payment UX is not implemented. |
+| Frontend | UI Freeze Candidate | Marketplace shell, buyer dashboard, orders, deposit, API keys, supplier cabinet, and admin ops surfaces exist. RC-2 browser/mobile/light/dark QA passed after small responsive fixes. |
+| Buyer readiness | Mostly ready for friendly buyers with manual/mock systems | Buyer auth, API keys/scopes, orders, wallet history, manual_test deposit intents, local E2E smoke, and RC-2 browser QA exist. Real payment UX is not implemented. |
 | Supplier readiness | Sandbox-ready only after business signoff | Supplier API, reservation callback, release retry, activation history API, payout requests, transactions, and integration contract exist. KYC/contract policy, supplier UI activation history, and sandbox signoff remain. |
 | Payment readiness | Manual/local only | `manual_test`, payment intents, admin completion, internal webhook foundation, idempotent wallet credit, and reconciliation visibility exist. Real provider checkout, signatures, amount/currency validation, and dispute policy are not implemented. |
 | SMS provider readiness | Mock/local only | Mock provider, supplier-pool path, polling worker, webhook skeleton, and SMS provider contract exist. Real adapters, credential rotation, price/stock freshness, and reconciliation are not implemented. |
@@ -27,15 +27,15 @@ Source documents:
 
 Backend go/no-go after BE-38:
 
-- Go for frontend completion, RC-2 browser QA, and UI freeze.
-- Go for friendly-buyer closed beta planning with mock/manual systems after RC-2 passes.
+- Go for UI freeze candidate based on RC-2 browser QA.
+- Go for friendly-buyer closed beta planning with mock/manual systems after operator/support signoff.
 - No-go for real payment processing until provider-specific payment integration work is implemented and verified.
 - No-go for real SMS providers until real adapters, price/stock freshness, cancellation semantics, and reconciliation are implemented and verified.
 - No-go for production supplier onboarding until business/KYC/contract/sandbox signoff is complete.
 
 ## 2. Recommended Order
 
-1. RC-2 browser visual QA / UI freeze.
+1. Phase B frontend security/ops polish after RC-2.
 2. Friendly buyer closed beta with mock/manual systems.
 3. First supplier sandbox.
 4. First real payment provider sandbox.
@@ -47,6 +47,8 @@ Do not reorder real payments or real SMS providers ahead of RC-2/friendly-buyer 
 ## 3. Stage Plans
 
 ### Stage 1: RC-2 Browser Visual QA / UI Freeze
+
+Status: passed as UI Freeze Candidate on 2026-06-29. Detailed route/theme/viewport results are recorded in `docs/UI_READINESS_AUDIT.md`.
 
 Entry criteria:
 
