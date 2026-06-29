@@ -2,6 +2,7 @@
 
 Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_READINESS.md`.
 Supplier reservation/release contract and operator handling are documented in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
+Future real payment provider contract and operator handling are documented in `docs/PAYMENT_PROVIDER_CONTRACT.md`.
 
 This document describes the implemented architecture as of the current MVP state. It is an internal source of truth for how SMSBridge is wired today, not a future design.
 
@@ -295,8 +296,10 @@ Implemented foundation:
 Not implemented:
 
 - real Payme/Click/crypto/provider verification
+- provider-specific checkout/session creation
 - provider-specific signatures
 - provider-specific webhook parsing
+- provider-specific amount/currency validation
 - chargeback/refund lifecycle
 - real payment provider UX beyond local/manual test flow
 

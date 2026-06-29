@@ -4,6 +4,7 @@ Current external integration readiness is tracked in `docs/EXTERNAL_INTEGRATION_
 
 This document describes callback/webhook-style HTTP contracts currently implemented or planned in this repo.
 The detailed supplier onboarding contract and operator runbook are in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
+The real payment provider contract and operator runbook are in `docs/PAYMENT_PROVIDER_CONTRACT.md`.
 
 Status legend:
 - Implemented: present in code and used by current flows.
@@ -158,6 +159,7 @@ Production safety:
 ## 4. Internal Payment Webhook Endpoint (Foundation)
 
 Status: Foundation only. It can transition payment intent statuses and credits wallet balance exactly once when an intent transitions to `succeeded`. Real provider signature verification is not implemented yet.
+Before any real provider is connected, follow `docs/PAYMENT_PROVIDER_CONTRACT.md`; the generic shared-secret endpoint alone is not sufficient for real provider traffic.
 
 Endpoint:
 - `POST /internal/payment-webhooks/{provider}`

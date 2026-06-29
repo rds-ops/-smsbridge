@@ -10,7 +10,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Internal closed beta with manual/mock systems | Mostly ready | Core flows and admin ops surfaces exist; RC-1 build/test/smoke passed. True visual browser/mobile QA still needs a recorded pass. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. RC-1 technical checks passed; browser/mobile QA remains. |
 | Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
-| Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
+| Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists and `docs/PAYMENT_PROVIDER_CONTRACT.md` defines the required provider contract, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, production runbooks, provider/payment integrations, support, and load/security verification. Backend production runbook and session revocation exist, but operational signoff is not complete. |
 
@@ -70,6 +70,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 - internal payment webhook foundation
 - idempotent wallet credit on succeeded status
 - payment reconciliation visibility
+- real provider contract/runbook in `docs/PAYMENT_PROVIDER_CONTRACT.md`
 
 ### Supplier cabinet/API
 
@@ -166,6 +167,8 @@ This document is the current source of truth for SMSBridge readiness before invo
 - Choose first payment provider.
 - Implement provider-specific signature verification.
 - Implement provider-specific webhook parsing and event ids.
+- Implement provider-specific checkout/session creation.
+- Implement provider-specific amount and currency validation.
 - Confirm webhook replay protection and idempotent wallet crediting under provider semantics.
 - Implement production secret management for payment credentials.
 - Define payment reconciliation runbook.
@@ -231,7 +234,7 @@ These are practical estimates, not precision metrics.
 | Frontend buyer MVP | 78% | Storefront and account flows exist; frontend build and route availability passed in RC-1; true visual/mobile QA remains. |
 | Supplier MVP | 80% | API/cabinet/callbacks/manual payout skeleton, admin API key issuance, backend activation transparency, and supplier integration/payout runbook exist; KYC, external payout execution, and supplier UI polish remain. |
 | Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and payment/provider production runbooks missing. |
-| Docs | 75% | Main docs and supplier contract/runbook are reconciled; provider/payment-specific runbooks still needed. |
+| Docs | 78% | Main docs, supplier contract/runbook, and payment provider contract are reconciled; real-provider implementation docs remain provider-specific future work. |
 | Real payments | 25% | Intent/webhook/crediting base exists; provider verification absent. |
 | Real SMS providers | 20% | Adapter skeletons exist; real integration absent. |
 | Production launch | 35% | Good MVP base; needs integrations, legal, security, monitoring, and ops maturity. |
@@ -246,7 +249,7 @@ These are practical estimates, not precision metrics.
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
 | Add supplier activation history to supplier UI | frontend | beta-useful | medium | Backend activation history exists; real suppliers still need it surfaced in the cabinet. | `/supplier` UI and browser smoke. |
 | Run auth/session browser QA | frontend/tests | beta-useful | small | Backend logout/logout-all exists; browser token handling still needs a recorded visual/session pass. | Browser login, refresh, logout, protected-route check. |
-| Choose and implement first payment provider verification | backend | blocker for real payments | large | Real payments cannot launch on shared-secret skeleton. | Provider webhook fixture tests and reconciliation tests. |
+| Choose and implement first payment provider verification | backend | blocker for real payments | large | Real payments cannot launch on shared-secret skeleton; provider-specific signature, checkout, amount/currency validation, and event mapping are required by `PAYMENT_PROVIDER_CONTRACT.md`. | Provider webhook fixture tests and reconciliation tests. |
 | Choose and implement first real SMS provider adapter | backend | blocker for real SMS | large | Marketplace cannot use real external SMS stock without it. | Adapter contract tests and sandbox integration. |
 | Add provider price/stock sync freshness | backend/ops | beta-useful | medium | Prevents stale pricing/availability. | Sync task tests and admin visibility. |
 | Write production runbook | docs/ops | blocker for launch | medium | Operators need deploy, backups, incidents, payments, supplier escalation. | Dry-run deployment checklist. |
@@ -392,3 +395,19 @@ Implemented:
 Limitations:
 
 - This is account/identifier lockout only; it does not add MFA, password reset, or IP/device anomaly detection.
+
+## 18. BE-35 Payment Provider Contract
+
+Date: 2026-06-29
+
+Implemented:
+
+- `docs/PAYMENT_PROVIDER_CONTRACT.md` documents the current internal payment model and real-provider contract.
+- Real providers must implement provider-specific checkout/session creation, signature verification, event mapping, amount validation, currency validation, event deduplication, and safe diagnostics before wallet crediting.
+- Operator runbook covers paid-but-not-credited, credited-but-not-succeeded, duplicate webhook, wrong amount, unknown intent, late success, refund, chargeback, and dispute cases.
+
+Limitations:
+
+- No real payment provider code was added.
+- `manual_test` remains the only enabled payment provider.
+- The generic internal webhook skeleton is not sufficient for real providers by itself.

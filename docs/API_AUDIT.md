@@ -19,6 +19,7 @@ SMSBridge has a broad local/closed-beta API foundation:
 - supplier inventory, activation history, SMS push, payout requests, and transaction history
 - supplier reservation callbacks, release callbacks, and release retry queue
 - supplier integration contract/runbook documented in `docs/SUPPLIER_INTEGRATION_CONTRACT.md`
+- payment provider contract/runbook documented in `docs/PAYMENT_PROVIDER_CONTRACT.md`
 - admin supplier creation/API-key regeneration with hashed storage and one-time raw key return
 - admin payment, payout, risk, reliability, logs, metrics, and ops endpoints
 - request logging with request IDs and identity attribution
@@ -136,6 +137,8 @@ Internal API gaps:
 - no real provider webhook processors
 - no payment provider-specific signature verification
 - no provider-specific event mapping
+- no provider-specific checkout/session creation
+- no provider-specific amount/currency validation
 - no external reconciliation import
 
 ## 7. Money and Ledger State
@@ -222,6 +225,7 @@ Not implemented:
 | Internal provider webhook namespace | PARTIAL, skeleton only |
 | Payment intents/manual_test/admin completion | DONE for local/manual foundation |
 | Payment wallet crediting from succeeded intents | DONE |
+| Payment provider integration contract | DONE |
 | Payment reconciliation visibility | PARTIAL, read-only |
 | Supplier payout request lifecycle | PARTIAL, no external payout provider |
 | Supplier manual payout policy/accounting readiness | DONE for manual/admin flow |
@@ -265,6 +269,8 @@ Blocker before real payments:
 
 - choose first real provider
 - implement provider signature verification and webhook event mapping
+- implement provider checkout/session creation
+- implement provider amount/currency validation
 - production secret management
 - payment reconciliation and operator runbook
 - production payment UX copy and error states

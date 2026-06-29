@@ -460,6 +460,7 @@ Codex не должен напрямую делать крупный refactor б
 - idempotent wallet crediting from successful payment intents. DONE
 - payment intent lifecycle visibility. DONE
 - admin manual_test payment completion endpoint. DONE (local/dev/testing tool only)
+- payment provider integration contract/runbook. DONE
 - webhook verification
 - idempotent deposits. PARTIAL (payment intent webhook deposits are idempotent; real provider deposit flows are not implemented)
 - payment credit consistency/reconciliation visibility. PARTIAL (admin read-only checks only)
