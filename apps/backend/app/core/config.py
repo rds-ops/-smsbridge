@@ -70,6 +70,9 @@ def validate_production_safety(config: Settings) -> None:
     if config.admin_seed_password in DEFAULT_ADMIN_PASSWORDS:
         raise RuntimeError("Unsafe production configuration: ADMIN_SEED_PASSWORD uses a default password")
 
+    if "*" in config.cors_origin_list:
+        raise RuntimeError("Unsafe production configuration: CORS_ORIGINS must not include wildcard origins")
+
     internal_secret = config.internal_webhook_secret.strip()
     if not internal_secret:
         raise RuntimeError("Unsafe production configuration: INTERNAL_WEBHOOK_SECRET must not be empty")

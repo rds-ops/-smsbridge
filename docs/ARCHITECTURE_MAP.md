@@ -75,8 +75,7 @@ Implemented UI foundation:
   - `app/services/supplier_reservations.py`
   - `app/services/rate_limit.py`
   - `app/services/risk.py`
-  - `app/services/ops.py`
-  - `app/services/cleanup.py`
+  - `app/services/ops_cleanup.py`
 - Models:
   - `app/models/entities.py`
 - Provider adapters:
@@ -111,6 +110,8 @@ Important database protections already implemented:
 - supplier payout status/amount checks
 - normalized nullable-operator uniqueness for prices and supplier inventory
 - unique wallet credit linkage by `wallet_transactions.payment_intent_id`
+
+Production startup guards reject default/weak core secrets, default admin seed password, default/empty internal webhook secret, and wildcard CORS origins in production-like environments. Production backend policy is tracked in `docs/PRODUCTION_BACKEND_RUNBOOK.md`.
 
 ### Redis
 
@@ -493,6 +494,7 @@ Deferred:
 2. Real provider adapters are placeholders and need credential, sync, error mapping, cancellation, and reconciliation design.
 3. Payment webhooks use a shared internal secret skeleton; real provider signatures and provider-specific event handling are not implemented.
 4. Refresh tokens are stateless; logout/session revocation is incomplete.
-5. Admin and supplier list pagination/filtering is still uneven.
-6. Risk monitoring is read-only/manual-review only; no automated abuse prevention.
-7. Metrics are useful for ops, but not production accounting.
+5. Supplier/provider secrets do not yet have a formal KMS/encryption-at-rest policy for real integrations.
+6. Admin and supplier list pagination/filtering is still uneven.
+7. Risk monitoring is read-only/manual-review only; no automated abuse prevention.
+8. Metrics are useful for ops, but not production accounting.

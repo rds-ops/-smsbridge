@@ -12,7 +12,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 | Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history exists, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI polish, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist; real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
-| Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. |
+| Public launch | Not ready | Needs legal, monitoring/alerting, session revocation, production runbooks, provider/payment integrations, support, and load/security verification. Backend production runbook exists, but operational signoff is not complete. |
 
 ## 2. What Is Already Done
 
@@ -112,6 +112,7 @@ This document is the current source of truth for SMSBridge readiness before invo
 - Redis rate limiting with identity/tier policies
 - cleanup dry-run
 - retention policy
+- production backend runbook and startup safety guards
 
 ### Risk/compliance foundation
 
@@ -276,12 +277,12 @@ This snapshot separates backend readiness from UI polish, external contracts, an
 | First real supplier sandbox | Mostly ready | Reservation callback, wallet-hold-before-reservation, release retry, activation history, admin API key issuance, config validation, supplier SMS, and manual payout accounting are implemented. Requires KYC/contract policy, supplier sandbox signoff, and external payout execution process before production onboarding. |
 | Real payments | Not ready | Payment intent lifecycle and idempotent wallet crediting exist, but real provider signature verification, provider-specific webhook mapping, checkout UX, and chargeback/refund policy are not implemented. |
 | Real SMS providers | Not ready | Mock/local and supplier-pool paths exist, and the internal provider webhook namespace is skeleton-only. Real provider adapters, price/stock freshness, credential rotation, cancellation semantics, and reconciliation remain. |
-| Operations for closed beta | Mostly ready | Request IDs/logs, audit logs, health, risk actions, ops summary, release retries, reconciliation, and cleanup dry-run exist. External alerting, production incident runbooks, and accounting-grade reporting remain. |
+| Operations for closed beta | Mostly ready | Request IDs/logs, audit logs, health, risk actions, ops summary, release retries, reconciliation, cleanup dry-run, production startup guards, and backend runbook exist. External alerting, incident drill, backup/restore verification, and accounting-grade reporting remain. |
 
 Remaining backend blockers by severity:
 
 - P0 before external parties: complete true browser/mobile visual QA; run supplier sandbox contract signoff; keep real payments disabled until provider verification is implemented; keep real SMS providers disabled until a real adapter and provider reconciliation are implemented.
-- P1 before broader beta: refresh-token/session revocation; provider price/stock freshness; production incident/deployment runbook; external alerting; operator playbooks for repeated supplier release failures.
+- P1 before broader beta: refresh-token/session revocation; provider price/stock freshness; production deployment/incident drill; external alerting; operator playbooks for repeated supplier release failures.
 - P2 after beta foundation: automated reconciliation repair; exact phone inventory option; supplier self-service onboarding/API key rotation; richer accounting reports.
 
 ## 13. RC-1 Verification Record
@@ -311,3 +312,31 @@ RC-1 conclusion:
 - Frontend build and route availability passed.
 - Local manual/mock E2E smoke passed.
 - True visual browser QA remains the main unrecorded friendly-buyer readiness item.
+
+## 14. BE-31 Production Backend Safety Audit
+
+Date: 2026-06-27
+
+Code hardening:
+
+- Production-like startup now rejects wildcard `CORS_ORIGINS`.
+- Existing startup guards already reject default/weak `SECRET_KEY`, default `ADMIN_SEED_PASSWORD`, and empty/default `INTERNAL_WEBHOOK_SECRET`.
+
+Documentation:
+
+- Production backend policy is documented in `docs/PRODUCTION_BACKEND_RUNBOOK.md`.
+- `.env.example` now explicitly lists `INTERNAL_WEBHOOK_SECRET` and warns against wildcard production CORS.
+
+Auth/session conclusion:
+
+- Stateless refresh tokens and client-side logout do not block a small trusted friendly-buyer beta when token lifetimes and monitoring are acceptable.
+- Server-side refresh/session revocation is P1 before broader beta and required before public launch or high-risk external onboarding.
+
+Remaining production blockers:
+
+- external monitoring/alerting
+- backup/restore verification
+- incident response/deployment runbook drill
+- server-side refresh/session revocation
+- formal KMS/encryption-at-rest policy for real supplier/provider secrets
+- real payment/provider verification and reconciliation before any real integrations

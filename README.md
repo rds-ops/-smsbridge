@@ -96,6 +96,8 @@ Important values:
 - `DATABASE_URL`
 - `REDIS_URL`
 - `SECRET_KEY`
+- `ADMIN_SEED_PASSWORD`
+- `INTERNAL_WEBHOOK_SECRET`
 - `CORS_ORIGINS`
 - `MOCK_SUCCESS_RATE`
 - `MOCK_SMS_DELAY_SECONDS`
@@ -108,6 +110,13 @@ Important values:
 Operational retention policy:
 
 - `docs/RETENTION_POLICY.md`
+
+Production backend safety notes:
+
+- `docs/PRODUCTION_BACKEND_RUNBOOK.md`
+- Set `ENVIRONMENT=production` or `ENVIRONMENT=staging` for production-like deployments.
+- Production-like startup rejects default/weak `SECRET_KEY`, default `ADMIN_SEED_PASSWORD`, empty/default `INTERNAL_WEBHOOK_SECRET`, and wildcard `CORS_ORIGINS`.
+- Do not deploy from `.env.example`; use exact HTTPS CORS origins and real secrets.
 
 ## API Examples
 

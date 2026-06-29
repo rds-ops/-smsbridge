@@ -44,6 +44,7 @@ Remaining auth/security gaps:
 - no per-account login lockout
 - provider API key encryption field exists, but real secret management/provider credential flow is not production-ready
 - internal webhooks do not have provider-specific signatures yet
+- production-like startup rejects wildcard CORS origins, but TrustedHost/reverse-proxy hostname enforcement is still an ops/deployment responsibility
 
 ## 3. Buyer API
 
@@ -202,6 +203,7 @@ Not implemented:
 - dashboards outside admin UI
 - automatic abuse blocking
 - incident/runbook maturity
+- backup/restore verification
 
 ## 10. Completed Stabilization Items
 
@@ -233,6 +235,7 @@ Not implemented:
 | Managed buyer API keys/scopes/usage | DONE |
 | Admin risk monitoring/actions | PARTIAL, manual-review only |
 | Operational cleanup foundation | PARTIAL |
+| Production backend startup safety guards | DONE for defaults/CORS; broader deployment hardening remains |
 
 ## 11. Remaining API Gaps
 
@@ -242,6 +245,13 @@ Blocker before friendly buyers:
 - ensure buyer docs clearly describe manual_test/admin completion
 - verify latest purchase flow in browser
 - verify auth modal/session behavior
+
+Production/security gap before broader beta:
+
+- add server-side refresh/session revocation
+- tune production rate limits and monitor Redis fail-open incidents
+- complete backup/restore and incident response drills
+- enforce trusted host/TLS/body limits at reverse proxy or app edge
 
 Blocker before real suppliers:
 

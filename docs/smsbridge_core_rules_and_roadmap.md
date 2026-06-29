@@ -395,6 +395,7 @@ Codex не должен напрямую делать крупный refactor б
 - remove provider_cost from buyer API. DONE
 - production secret guard. DONE
 - production admin password guard. DONE
+- production CORS wildcard guard. DONE
 - validate provider types/statuses. DONE
 - add supplier request logging. DONE
 
@@ -527,6 +528,7 @@ Codex не должен напрямую делать крупный refactor б
 - structured logging. PARTIAL (request_id correlation and JSON-safe request completion logs)
 - caching strategy
 - operational cleanup/retention policy. PARTIAL (safe cleanup for non-financial operational tables; no external archive storage yet)
+- production backend runbook. PARTIAL (backend safety runbook exists; deployment drill, backup/restore, and alerting still missing)
 - background reconciliation jobs
 - abuse prevention. PARTIAL (admin-only user risk visibility and manual review actions; no automatic blocking yet)
 - fraud/risk controls. PARTIAL (basic transparent risk scoring from orders/API usage plus watch/review notes; no ML or auto-ban)
