@@ -15,6 +15,7 @@ Main roles:
 
 - `buyer`: creates an account, funds a wallet, buys temporary numbers, waits for SMS, cancels or finishes orders, and can use JWT, managed API keys, or a legacy API key.
 - `supplier`: marketplace partner authenticated with a supplier API key. Suppliers manage count-based inventory, receive reservation callbacks if enabled, push SMS, request payouts, and view their transaction history.
+- `supplier applicant`: public pre-key applicant that submits a supplier application for admin review before any supplier account or API key is issued.
 - `admin`: internal operator for users, orders, providers, suppliers, manual funding, payout review, risk review, logs, reconciliation, and operational visibility.
 - `provider`: external SMS activation source or local mock provider. Real provider adapters are placeholders except the local mock and supplier-pool path.
 - `worker`: Celery process for polling waiting orders, retrying supplier releases, and operational cleanup.
@@ -99,6 +100,7 @@ PostgreSQL stores all durable business state:
 - orders and order events
 - prices and provider rows
 - suppliers, inventory, activations, SMS, transactions, payout requests
+- supplier applications for public intake and admin review
 - payment intents and payment webhook events
 - idempotency keys
 - API request logs, audit logs, risk actions, cleanup/retry state

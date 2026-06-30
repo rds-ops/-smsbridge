@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {useEffect, useState} from "react";
 import {DataTable} from "@/components/shared/data-table";
 import {Alert, Card, CopyButton, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
@@ -314,6 +315,7 @@ export default function SupplierPage() {
               <button className="btn btn-primary justify-self-start" type="submit">{t("supplierCabinet.connect")}</button>
             </form>
             <p className="mt-4 text-sm leading-6 text-neutral-600">{t("supplierCabinet.sessionWarning")}</p>
+            <Link className="btn btn-secondary mt-3 w-fit" href="/suppliers">{t("supplierCabinet.applyLink")}</Link>
             {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
           </Card>
         </section>

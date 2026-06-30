@@ -20,7 +20,7 @@ Source documents:
 | Backend core | Internal phase complete with P1/P2 follow-ups | BE-38 found no P0 backend architecture blocker to moving into frontend completion/UI freeze. RC-1 passed backend build, migrations, full tests, health checks, and local E2E smoke. Wallet ledger, order lifecycle, idempotency, state transitions, request logs, rate limits, and auth hardening are implemented. |
 | Frontend | UI Freeze Candidate | Marketplace shell, buyer dashboard, orders, deposit, API keys, supplier cabinet, and admin ops surfaces exist. RC-2 browser/mobile/light/dark QA passed after small responsive fixes. |
 | Buyer readiness | Mostly ready for friendly buyers with manual/mock systems | Buyer auth, API keys/scopes, orders, wallet history, manual_test deposit intents, local E2E smoke, and RC-2 browser QA exist. Real payment UX is not implemented. |
-| Supplier readiness | Sandbox-ready only after business signoff | Supplier API, reservation callback, release retry, activation history API, payout requests, transactions, and integration contract exist. KYC/contract policy, supplier UI activation history, and sandbox signoff remain. |
+| Supplier readiness | Sandbox-ready only after business signoff | Supplier API, public application/admin review foundation, reservation callback, release retry, activation history API/UI, payout requests, transactions, and integration contract exist. KYC/contract policy and sandbox signoff remain. |
 | Payment readiness | Manual/local only | `manual_test`, payment intents, admin completion, internal webhook foundation, idempotent wallet credit, and reconciliation visibility exist. Real provider checkout, signatures, amount/currency validation, and dispute policy are not implemented. |
 | SMS provider readiness | Mock/local only | Mock provider, supplier-pool path, polling worker, webhook skeleton, and SMS provider contract exist. Real adapters, credential rotation, price/stock freshness, and reconciliation are not implemented. |
 | Operations readiness | Closed-beta foundation | Health endpoints, request IDs, request logs, audit logs, ops summary, risk actions, cleanup dry-run, release retries, and runbooks exist. External alerting, backup/restore drill, incident drill, and accounting-grade reporting remain. |
@@ -159,9 +159,10 @@ Entry criteria:
 
 - Stage 1 passed.
 - Supplier candidate has business/KYC/contract approval for sandbox.
+- Supplier candidate submitted the Supplier Center application or has an equivalent approved internal review record.
 - Supplier has reviewed `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 - Admin creates supplier as `pending`, configures reservation callback, and issues API key through secure channel.
-- Supplier activation history API is available; supplier UI activation history remains a known gap unless implemented before sandbox.
+- Supplier activation history API/UI is available for sandbox visibility.
 
 Allowed actions:
 
@@ -403,7 +404,7 @@ Required tests/checks:
 | Browser/mobile visual QA not recorded | P0 before friendly buyers | UI/tests | Run RC-2 browser QA and record exact results. |
 | Buyer misunderstanding manual_test funding | P0 before friendly buyers | product/docs/UI | Clarify copy: intent creation does not fund wallet until admin/manual completion or webhook success. |
 | Supplier KYC/contract/support process missing | P0 before real supplier | business/legal/ops | Define approval, contract, support, escalation, and sandbox signoff checklist. |
-| Supplier activation history missing from UI | P1 supplier sandbox | UI | Add `/supplier` activation history or provide API-based sandbox reporting. |
+| Supplier application/review and activation browser QA pending | P1 supplier sandbox | UI/tests | Browser-test `/suppliers`, admin supplier application review, `/supplier` activation history, and SMS push correlation before first supplier sandbox. |
 | External payout execution not implemented | P1 before production supplier payouts | ops/business/backend | Keep payouts manual/admin; define external settlement process before automation. |
 | Real payment signature verification missing | P0 before real payments | backend/security | Implement provider-specific verification per payment contract. |
 | Payment amount/currency validation missing | P0 before real payments | backend/accounting | Implement validation before any real wallet crediting. |

@@ -16,6 +16,7 @@ from app.models import (
     SmsMessage,
     Supplier,
     SupplierActivation,
+    SupplierApplication,
     SupplierInventory,
     SupplierReleaseRetry,
     SupplierSms,
@@ -50,6 +51,25 @@ def supplier_key(client, admin_token, supplier_id: int) -> str:
     )
     assert response.status_code == 200, response.text
     return response.json()["api_key"]
+
+
+def supplier_application_payload(**overrides):
+    payload = {
+        "contact_name": "Acme Numbers",
+        "email": "supplier-app@example.com",
+        "contact_handle": "@acme_numbers",
+        "country_market": "Indonesia",
+        "number_type": "real_sim",
+        "estimated_daily_volume": 100,
+        "estimated_monthly_volume": 3000,
+        "integration_availability": "yes",
+        "inventory_description": "We operate compliant OTP testing inventory for QA and onboarding flows.",
+        "api_url": "https://supplier.example.com/v1/reservations",
+        "equipment_details": "SIM bank and internal routing platform.",
+        "website": "https://supplier.example.com",
+    }
+    payload.update(overrides)
+    return payload
 
 
 def update_inventory(client, api_key: str, count: int = 10):
@@ -246,6 +266,94 @@ def test_admin_can_regenerate_supplier_api_key_and_auth_works(client, admin_toke
         assert supplier_entity.api_key_hash != api_key
     finally:
         db.close()
+
+
+def test_public_supplier_application_is_persisted_safely(client):
+    response = client.post("/supplier/v1/applications", json=supplier_application_payload())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "received"
+    assert body["public_id"]
+    assert "api_key" not in body
+    assert "inventory_description" not in body
+
+    db = SessionLocal()
+    try:
+        application = db.scalar(select(SupplierApplication).where(SupplierApplication.public_id == body["public_id"]))
+        assert application is not None
+        assert application.status == "pending"
+        assert application.email == "supplier-app@example.com"
+        assert application.contact_name == "Acme Numbers"
+        assert application.api_url == "https://supplier.example.com/v1/reservations"
+    finally:
+        db.close()
+
+
+def test_supplier_application_rejects_invalid_public_input(client):
+    response = client.post(
+        "/supplier/v1/applications",
+        json=supplier_application_payload(api_url="ftp://supplier.example.com/reservations"),
+    )
+
+    assert response.status_code == 400
+    assert "api_url" in response.json()["detail"]
+
+
+def test_admin_can_list_detail_and_review_supplier_applications(client, admin_token):
+    created = client.post("/supplier/v1/applications", json=supplier_application_payload(email="review@example.com"))
+    assert created.status_code == 200, created.text
+
+    listed = client.get("/admin/supplier-applications", headers={"Authorization": f"Bearer {admin_token}"})
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json() if item["public_id"] == created.json()["public_id"])
+    assert row["status"] == "pending"
+    assert row["email"] == "review@example.com"
+    assert row["inventory_description"]
+    assert "api_key" not in row
+
+    detail = client.get(f"/admin/supplier-applications/{row['id']}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["public_id"] == created.json()["public_id"]
+
+    reviewed = client.patch(
+        f"/admin/supplier-applications/{row['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"status": "needs_info", "internal_review_note": "Ask for sandbox callback URL."},
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["status"] == "needs_info"
+    assert reviewed.json()["internal_review_note"] == "Ask for sandbox callback URL."
+    assert reviewed.json()["reviewed_by_user_id"] is not None
+    assert reviewed.json()["reviewed_at"] is not None
+
+
+def test_supplier_application_approval_does_not_create_supplier_or_key(client, admin_token):
+    created = client.post("/supplier/v1/applications", json=supplier_application_payload(email="approve@example.com"))
+    assert created.status_code == 200, created.text
+    before_suppliers = client.get("/admin/suppliers", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    listed = client.get("/admin/supplier-applications", headers={"Authorization": f"Bearer {admin_token}"})
+    application = next(item for item in listed.json() if item["public_id"] == created.json()["public_id"])
+
+    approved = client.patch(
+        f"/admin/supplier-applications/{application['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"status": "approved"},
+    )
+
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+    after_suppliers = client.get("/admin/suppliers", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    assert len(after_suppliers) == len(before_suppliers)
+    assert "api_key" not in approved.json()
+
+
+def test_non_admin_cannot_access_supplier_applications(client, user_token):
+    created = client.post("/supplier/v1/applications", json=supplier_application_payload(email="blocked-review@example.com"))
+    assert created.status_code == 200, created.text
+
+    listed = client.get("/admin/supplier-applications", headers={"Authorization": f"Bearer {user_token}"})
+    assert listed.status_code == 403
 
 
 def test_blocked_supplier_cannot_update_inventory(client, admin_token):

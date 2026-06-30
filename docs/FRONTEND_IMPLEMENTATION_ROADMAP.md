@@ -14,13 +14,14 @@ Source of truth inputs:
 
 ## 1. Current Frontend Status
 
-Estimated frontend completion for mock/manual closed beta: **85%**.
+Estimated frontend completion for mock/manual closed beta: **87%**.
 
 Meaning:
 
 - Buyer local/demo flows are mostly implemented.
 - Admin operational surfaces are mostly implemented.
 - Supplier cabinet MVP is mostly implemented.
+- Public supplier application intake and admin review foundation are implemented.
 - RC-2 browser/mobile/light/dark QA is recorded and passed after small responsive fixes.
 - Several backend-complete capabilities are not fully wired in UI yet.
 - Real payment, real SMS provider, and real supplier onboarding UX remain out of scope until corresponding backend/business gates are opened.
@@ -51,6 +52,7 @@ Meaning:
 | Transactions | Implemented | `GET /supplier/v1/transactions` | Complete | Mostly ready | Browser QA for pagination/load-more | No for buyer beta | Yes |
 | Payouts | Implemented | `POST/GET /supplier/v1/payout-requests` | Complete for manual payouts | Mostly ready | Browser QA for create/list/error handling | No for buyer beta | Yes |
 | Supplier API key access | Implemented as paste-key MVP | Admin creates/regenerates key; no supplier self-key endpoint | Complete for admin-issued key | MVP ready | Clarify that key is admin-issued; do not build self-service key management without backend | No for buyer beta | Yes |
+| Supplier application intake `/suppliers` | Implemented foundation | `POST /supplier/v1/applications` plus admin review endpoints | Complete for application/review intake | Mostly ready | Browser QA for modal submit and admin status review | Supplier sandbox useful | Yes for buyer beta |
 | Supplier settings | Not implemented | No supplier self-update endpoint | Not applicable | Not applicable | Do not build until backend exists | No | Yes |
 | SMS Push | Implemented helper | `POST /supplier/v1/sms` | Complete | Mostly ready | Browser QA; ideally pair with activation history once implemented | Blocker for supplier sandbox manual testing | Yes for buyer beta |
 
@@ -61,7 +63,8 @@ Meaning:
 | Admin dashboard/Ops | Implemented | `GET /admin/ops/summary` | Complete | Mostly ready | Browser QA | Yes for operators | No |
 | Supplier management | Implemented | `/admin/suppliers`, detail, patch, API key regenerate | Complete | Mostly ready | Browser QA for create/update/key one-time display | Yes for supplier sandbox | Yes for buyer beta |
 | Supplier health | Implemented through inventory/retries/reliability | supplier inventory fields, release retries | Complete | Mostly ready | Browser QA for selected supplier context and visibility fields | Supplier sandbox useful | Yes |
-| Supplier onboarding | Implemented admin-managed flow | supplier create/update/API key/regenerate | Complete | Mostly ready | Verify reservation config validation and copy; no self-service onboarding | Supplier sandbox blocker | Yes for buyer beta |
+| Supplier onboarding | Implemented admin-managed plus application review foundation | public application intake, admin supplier application review, supplier create/update/API key/regenerate | Complete for MVP review and admin-issued key | Mostly ready | Browser QA for application submit, review, reservation config validation and key issuance; KYC/contract remains outside product | Supplier sandbox blocker | Yes for buyer beta |
+| Supplier applications | Implemented | `GET/PATCH /admin/supplier-applications`; `POST /supplier/v1/applications` | Complete for safe review intake | Mostly ready | Browser QA for filter/detail/status/note | Supplier sandbox useful | Yes |
 | Supplier payouts | Implemented | list/detail/approve/reject/mark-paid | Complete | Mostly ready | Browser QA for lifecycle actions and idempotent refresh | Supplier sandbox useful | Yes |
 | Release retries | Implemented | `GET /admin/supplier-release-retries` | Complete | Mostly ready | Browser QA in Reliability tab | Supplier sandbox useful | Yes |
 | Payment intents | Implemented | list/detail/manual-complete/reconciliation | Complete for `manual_test` | Mostly ready | Browser QA for manual complete and filters | Yes for manual funding ops | No |
@@ -85,11 +88,12 @@ Meaning:
 | Auth logout/logout-all | Yes | Yes | No | Yes |
 | Supplier profile/inventory/payouts/SMS/transactions | Yes | Yes | Mostly no | Yes |
 | Supplier activation history | Yes | Yes | No | Yes |
+| Supplier application intake/admin review | Yes | Yes | No | Yes |
 | Admin ops/risk/reliability/payments/payouts/logs | Yes | Yes | Mostly no | Yes |
 | Admin session revoke-all | Yes | Yes | No | Yes |
 | Real payment checkout | No usable real provider API | No | No | No |
 | Real SMS provider operations | No real adapters | No | No | No |
-| Supplier self-service onboarding/settings | No | No | No | No |
+| Supplier self-service settings/KYC workflow | No | No | No | No |
 
 ## 6. Implementation Priority
 
@@ -127,9 +131,10 @@ Tasks:
 
 1. Add supplier activation history tab to `/supplier` using `GET /supplier/v1/activations`. Done.
 2. Add supplier activation history type and supplier API client method. Done.
-3. Browser-test supplier SMS push against returned activation ids.
-4. Browser-test admin supplier onboarding/config/API-key issuance.
-5. Browser-test supplier release retries and supplier payout lifecycle visibility.
+3. Add public supplier application intake and admin review surface. Done.
+4. Browser-test supplier SMS push against returned activation ids.
+5. Browser-test supplier application submit/review plus admin supplier onboarding/config/API-key issuance.
+6. Browser-test supplier release retries and supplier payout lifecycle visibility.
 
 ### Phase D: Nice-To-Have
 
@@ -167,8 +172,8 @@ Can safely wait:
 - Buyer order event timeline, because buyer-safe backend endpoint does not exist yet.
 - Real payment provider UX.
 - Real SMS provider operations UI.
-- Supplier self-service onboarding/settings.
+- Supplier KYC/contract workflow and self-service settings.
 
 ## 8. Recommended First Frontend Task
 
-RC-2 is complete. Backend logout/logout-all, admin target-user session revoke-all, and supplier activation history are now wired in frontend. Next recommended frontend task: run supplier sandbox browser QA against activation history plus SMS push, then execute supplier sandbox signoff.
+RC-2 is complete. Backend logout/logout-all, admin target-user session revoke-all, supplier activation history, and supplier application review are now wired in frontend. Next recommended frontend task: run supplier sandbox browser QA against application intake/review, activation history, SMS push, and admin key issuance, then execute supplier sandbox signoff.

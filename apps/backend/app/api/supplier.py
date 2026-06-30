@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_supplier, require_active_supplier
 from app.db.session import get_db
-from app.models import Order, SmsMessage, Supplier, SupplierActivation, SupplierInventory, SupplierPayoutRequest, SupplierTransaction
+from app.models import Order, SmsMessage, Supplier, SupplierActivation, SupplierApplication, SupplierInventory, SupplierPayoutRequest, SupplierTransaction
 from app.schemas.supplier import (
     SupplierActivationSafeOut,
+    SupplierApplicationCreateIn,
+    SupplierApplicationReceivedOut,
     SupplierInventoryOut,
     SupplierInventoryUpdateIn,
     SupplierInventoryUpdateOut,
@@ -19,9 +21,61 @@ from app.schemas.supplier import (
     SupplierSmsPushOut,
     SupplierTransactionSafeOut,
 )
+from app.services.audit import add_audit_log
 from app.services.suppliers import create_supplier_payout_request, push_sms, upsert_inventory
 
 router = APIRouter(prefix="/supplier/v1", tags=["supplier-api"])
+
+
+def _clean_text(value: str) -> str:
+    return " ".join(value.strip().split())
+
+
+def _clean_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _safe_url(value: str | None, field_name: str) -> str | None:
+    cleaned = _clean_optional(value)
+    if cleaned and not cleaned.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be an HTTP(S) URL")
+    return cleaned
+
+
+@router.post("/applications", response_model=SupplierApplicationReceivedOut)
+def create_supplier_application(payload: SupplierApplicationCreateIn, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        raise HTTPException(status_code=400, detail="Invalid email")
+    application = SupplierApplication(
+        contact_name=_clean_text(payload.contact_name),
+        email=email,
+        contact_handle=_clean_text(payload.contact_handle),
+        country_market=_clean_text(payload.country_market),
+        number_type=payload.number_type,
+        estimated_daily_volume=payload.estimated_daily_volume,
+        estimated_monthly_volume=payload.estimated_monthly_volume,
+        integration_availability=payload.integration_availability,
+        inventory_description=payload.inventory_description.strip(),
+        api_url=_safe_url(payload.api_url, "api_url"),
+        equipment_details=_clean_optional(payload.equipment_details),
+        website=_safe_url(payload.website, "website"),
+    )
+    db.add(application)
+    db.flush()
+    add_audit_log(
+        db,
+        "supplier_application.create",
+        "supplier_application",
+        str(application.id),
+        None,
+        {"public_id": application.public_id, "status": application.status, "number_type": application.number_type},
+    )
+    db.commit()
+    return SupplierApplicationReceivedOut(public_id=application.public_id)
 
 
 @router.get("/me", response_model=SupplierMeOut)

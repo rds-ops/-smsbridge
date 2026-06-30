@@ -21,7 +21,7 @@ Next phase: Phase B frontend security/ops polish and friendly-buyer beta prepara
 | Local demo | Ready | RC-1 full backend tests, frontend build, migrations, health checks, and local E2E smoke passed on 2026-06-27. |
 | Internal closed beta with manual/mock systems | Ready with ops signoff | Backend internal phase is complete with P1/P2 follow-ups; RC-1 build/test/smoke passed; RC-2 browser/mobile/light/dark QA passed as UI Freeze Candidate. |
 | Friendly buyer testing | Mostly ready | Buyer storefront, wallet history, manual_test deposit intent, orders, and API keys exist; funding is still manual/admin-completed. Backend P0 review and RC-2 browser QA passed; support/operator signoff remains before invites. |
-| Real supplier onboarding | Not ready | Supplier API/cabinet foundation exists, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history is exposed in the supplier cabinet, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI browser QA, external payout execution, and sandbox signoff remain. |
+| Real supplier onboarding | Not ready, application foundation exists | Supplier API/cabinet foundation exists, public supplier application intake and admin review exist, admin supplier API key issuance is explicit, wallet hold now precedes supplier callback reservation, activation history is exposed in the supplier cabinet, malformed ambiguous responses with external references enqueue release retry, manual payout policy is documented/enforced, and the integration contract/runbook is documented. KYC/contract policy, supplier UI browser QA, external payout execution, and sandbox signoff remain. |
 | Real payment integration | Not ready | Payment intent/webhook/wallet-credit foundation exists and `docs/PAYMENT_PROVIDER_CONTRACT.md` defines the required provider contract, but real provider signatures, reconciliation, secrets, and UX are deferred. |
 | Real SMS provider integration | Not ready | Provider skeleton and mock exist and `docs/SMS_PROVIDER_CONTRACT.md` defines the required adapter/ops contract, but real adapters, price/stock sync, credentials, error mapping, and reconciliation are deferred. |
 | Public launch | Not ready | Needs legal, monitoring/alerting, production runbooks, provider/payment integrations, support, and load/security verification. Backend production runbook and session revocation exist, but operational signoff is not complete. |
@@ -37,6 +37,7 @@ Next phase: Phase B frontend security/ops polish and friendly-buyer beta prepara
 - step-based storefront flow
 - persistent storefront on buyer/account pages
 - FAQ and Suppliers pages
+- supplier application intake from `/suppliers`
 
 ### Buyer auth/account
 
@@ -89,6 +90,7 @@ Next phase: Phase B frontend security/ops polish and friendly-buyer beta prepara
 
 - supplier API-key auth
 - supplier profile
+- supplier application intake for pre-key onboarding review
 - inventory list/update
 - activation/reservation history in Supplier API and supplier cabinet
 - SMS push
@@ -112,6 +114,7 @@ Next phase: Phase B frontend security/ops polish and friendly-buyer beta prepara
 
 - users, orders, providers, suppliers
 - supplier reservation config/visibility
+- supplier application review/status/note surface
 - payment intents/manual completion
 - supplier payout requests
 - risk users/actions
@@ -161,8 +164,9 @@ Next phase: Phase B frontend security/ops polish and friendly-buyer beta prepara
 
 ### Blockers
 
-- Define supplier onboarding/KYC/contract/support policy.
+- Define supplier onboarding/KYC/contract/support policy. The application/review UI exists, but final business/legal gates do not.
 - Browser-test supplier activation history in the supplier UI and document how suppliers should use it operationally.
+- Browser-test supplier application submit/review before first sandbox onboarding.
 - Run supplier sandbox signoff against `docs/SUPPLIER_INTEGRATION_CONTRACT.md`.
 - Define real payout provider/external settlement process if payouts will move beyond manual admin mark-paid.
 - Decide whether count-based callback remains the production strategy or exact inventory is required for some suppliers.
@@ -245,7 +249,7 @@ These are practical estimates, not precision metrics.
 |---|---:|---|
 | Backend core MVP | 80% | Strong local/manual foundations; real integrations deferred. |
 | Frontend buyer MVP | 78% | Storefront and account flows exist; frontend build and route availability passed in RC-1; true visual/mobile QA remains. |
-| Supplier MVP | 80% | API/cabinet/callbacks/manual payout skeleton, admin API key issuance, backend activation transparency, and supplier integration/payout runbook exist; KYC, external payout execution, and supplier UI polish remain. |
+| Supplier MVP | 83% | API/cabinet/callbacks/manual payout skeleton, public application/admin review foundation, admin API key issuance, backend activation transparency, and supplier integration/payout runbook exist; KYC, external payout execution, and supplier UI polish remain. |
 | Admin/ops MVP | 80% | Broad operational UI and endpoints exist; pagination and payment/provider production runbooks missing. |
 | Docs | 80% | Main docs, supplier contract/runbook, payment provider contract, and SMS provider contract are reconciled; implementation-specific provider docs remain future work. |
 | Real payments | 25% | Intent/webhook/crediting base exists; provider verification absent. |
@@ -260,6 +264,7 @@ These are practical estimates, not precision metrics.
 | Run supplier sandbox contract signoff | ops/tests/docs | blocker | medium | Code and runbook exist, but a real supplier must prove idempotent reservation, release, SMS, and timeout behavior before onboarding. | Execute contract checklist from `SUPPLIER_INTEGRATION_CONTRACT.md`. |
 | Clarify manual_test payment UX/docs | docs/frontend | blocker | small | Friendly buyers must not think payment intent creation funds wallet. | Review `/deposit`, `API_BUYER.md`, local E2E guide. |
 | Verify storefront auth/order browser flow | frontend/tests | blocker | medium | Recent shell/auth changes are central to buyer testing. | Browser smoke: select offer, login, create order. |
+| Browser-test supplier application/review flow | frontend/tests | beta-useful | small | Application intake and admin review are surfaced; first sandbox needs a verified submission/review/key-issuance path. | `/suppliers` + `/admin` browser smoke. |
 | Browser-test supplier activation history in supplier UI | frontend/tests | beta-useful | small | Supplier activation history is surfaced; real suppliers still need a verified cabinet workflow. | `/supplier` UI and browser smoke. |
 | Run auth/session browser QA | frontend/tests | beta-useful | small | Backend logout/logout-all exists; browser token handling still needs a recorded visual/session pass. | Browser login, refresh, logout, protected-route check. |
 | Choose and implement first payment provider verification | backend | blocker for real payments | large | Real payments cannot launch on shared-secret skeleton; provider-specific signature, checkout, amount/currency validation, and event mapping are required by `PAYMENT_PROVIDER_CONTRACT.md`. | Provider webhook fixture tests and reconciliation tests. |
@@ -291,7 +296,7 @@ This snapshot separates backend readiness from UI polish, external contracts, an
 | Area | Backend readiness | Notes |
 |---|---|---|
 | Friendly buyers with manual/mock systems | Mostly ready | Buyer auth, orders, idempotency, wallet ledger, manual_test deposits, wallet history, API keys/scopes, and rate limits exist. RC-1 backend/frontend/smoke verification passed; true browser/mobile visual QA remains before inviting buyers. |
-| First real supplier sandbox | Mostly ready | Reservation callback, wallet-hold-before-reservation, release retry, activation history, admin API key issuance, config validation, supplier SMS, and manual payout accounting are implemented. Requires KYC/contract policy, supplier sandbox signoff, and external payout execution process before production onboarding. |
+| First real supplier sandbox | Mostly ready | Supplier application intake/admin review, reservation callback, wallet-hold-before-reservation, release retry, activation history, admin API key issuance, config validation, supplier SMS, and manual payout accounting are implemented. Requires KYC/contract policy, supplier sandbox signoff, and external payout execution process before production onboarding. |
 | Real payments | Not ready | Payment intent lifecycle and idempotent wallet crediting exist, but real provider signature verification, provider-specific webhook mapping, checkout UX, and chargeback/refund policy are not implemented. |
 | Real SMS providers | Not ready | Mock/local and supplier-pool paths exist, the provider contract is documented, and the internal provider webhook namespace is skeleton-only. Real provider adapters, price/stock freshness, credential rotation, cancellation semantics, and reconciliation remain. |
 | Operations for closed beta | Mostly ready | Request IDs/logs, audit logs, health, risk actions, ops summary, release retries, reconciliation, cleanup dry-run, production startup guards, and backend runbook exist. External alerting, incident drill, backup/restore verification, and accounting-grade reporting remain. |

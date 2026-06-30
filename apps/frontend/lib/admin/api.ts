@@ -17,6 +17,7 @@ import type {
   PaymentCreditReconciliation,
   Provider,
   Supplier,
+  SupplierApplication,
   SupplierActivation,
   SupplierInventory,
   SupplierPayoutReconciliation,
@@ -146,6 +147,23 @@ export function getProviders() {
 
 export function getSuppliers() {
   return apiFetch<Supplier[]>("/admin/suppliers");
+}
+
+export function getSupplierApplications(filters: {status?: string; limit?: number; offset?: number} = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  params.set("limit", String(filters.limit ?? 100));
+  if (filters.offset) params.set("offset", String(filters.offset));
+  const query = params.toString();
+  return apiFetch<SupplierApplication[]>(`/admin/supplier-applications${query ? `?${query}` : ""}`);
+}
+
+export function getSupplierApplication(applicationId: number) {
+  return apiFetch<SupplierApplication>(`/admin/supplier-applications/${applicationId}`);
+}
+
+export function updateSupplierApplication(applicationId: number, payload: {status?: string; internal_review_note?: string | null}) {
+  return apiFetch<SupplierApplication>(`/admin/supplier-applications/${applicationId}`, {method: "PATCH", body: JSON.stringify(payload)});
 }
 
 export function createSupplier(payload: SupplierCreatePayload) {

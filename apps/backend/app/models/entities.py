@@ -480,6 +480,49 @@ class Supplier(Base, TimestampMixin):
     )
 
 
+SUPPLIER_APPLICATION_STATUSES = ("pending", "approved", "rejected", "needs_info")
+SUPPLIER_APPLICATION_NUMBER_TYPES = ("real_sim", "virtual_numbers", "other")
+SUPPLIER_APPLICATION_INTEGRATION_AVAILABILITY = ("yes", "no", "needs_discussion")
+
+
+class SupplierApplication(Base, TimestampMixin):
+    __tablename__ = "supplier_applications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid4()), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True, nullable=False)
+    contact_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    contact_handle: Mapped[str] = mapped_column(String(160), nullable=False)
+    country_market: Mapped[str] = mapped_column(String(120), nullable=False)
+    number_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    estimated_daily_volume: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_monthly_volume: Mapped[int] = mapped_column(Integer, nullable=False)
+    integration_availability: Mapped[str] = mapped_column(String(40), nullable=False)
+    inventory_description: Mapped[str] = mapped_column(Text, nullable=False)
+    api_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    equipment_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    internal_review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    reviewed_by: Mapped[Optional[User]] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(f"status in {SUPPLIER_APPLICATION_STATUSES}", name="ck_supplier_applications_status_allowed"),
+        CheckConstraint(f"number_type in {SUPPLIER_APPLICATION_NUMBER_TYPES}", name="ck_supplier_applications_number_type_allowed"),
+        CheckConstraint(
+            f"integration_availability in {SUPPLIER_APPLICATION_INTEGRATION_AVAILABILITY}",
+            name="ck_supplier_applications_integration_allowed",
+        ),
+        CheckConstraint("estimated_daily_volume >= 0", name="ck_supplier_applications_daily_volume_non_negative"),
+        CheckConstraint("estimated_monthly_volume >= 0", name="ck_supplier_applications_monthly_volume_non_negative"),
+        Index("ix_supplier_applications_status_created_at", "status", "created_at"),
+        Index("ix_supplier_applications_email_created_at", "email", "created_at"),
+    )
+
+
 class SupplierInventory(Base, TimestampMixin):
     __tablename__ = "supplier_inventory"
 

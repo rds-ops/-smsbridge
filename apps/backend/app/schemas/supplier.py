@@ -61,6 +61,55 @@ class SupplierApiKeyOut(BaseModel):
     message: str = "Store this supplier API key now. It will not be shown again."
 
 
+class SupplierApplicationCreateIn(BaseModel):
+    contact_name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=5, max_length=255)
+    contact_handle: str = Field(min_length=2, max_length=160)
+    country_market: str = Field(min_length=2, max_length=120)
+    number_type: str = Field(pattern="^(real_sim|virtual_numbers|other)$")
+    estimated_daily_volume: int = Field(ge=0, le=10_000_000)
+    estimated_monthly_volume: int = Field(ge=0, le=300_000_000)
+    integration_availability: str = Field(pattern="^(yes|no|needs_discussion)$")
+    inventory_description: str = Field(min_length=20, max_length=3000)
+    api_url: str | None = Field(default=None, max_length=1000)
+    equipment_details: str | None = Field(default=None, max_length=3000)
+    website: str | None = Field(default=None, max_length=1000)
+
+
+class SupplierApplicationReceivedOut(BaseModel):
+    status: str = "received"
+    public_id: str
+    message: str = "Application received. Our team will review it before issuing supplier access."
+
+
+class SupplierApplicationOut(ORMModel):
+    id: int
+    public_id: str
+    status: str
+    contact_name: str
+    email: str
+    contact_handle: str
+    country_market: str
+    number_type: str
+    estimated_daily_volume: int
+    estimated_monthly_volume: int
+    integration_availability: str
+    inventory_description: str
+    api_url: str | None = None
+    equipment_details: str | None = None
+    website: str | None = None
+    internal_review_note: str | None = None
+    reviewed_at: datetime | None = None
+    reviewed_by_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SupplierApplicationPatch(BaseModel):
+    status: str | None = Field(default=None, pattern="^(pending|approved|rejected|needs_info)$")
+    internal_review_note: str | None = Field(default=None, max_length=3000)
+
+
 class SupplierMeOut(ORMModel):
     id: int
     name: str

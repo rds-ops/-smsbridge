@@ -20,7 +20,7 @@ Implemented foundations:
 - local shadcn/ui-compatible primitives
 - persistent storefront around buyer/public account pages
 - public FAQ page
-- public Suppliers page
+- public Suppliers page with supplier application modal
 - API docs page with signed-in managed API key management
 - supplier cabinet at `/supplier`
 
@@ -42,6 +42,7 @@ Implemented:
 - settings page
 - frontend logout calls backend logout when a refresh token exists, and settings includes a current-user logout-all control
 - FAQ and Suppliers public pages
+- supplier application submission through `/suppliers` with admin review, but not automatic supplier activation
 
 Partially implemented:
 
@@ -73,6 +74,7 @@ Implemented:
 - SMS push helper
 - payout request create/list
 - supplier transaction/reward history
+- supplier cabinet copy clarifies API keys are admin-issued after application review/approval
 
 Partially implemented:
 
@@ -84,7 +86,7 @@ Missing/deferred:
 
 - supplier login/JWT or stronger partner auth UX
 - supplier activation history browser QA with SMS push correlation
-- supplier onboarding/KYC/contract flow
+- supplier KYC/contract/sandbox signoff workflow
 - richer payout/accounting explanations
 
 ## 4. Admin UI
@@ -100,6 +102,7 @@ Implemented:
 - orders
 - providers
 - suppliers
+- supplier application review/status/note surface
 - supplier reservation config in supplier create/update
 - supplier reservation/release visibility fields in supplier inventory
 - audit logs
@@ -139,7 +142,7 @@ Missing/deferred:
 | Supplier cabinet MVP | Mostly ready | Profile/inventory/activations/SMS/payouts/transactions implemented and RC-2 route checks passed; activation history still needs focused browser QA. |
 | Admin operations | Mostly ready | Ops/risk/payments/payouts/reliability/logs implemented; RC-2 admin route check passed. |
 | Real payment UX | Not ready | Real providers deferred. |
-| Real supplier onboarding UX | Not ready | No onboarding/KYC/session flow. |
+| Real supplier onboarding UX | Partial foundation | Public application intake and admin review are implemented; KYC/contract/session flow and sandbox signoff remain. |
 | Real provider operations UI | Not ready | Real adapters/sync not implemented. |
 
 ## 6. Remaining UI Gaps
@@ -152,6 +155,7 @@ Beta blockers or near-blockers:
 Beta useful:
 
 - buyer-safe order event timeline after backend endpoint exists
+- supplier application intake/admin review browser QA
 - supplier activation history browser QA with SMS push correlation
 - improved admin pagination/filtering on high-volume tables
 - better supplier payout/accounting explanations
@@ -160,7 +164,7 @@ Beta useful:
 Later:
 
 - real payment provider checkout UX
-- real supplier onboarding/KYC UI
+- real supplier KYC/contract/self-service settings UI
 - provider credential/sync UI
 - external observability dashboard integration
 
@@ -171,11 +175,12 @@ Screen-by-screen implementation order is tracked in `docs/FRONTEND_IMPLEMENTATIO
 | Task | Area | Priority | Complexity | Why |
 |---|---|---|---|---|
 | Longer authenticated session/logout browser pass | frontend/tests | beta-useful | small | Backend logout/logout-all is wired; longer-session browser behavior still needs a focused pass. |
+| Supplier application intake/admin review QA | frontend/tests | beta-useful | small | Public application and admin review are wired; supplier sandbox needs a verified submission/review/key-issuance path. |
 | Supplier activation history browser QA | frontend/tests | beta-useful | small | UI is wired; real suppliers need a verified activation/SMS workflow in the cabinet. |
 | Admin user session revoke-all browser QA | frontend/tests | beta-useful | small | UI action is wired; confirm operator workflow in browser. |
 | Buyer order event timeline | backend/frontend | later | medium | Requires buyer-safe event endpoint first. |
 | Admin high-volume pagination polish | frontend/backend | beta-useful | medium | Keeps ops pages usable as data grows. |
-| Supplier onboarding UX | product/frontend | later | large | Needed before real supplier acquisition. |
+| Supplier KYC/contract/self-service UX | product/frontend | later | large | Needed before real production supplier acquisition. |
 | Real payment provider UX | frontend/backend | later | large | Deferred until provider implementation. |
 | Provider operations UI | frontend/backend | later | large | Depends on real provider adapter/sync work. |
 | Dark mode polish for dense admin/supplier pages | frontend | later | small | Visual polish, not core readiness. |
@@ -255,6 +260,6 @@ RC-2 status:
 Remaining non-blocking gaps:
 
 - Frontend logout/logout-all is wired to backend endpoints; longer-session browser QA remains useful.
-- Supplier activation history UI is wired; focused Phase C browser QA remains for supplier sandbox.
+- Supplier application intake/admin review and activation history UI are wired; focused Phase C browser QA remains for supplier sandbox.
 - Admin target-user session revoke-all UI is wired; browser QA remains useful for operator workflow.
 - Real payment provider UX and real SMS provider operations UI remain deferred until backend integration gates open.

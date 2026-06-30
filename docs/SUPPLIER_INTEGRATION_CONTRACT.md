@@ -8,19 +8,21 @@ Current status:
 - Wallet hold happens before supplier reservation callback.
 - Supplier activation history exists at `GET /supplier/v1/activations`.
 - Release callback failures use a durable retry queue.
+- Public supplier application intake and admin review foundation exist.
 - Admin supplier creation and API key issuance are implemented.
-- Real supplier KYC/contract policy, supplier self-service onboarding, and external payout execution are still not implemented.
+- Real supplier KYC/contract policy, supplier self-service settings, and external payout execution are still not implemented.
 
 ## 1. Admin Onboarding and API Key Issuance
 
 Current onboarding flow:
 
-1. Admin reviews supplier manually outside the product.
-2. Admin creates a supplier record in `/admin/suppliers`, usually with `status=pending`.
-3. Admin configures reservation settings if the supplier will serve real reservations.
-4. Admin regenerates the supplier API key with `/admin/suppliers/{supplier_id}/api-key/regenerate`.
-5. Admin gives the raw key to the supplier through an approved secure channel.
-6. Admin sets supplier `status=active` only after sandbox signoff.
+1. Supplier submits a public application through `/supplier/v1/applications` or `/suppliers`.
+2. Admin reviews the application in the admin supplier application surface.
+3. Admin creates a supplier record in `/admin/suppliers`, usually with `status=pending`.
+4. Admin configures reservation settings if the supplier will serve real reservations.
+5. Admin regenerates the supplier API key with `/admin/suppliers/{supplier_id}/api-key/regenerate`.
+6. Admin gives the raw key to the supplier through an approved secure channel.
+7. Admin sets supplier `status=active` only after sandbox signoff.
 
 API key behavior:
 

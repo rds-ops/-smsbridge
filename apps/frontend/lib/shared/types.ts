@@ -199,6 +199,50 @@ export type SupplierActivationHistoryRow = {
   updated_at: string;
 };
 
+export type SupplierApplication = {
+  id: number;
+  public_id: string;
+  status: string;
+  contact_name: string;
+  email: string;
+  contact_handle: string;
+  country_market: string;
+  number_type: "real_sim" | "virtual_numbers" | "other";
+  estimated_daily_volume: number;
+  estimated_monthly_volume: number;
+  integration_availability: "yes" | "no" | "needs_discussion";
+  inventory_description: string;
+  api_url?: string | null;
+  equipment_details?: string | null;
+  website?: string | null;
+  internal_review_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by_user_id?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupplierApplicationCreate = {
+  contact_name: string;
+  email: string;
+  contact_handle: string;
+  country_market: string;
+  number_type: "real_sim" | "virtual_numbers" | "other";
+  estimated_daily_volume: number;
+  estimated_monthly_volume: number;
+  integration_availability: "yes" | "no" | "needs_discussion";
+  inventory_description: string;
+  api_url?: string | null;
+  equipment_details?: string | null;
+  website?: string | null;
+};
+
+export type SupplierApplicationReceived = {
+  status: string;
+  public_id: string;
+  message: string;
+};
+
 export type Metrics = Record<string, unknown>;
 
 export type AdminOpsSummary = {

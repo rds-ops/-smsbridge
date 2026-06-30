@@ -86,6 +86,7 @@ Buyer API gaps:
 | Method | Path | Status | Notes |
 |---|---|---|---|
 | `GET` | `/supplier/v1/me` | implemented | Supplier profile, balances, reward percent, status. |
+| `POST` | `/supplier/v1/applications` | implemented | Public supplier application intake for admin review. Does not create supplier accounts or API keys. |
 | `GET` | `/supplier/v1/inventory` | implemented | Supplier-scoped inventory. |
 | `POST` | `/supplier/v1/inventory/update` | implemented | Upserts count-based inventory. |
 | `GET` | `/supplier/v1/activations` | implemented | Supplier-scoped activation/reservation history with SMS summary fields. |
@@ -96,7 +97,7 @@ Buyer API gaps:
 
 Supplier API gaps:
 
-- no supplier self-service onboarding/KYC workflow
+- no supplier KYC/contract/self-service settings workflow; public application intake exists
 - no exact phone inventory model
 - no external payout provider execution
 
@@ -107,7 +108,7 @@ Admin endpoints cover:
 - users and limits
 - orders and order events
 - providers
-- suppliers, inventory, activations, SMS, transactions
+- suppliers, supplier applications, inventory, activations, SMS, transactions
 - supplier reservation config and API-key regeneration
 - wallet deposits and adjustments
 - order refunds

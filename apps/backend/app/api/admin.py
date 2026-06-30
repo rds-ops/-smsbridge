@@ -18,6 +18,7 @@ from app.models import (
     Provider,
     Supplier,
     SupplierActivation,
+    SupplierApplication,
     SupplierInventory,
     SupplierPayoutRequest,
     SupplierReleaseRetry,
@@ -52,6 +53,8 @@ from app.schemas.supplier import (
     AdminSupplierInventoryOut,
     SupplierAdjustmentIn,
     SupplierActivationOut,
+    SupplierApplicationOut,
+    SupplierApplicationPatch,
     SupplierApiKeyOut,
     SupplierCreate,
     SupplierListOut,
@@ -261,6 +264,64 @@ def suppliers(db: Session = Depends(get_db), admin: User = Depends(require_admin
         .limit(200)
     ).all()
     return [SupplierListOut.model_validate(supplier).model_copy(update={"inventory_count": count}) for supplier, count in rows]
+
+
+@router.get("/supplier-applications", response_model=list[SupplierApplicationOut])
+def supplier_applications(
+    status: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    stmt = select(SupplierApplication)
+    if status:
+        stmt = stmt.where(SupplierApplication.status == status)
+    return list(
+        db.scalars(
+            stmt.order_by(SupplierApplication.created_at.desc(), SupplierApplication.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+    )
+
+
+@router.get("/supplier-applications/{application_id}", response_model=SupplierApplicationOut)
+def supplier_application_detail(application_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    application = db.get(SupplierApplication, application_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Supplier application not found")
+    return application
+
+
+@router.patch("/supplier-applications/{application_id}", response_model=SupplierApplicationOut)
+def update_supplier_application(
+    application_id: int,
+    payload: SupplierApplicationPatch,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    application = db.get(SupplierApplication, application_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Supplier application not found")
+    data = payload.model_dump(exclude_unset=True)
+    if "status" in data and data["status"] is not None:
+        application.status = data["status"]
+        application.reviewed_at = datetime.now(timezone.utc)
+        application.reviewed_by_user_id = admin.id
+    if "internal_review_note" in data:
+        application.internal_review_note = data["internal_review_note"]
+    add_audit_log(
+        db,
+        "supplier_application.update",
+        "supplier_application",
+        str(application.id),
+        admin.id,
+        {"status": application.status, "has_internal_review_note": bool(application.internal_review_note)},
+    )
+    db.commit()
+    db.refresh(application)
+    return application
 
 
 def _validate_supplier_reservation_config(supplier: Supplier) -> None:

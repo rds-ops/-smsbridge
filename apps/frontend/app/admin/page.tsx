@@ -23,6 +23,8 @@ import {
   getApiRequestLogs,
   getAuditLogs,
   getProviders,
+  getSupplierApplication,
+  getSupplierApplications,
   getSupplierActivations,
   getSupplierInventory,
   getOperationalCleanupDryRun,
@@ -38,6 +40,7 @@ import {
   regenerateSupplierApiKey,
   rejectSupplierPayoutRequest,
   revokeUserSessions,
+  updateSupplierApplication,
   updateSupplier
 } from "@/lib/admin/api";
 import type {SupplierReservationPayload} from "@/lib/admin/api";
@@ -57,6 +60,7 @@ import type {
   PaymentCreditReconciliation,
   Provider,
   Supplier,
+  SupplierApplication,
   SupplierActivation,
   SupplierInventory,
   SupplierPayoutReconciliation,
@@ -68,9 +72,9 @@ import type {
 } from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type AdminTab = "ops" | "reliability" | "risk users" | "payment intents" | "supplier payouts" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
+type AdminTab = "ops" | "reliability" | "risk users" | "payment intents" | "supplier payouts" | "metrics" | "users" | "orders" | "providers" | "suppliers" | "supplier applications" | "supplier inventory" | "supplier activations" | "supplier sms" | "supplier transactions" | "audit" | "api logs";
 
-const tabs: AdminTab[] = ["ops", "reliability", "risk users", "payment intents", "supplier payouts", "metrics", "users", "orders", "providers", "suppliers", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
+const tabs: AdminTab[] = ["ops", "reliability", "risk users", "payment intents", "supplier payouts", "metrics", "users", "orders", "providers", "suppliers", "supplier applications", "supplier inventory", "supplier activations", "supplier sms", "supplier transactions", "audit", "api logs"];
 const supplierDetailTabs: AdminTab[] = ["supplier inventory", "supplier activations", "supplier sms", "supplier transactions"];
 
 export default function AdminPage() {
@@ -108,6 +112,12 @@ function AdminPanel() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierApplications, setSupplierApplications] = useState<SupplierApplication[]>([]);
+  const [supplierApplicationDetail, setSupplierApplicationDetail] = useState<SupplierApplication | null>(null);
+  const [supplierApplicationStatusFilter, setSupplierApplicationStatusFilter] = useState("");
+  const [supplierApplicationReviewStatus, setSupplierApplicationReviewStatus] = useState("pending");
+  const [supplierApplicationReviewNote, setSupplierApplicationReviewNote] = useState("");
+  const [supplierApplicationReviewLoading, setSupplierApplicationReviewLoading] = useState(false);
   const [supplierInventory, setSupplierInventory] = useState<SupplierInventory[]>([]);
   const [supplierActivations, setSupplierActivations] = useState<SupplierActivation[]>([]);
   const [supplierSms, setSupplierSms] = useState<SupplierSms[]>([]);
@@ -187,6 +197,12 @@ function AdminPanel() {
         setSuppliers(rows);
         if (!selectedSupplierId && rows[0]) setSelectedSupplierId(String(rows[0].id));
       }
+      if (selectedTab === "supplier applications") {
+        const rows = await getSupplierApplications(supplierApplicationFilters(supplierApplicationStatusFilter));
+        setSupplierApplications(rows);
+        if (rows[0]) await selectSupplierApplication(rows[0].id);
+        else setSupplierApplicationDetail(null);
+      }
       if (supplierDetailTabs.includes(selectedTab)) {
         const supplierId = Number(selectedSupplierId);
         if (!Number.isInteger(supplierId) || supplierId <= 0) {
@@ -239,6 +255,10 @@ function AdminPanel() {
   useEffect(() => {
     if (tab === "supplier payouts") load(tab);
   }, [supplierPayoutStatusFilter]);
+
+  useEffect(() => {
+    if (tab === "supplier applications") load(tab);
+  }, [supplierApplicationStatusFilter]);
 
   useEffect(() => {
     if (tab === "api logs") load(tab);
@@ -304,6 +324,36 @@ function AdminPanel() {
 
   async function selectSupplierPayout(id: number) {
     setSupplierPayoutDetail(await getAdminSupplierPayoutRequest(id));
+  }
+
+  async function selectSupplierApplication(id: number) {
+    const application = await getSupplierApplication(id);
+    setSupplierApplicationDetail(application);
+    setSupplierApplicationReviewStatus(application.status);
+    setSupplierApplicationReviewNote(application.internal_review_note || "");
+  }
+
+  async function applySupplierApplicationFilters() {
+    if (tab === "supplier applications") await load("supplier applications");
+  }
+
+  async function reviewSupplierApplication() {
+    if (!supplierApplicationDetail) return;
+    setSupplierApplicationReviewLoading(true);
+    setToast({type: "success", message: ""});
+    try {
+      const updated = await updateSupplierApplication(supplierApplicationDetail.id, {
+        status: supplierApplicationReviewStatus,
+        internal_review_note: supplierApplicationReviewNote.trim() || null
+      });
+      setSupplierApplicationDetail(updated);
+      setSupplierApplications(await getSupplierApplications(supplierApplicationFilters(supplierApplicationStatusFilter)));
+      setToast({type: "success", message: t("admin.supplierApplicationSaved")});
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("admin.supplierApplicationSaveFailed")});
+    } finally {
+      setSupplierApplicationReviewLoading(false);
+    }
   }
 
   async function applySupplierPayoutFilters() {
@@ -494,6 +544,7 @@ function AdminPanel() {
     if (tab === "orders") return filter(orders.map((order) => ({...order, profit: orderProfit(order)} as Record<string, unknown>)));
     if (tab === "providers") return filter(providers as unknown as Record<string, unknown>[]);
     if (tab === "suppliers") return filter(suppliers as unknown as Record<string, unknown>[]);
+    if (tab === "supplier applications") return filter(supplierApplications as unknown as Record<string, unknown>[]);
     if (tab === "supplier inventory") return filter(supplierInventory as unknown as Record<string, unknown>[]);
     if (tab === "supplier activations") return filter(supplierActivations as unknown as Record<string, unknown>[]);
     if (tab === "supplier sms") return filter(supplierSms as unknown as Record<string, unknown>[]);
@@ -501,7 +552,7 @@ function AdminPanel() {
     if (tab === "audit") return filter(auditLogs);
     if (tab === "api logs") return filter(apiLogs as unknown as Record<string, unknown>[]);
     return [];
-  }, [tab, users, orders, providers, suppliers, supplierInventory, supplierActivations, supplierSms, supplierTransactions, auditLogs, apiLogs, query, requestIdFilter]);
+  }, [tab, users, orders, providers, suppliers, supplierApplications, supplierInventory, supplierActivations, supplierSms, supplierTransactions, auditLogs, apiLogs, query, requestIdFilter]);
 
   const columns = useMemo<Column<Record<string, unknown>>[]>(() => {
     if (tab === "users") return [
@@ -571,6 +622,26 @@ function AdminPanel() {
           <button className="btn btn-secondary px-2 py-1 text-xs" onClick={() => changeSupplierReward(Number(row.id), row.reward_percent)}>{t("admin.updateReward")}</button>
           <button className="btn btn-secondary px-2 py-1 text-xs" onClick={() => regenerateKey(Number(row.id))}>{t("admin.regenerateSupplierKey")}</button>
         </div>
+      )}
+    ];
+    if (tab === "supplier applications") return [
+      {key: "public_id", header: "public_id", render: (row) => truncate(row.public_id, 16)},
+      {key: "contact_name", header: t("admin.applicant")},
+      {key: "email", header: t("common.email")},
+      {key: "country_market", header: t("admin.countryMarket")},
+      {key: "number_type", header: t("admin.numberType")},
+      {key: "estimated_daily_volume", header: t("admin.dailyVolume")},
+      {key: "estimated_monthly_volume", header: t("admin.monthlyVolume")},
+      {key: "integration_availability", header: t("admin.integrationAvailability")},
+      {key: "status", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status)} />},
+      {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)},
+      {key: "actions", header: t("common.actions"), render: (row) => (
+        <button
+          className="btn btn-secondary px-2 py-1 text-xs"
+          onClick={() => selectSupplierApplication(Number(row.id)).catch((err) => setToast({type: "error", message: err instanceof Error ? err.message : t("buy.loadFailed")}))}
+        >
+          {t("common.details")}
+        </button>
       )}
     ];
     if (tab === "supplier inventory") return [
@@ -855,6 +926,27 @@ function AdminPanel() {
           onAction={runSupplierPayoutAction}
           t={t}
         />
+      ) : tab === "supplier applications" ? (
+        <SupplierApplicationsView
+          applications={supplierApplications}
+          detail={supplierApplicationDetail}
+          statusFilter={supplierApplicationStatusFilter}
+          setStatusFilter={setSupplierApplicationStatusFilter}
+          reviewStatus={supplierApplicationReviewStatus}
+          setReviewStatus={setSupplierApplicationReviewStatus}
+          reviewNote={supplierApplicationReviewNote}
+          setReviewNote={setSupplierApplicationReviewNote}
+          loading={loading}
+          reviewLoading={supplierApplicationReviewLoading}
+          query={query}
+          setQuery={setQuery}
+          columns={columns}
+          rows={filteredRows}
+          onApplyFilters={applySupplierApplicationFilters}
+          onSelect={(id) => selectSupplierApplication(id).catch((err) => setToast({type: "error", message: err instanceof Error ? err.message : t("buy.loadFailed")}))}
+          onReview={reviewSupplierApplication}
+          t={t}
+        />
       ) : tab === "metrics" ? <MetricsView metrics={metrics} t={t} /> : (
         <Card className="mt-6" title={tabLabel(tab, t)} description={t("admin.searchDesc")}>
           {tab === "api logs" ? (
@@ -904,6 +996,7 @@ function tabLabel(tab: AdminTab, t: (key: string, vars?: Record<string, string |
     orders: t("admin.orders"),
     providers: t("admin.providers"),
     suppliers: t("admin.suppliers"),
+    "supplier applications": t("admin.supplierApplications"),
     "supplier inventory": t("admin.supplierInventory"),
     "supplier activations": t("admin.supplierActivations"),
     "supplier sms": t("admin.supplierSms"),
@@ -1330,6 +1423,147 @@ function PaymentIntentsView({
   );
 }
 
+function SupplierApplicationsView({
+  applications,
+  detail,
+  statusFilter,
+  setStatusFilter,
+  reviewStatus,
+  setReviewStatus,
+  reviewNote,
+  setReviewNote,
+  loading,
+  reviewLoading,
+  query,
+  setQuery,
+  columns,
+  rows,
+  onApplyFilters,
+  onSelect,
+  onReview,
+  t
+}: {
+  applications: SupplierApplication[];
+  detail: SupplierApplication | null;
+  statusFilter: string;
+  setStatusFilter: (value: string) => void;
+  reviewStatus: string;
+  setReviewStatus: (value: string) => void;
+  reviewNote: string;
+  setReviewNote: (value: string) => void;
+  loading: boolean;
+  reviewLoading: boolean;
+  query: string;
+  setQuery: (value: string) => void;
+  columns: Column<Record<string, unknown>>[];
+  rows: Record<string, unknown>[];
+  onApplyFilters: () => void;
+  onSelect: (id: number) => void;
+  onReview: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  return (
+    <section className="mt-6 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <Card title={t("admin.supplierApplications")} description={t("admin.supplierApplicationsDesc")}>
+        <div className="mb-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <label className="grid gap-1 text-sm">
+            {t("common.status")}
+            <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="">{t("admin.allStatuses")}</option>
+              <option value="pending">{t("status.pending")}</option>
+              <option value="needs_info">{t("status.needs_info")}</option>
+              <option value="approved">{t("status.approved")}</option>
+              <option value="rejected">{t("status.rejected")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t("common.search")}
+            <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("common.searchTable")} />
+          </label>
+          <button className="btn btn-secondary self-end" onClick={onApplyFilters} disabled={loading}>{loading ? t("common.refreshing") : t("common.refresh")}</button>
+        </div>
+        <DataTable rows={rows} columns={columns} emptyTitle={t("admin.noSupplierApplications")} />
+        {applications.length > 0 && (
+          <p className="mt-3 text-xs text-neutral-500">{t("admin.supplierApplicationsCount", {count: applications.length})}</p>
+        )}
+      </Card>
+
+      <Card title={t("admin.supplierApplicationDetail")} description={t("admin.supplierApplicationDetailDesc")}>
+        {!detail ? (
+          <p className="text-sm text-neutral-600">{t("admin.selectSupplierApplication")}</p>
+        ) : (
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-semibold">{detail.contact_name}</p>
+                <p className="text-xs text-neutral-500">{detail.public_id}</p>
+              </div>
+              <StatusBadge status={detail.status} />
+            </div>
+
+            <div className="grid gap-3 text-sm md:grid-cols-2">
+              <AdminDetail label={t("common.email")} value={detail.email} />
+              <AdminDetail label={t("admin.contactHandle")} value={detail.contact_handle} />
+              <AdminDetail label={t("admin.countryMarket")} value={detail.country_market} />
+              <AdminDetail label={t("admin.numberType")} value={detail.number_type} />
+              <AdminDetail label={t("admin.dailyVolume")} value={detail.estimated_daily_volume} />
+              <AdminDetail label={t("admin.monthlyVolume")} value={detail.estimated_monthly_volume} />
+              <AdminDetail label={t("admin.integrationAvailability")} value={detail.integration_availability} />
+              <AdminDetail label={t("admin.reviewedAt")} value={dateTime(detail.reviewed_at)} />
+              <AdminDetail label="api_url" value={detail.api_url || "-"} />
+              <AdminDetail label="website" value={detail.website || "-"} />
+            </div>
+
+            <div className="grid gap-1 text-sm">
+              <span className="font-medium">{t("admin.inventoryDescription")}</span>
+              <p className="rounded-md border border-line bg-panel p-3 text-neutral-700">{detail.inventory_description}</p>
+            </div>
+            {detail.equipment_details && (
+              <div className="grid gap-1 text-sm">
+                <span className="font-medium">{t("admin.equipmentDetails")}</span>
+                <p className="rounded-md border border-line bg-panel p-3 text-neutral-700">{detail.equipment_details}</p>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-line bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+              {t("admin.supplierApplicationApprovalHelp")}
+            </div>
+
+            <div className="grid gap-3">
+              <label className="grid gap-1 text-sm">
+                {t("common.status")}
+                <select className="field" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
+                  <option value="pending">{t("status.pending")}</option>
+                  <option value="needs_info">{t("status.needs_info")}</option>
+                  <option value="approved">{t("status.approved")}</option>
+                  <option value="rejected">{t("status.rejected")}</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("admin.internalReviewNote")} {t("common.optional")}
+                <textarea
+                  className="field min-h-24"
+                  value={reviewNote}
+                  onChange={(event) => setReviewNote(event.target.value)}
+                  maxLength={3000}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn btn-primary" onClick={onReview} disabled={reviewLoading}>
+                  {reviewLoading ? t("common.saving") : t("admin.saveReview")}
+                </button>
+                <button className="btn btn-secondary" onClick={() => onSelect(detail.id)} disabled={reviewLoading}>
+                  {t("common.refresh")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 function SupplierPayoutsView({
   payouts,
   detail,
@@ -1467,6 +1701,15 @@ function RiskDetailRow({label, value}: {label: string; value: ReactNode}) {
   return <p className="flex justify-between gap-3 border-b border-line pb-2 last:border-0"><span className="text-neutral-600">{label}</span><strong>{value || "-"}</strong></p>;
 }
 
+function AdminDetail({label, value}: {label: string; value: ReactNode}) {
+  return (
+    <div className="rounded-md border border-line bg-panel p-3">
+      <p className="text-xs uppercase tracking-wide text-neutral-500">{label}</p>
+      <div className="mt-1 break-words font-medium text-slate-900">{value || "-"}</div>
+    </div>
+  );
+}
+
 function formatRate(value: number) {
   return `${Math.round(Number(value || 0) * 100)}%`;
 }
@@ -1489,6 +1732,14 @@ function supplierPayoutFilters(status: string, supplierId: string) {
   return {
     ...(status ? {status} : {}),
     ...(Number.isInteger(parsedSupplierId) && parsedSupplierId > 0 ? {supplier_id: parsedSupplierId} : {})
+  };
+}
+
+function supplierApplicationFilters(status: string) {
+  return {
+    limit: 100,
+    offset: 0,
+    ...(status ? {status} : {})
   };
 }
 

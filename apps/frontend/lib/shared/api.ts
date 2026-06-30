@@ -1,3 +1,5 @@
+import type {SupplierApplicationCreate, SupplierApplicationReceived} from "@/lib/shared/types";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 type AuthPayload = {
@@ -196,4 +198,11 @@ export async function auth(path: string, payload: unknown) {
 
 export async function currentUser() {
   return apiFetch<{id: number; email: string; role: "user" | "admin"; status: string; tier: string; locale: "en" | "ru"}>("/auth/me");
+}
+
+export function submitSupplierApplication(payload: SupplierApplicationCreate) {
+  return apiFetch<SupplierApplicationReceived>("/supplier/v1/applications", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
