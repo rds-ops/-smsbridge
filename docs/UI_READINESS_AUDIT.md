@@ -40,6 +40,7 @@ Implemented:
 - API docs page with managed API key create/list/revoke/scopes/usage
 - legacy API key regenerate remains available for compatibility
 - settings page
+- frontend logout calls backend logout when a refresh token exists, and settings includes a current-user logout-all control
 - FAQ and Suppliers public pages
 
 Partially implemented:
@@ -68,20 +69,21 @@ Implemented:
 - API key stored in session storage for MVP use
 - profile/balance/reward/status from `GET /supplier/v1/me`
 - inventory list/update
+- supplier activation history list with safe summary fields
 - SMS push helper
 - payout request create/list
 - supplier transaction/reward history
 
 Partially implemented:
 
-- supplier activation history backend endpoint now exists, but it is not surfaced in the `/supplier` UI yet.
+- supplier activation history is surfaced, but still needs focused browser QA with SMS push correlation before supplier sandbox.
 - supplier API key handling is MVP-style paste-and-store; not a full supplier login/session flow.
 - reservation/release health is mostly visible to admins, not suppliers.
 
 Missing/deferred:
 
 - supplier login/JWT or stronger partner auth UX
-- supplier activation history UI
+- supplier activation history browser QA with SMS push correlation
 - supplier onboarding/KYC/contract flow
 - richer payout/accounting explanations
 
@@ -106,6 +108,7 @@ Implemented:
 - ops summary dashboard
 - risk users/actions
 - payment intent list/detail/manual completion
+- user session revoke-all action from the Users table
 - supplier payout requests and lifecycle actions
 - reliability center:
   - supplier release retries
@@ -133,7 +136,7 @@ Missing/deferred:
 | Local demo buyer flow | Ready | RC-1 frontend build/local E2E passed; RC-2 browser QA passed after small responsive fixes. |
 | Buyer wallet/manual deposit flow | Ready for manual/mock beta | `manual_test` creation exists; admin completion remains admin-only and copy is visible. |
 | Managed API keys | Mostly ready | Create/list/revoke/scopes/usage implemented. |
-| Supplier cabinet MVP | Mostly ready | Profile/inventory/SMS/payouts/transactions implemented and RC-2 route checks passed; activation history backend exists but UI is missing. |
+| Supplier cabinet MVP | Mostly ready | Profile/inventory/activations/SMS/payouts/transactions implemented and RC-2 route checks passed; activation history still needs focused browser QA. |
 | Admin operations | Mostly ready | Ops/risk/payments/payouts/reliability/logs implemented; RC-2 admin route check passed. |
 | Real payment UX | Not ready | Real providers deferred. |
 | Real supplier onboarding UX | Not ready | No onboarding/KYC/session flow. |
@@ -144,12 +147,12 @@ Missing/deferred:
 Beta blockers or near-blockers:
 
 - no active RC-2 buyer UI blocker after the recorded browser pass
-- verify token refresh/logout behavior during longer manual sessions
+- verify token refresh/logout/logout-all behavior during longer manual sessions
 
 Beta useful:
 
 - buyer-safe order event timeline after backend endpoint exists
-- supplier activation history UI
+- supplier activation history browser QA with SMS push correlation
 - improved admin pagination/filtering on high-volume tables
 - better supplier payout/accounting explanations
 - docs links from UI to local E2E/manual_test flows
@@ -167,9 +170,9 @@ Screen-by-screen implementation order is tracked in `docs/FRONTEND_IMPLEMENTATIO
 
 | Task | Area | Priority | Complexity | Why |
 |---|---|---|---|---|
-| Longer authenticated session/logout browser pass | frontend/tests | beta-useful | small | Backend logout exists, but frontend logout is still local token clearing. |
-| Supplier activation history UI | frontend | beta-useful | medium | Backend endpoint exists; real suppliers need visibility in the cabinet. |
-| Admin user session revoke-all UI | frontend | beta-useful | small | Backend endpoint exists; useful for operator security workflows. |
+| Longer authenticated session/logout browser pass | frontend/tests | beta-useful | small | Backend logout/logout-all is wired; longer-session browser behavior still needs a focused pass. |
+| Supplier activation history browser QA | frontend/tests | beta-useful | small | UI is wired; real suppliers need a verified activation/SMS workflow in the cabinet. |
+| Admin user session revoke-all browser QA | frontend/tests | beta-useful | small | UI action is wired; confirm operator workflow in browser. |
 | Buyer order event timeline | backend/frontend | later | medium | Requires buyer-safe event endpoint first. |
 | Admin high-volume pagination polish | frontend/backend | beta-useful | medium | Keeps ops pages usable as data grows. |
 | Supplier onboarding UX | product/frontend | later | large | Needed before real supplier acquisition. |
@@ -251,7 +254,7 @@ RC-2 status:
 
 Remaining non-blocking gaps:
 
-- Frontend logout still clears local tokens only; backend logout/logout-all endpoints exist and should be wired in Phase B.
-- Supplier activation history UI is still missing and remains Phase C for supplier sandbox.
-- Admin target-user session revoke-all UI is still missing and remains Phase B.
+- Frontend logout/logout-all is wired to backend endpoints; longer-session browser QA remains useful.
+- Supplier activation history UI is wired; focused Phase C browser QA remains for supplier sandbox.
+- Admin target-user session revoke-all UI is wired; browser QA remains useful for operator workflow.
 - Real payment provider UX and real SMS provider operations UI remain deferred until backend integration gates open.

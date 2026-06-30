@@ -37,6 +37,7 @@ import {
   markSupplierPayoutPaid,
   regenerateSupplierApiKey,
   rejectSupplierPayoutRequest,
+  revokeUserSessions,
   updateSupplier
 } from "@/lib/admin/api";
 import type {SupplierReservationPayload} from "@/lib/admin/api";
@@ -133,6 +134,7 @@ function AdminPanel() {
   const [supplierReservationTimeout, setSupplierReservationTimeout] = useState("5");
   const [supplierApiKey, setSupplierApiKey] = useState("");
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [sessionRevokeUserId, setSessionRevokeUserId] = useState<number | null>(null);
   const [toast, setToast] = useState<{type: "success" | "error"; message: string}>({type: "success", message: ""});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -471,6 +473,20 @@ function AdminPanel() {
     }
   }
 
+  async function revokeSessions(userId: number) {
+    if (!window.confirm(t("admin.confirmRevokeSessions", {userId}))) return;
+    setSessionRevokeUserId(userId);
+    setToast({type: "success", message: ""});
+    try {
+      const result = await revokeUserSessions(userId);
+      setToast({type: "success", message: t("admin.sessionsRevoked", {count: result.revoked_sessions, userId})});
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("admin.sessionsRevokeFailed")});
+    } finally {
+      setSessionRevokeUserId(null);
+    }
+  }
+
   const filteredRows = useMemo(() => {
     const lower = query.trim().toLowerCase();
     const filter = (rows: Record<string, unknown>[]) => !lower ? rows : rows.filter((row) => JSON.stringify(row).toLowerCase().includes(lower));
@@ -503,7 +519,16 @@ function AdminPanel() {
       {key: "held_balance", header: t("common.heldBalance"), render: (row) => money(row.held_balance, String(row.currency || "USD"))},
       {key: "currency", header: t("common.currency")},
       {key: "api_key_status", header: t("common.apiKeyStatus")},
-      {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)}
+      {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)},
+      {key: "actions", header: t("common.actions"), render: (row) => (
+        <button
+          className="btn btn-secondary px-2 py-1 text-xs"
+          disabled={sessionRevokeUserId === Number(row.id)}
+          onClick={() => revokeSessions(Number(row.id))}
+        >
+          {sessionRevokeUserId === Number(row.id) ? t("common.saving") : t("admin.revokeSessions")}
+        </button>
+      )}
     ];
     if (tab === "orders") return [
       {key: "public_id", header: "public_id", render: (row) => truncate(row.public_id, 12)},
@@ -627,7 +652,7 @@ function AdminPanel() {
       {key: "ip_address", header: t("common.ipAddress")},
       {key: "created_at", header: t("common.created"), render: (row) => dateTime(row.created_at)}
     ];
-  }, [tab, t]);
+  }, [sessionRevokeUserId, tab, t]);
 
   return (
     <PageShell wide>

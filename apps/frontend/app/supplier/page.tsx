@@ -2,16 +2,17 @@
 
 import {useEffect, useState} from "react";
 import {DataTable} from "@/components/shared/data-table";
-import {Alert, Card, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
-import {createSupplierPayoutRequest, getSupplierInventory, getSupplierPayoutRequests, getSupplierTransactions, pushSupplierSms, supplierMe, updateSupplierInventory} from "@/lib/supplier/api";
+import {Alert, Card, CopyButton, MetricCard, PageHeader, PageShell, StatusBadge, Toast} from "@/components/shared/ui";
+import {createSupplierPayoutRequest, getSupplierActivations, getSupplierInventory, getSupplierPayoutRequests, getSupplierTransactions, pushSupplierSms, supplierMe, updateSupplierInventory} from "@/lib/supplier/api";
 import {dateTime, money, percent, truncate} from "@/lib/shared/format";
-import type {SupplierInventoryRow, SupplierPayoutRequest, SupplierProfile, SupplierSmsPushResponse, SupplierTransactionHistoryRow} from "@/lib/shared/types";
+import type {SupplierActivationHistoryRow, SupplierInventoryRow, SupplierPayoutRequest, SupplierProfile, SupplierSmsPushResponse, SupplierTransactionHistoryRow} from "@/lib/shared/types";
 import {useTranslation} from "@/lib/i18n";
 
-type SupplierTab = "profile" | "inventory" | "sms" | "payouts" | "transactions";
+type SupplierTab = "profile" | "inventory" | "activations" | "sms" | "payouts" | "transactions";
 
 const storageKey = "smsbridge_supplier_api_key";
 const TRANSACTION_LIMIT = 50;
+const ACTIVATION_LIMIT = 50;
 
 export default function SupplierPage() {
   const {t} = useTranslation();
@@ -19,6 +20,10 @@ export default function SupplierPage() {
   const [apiKey, setApiKey] = useState("");
   const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [inventory, setInventory] = useState<SupplierInventoryRow[]>([]);
+  const [activations, setActivations] = useState<SupplierActivationHistoryRow[]>([]);
+  const [activationOffset, setActivationOffset] = useState(0);
+  const [activationsHasMore, setActivationsHasMore] = useState(false);
+  const [activationsLoadingMore, setActivationsLoadingMore] = useState(false);
   const [payouts, setPayouts] = useState<SupplierPayoutRequest[]>([]);
   const [transactions, setTransactions] = useState<SupplierTransactionHistoryRow[]>([]);
   const [transactionOffset, setTransactionOffset] = useState(0);
@@ -36,6 +41,11 @@ export default function SupplierPage() {
   const [successRate, setSuccessRate] = useState("");
   const [avgSmsTime, setAvgSmsTime] = useState("");
   const [inventoryStatus, setInventoryStatus] = useState("active");
+
+  const [activationStatusFilter, setActivationStatusFilter] = useState("");
+  const [activationServiceFilter, setActivationServiceFilter] = useState("");
+  const [activationCountryFilter, setActivationCountryFilter] = useState("");
+  const [activationPhoneFilter, setActivationPhoneFilter] = useState("");
 
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutMethod, setPayoutMethod] = useState("");
@@ -61,14 +71,18 @@ export default function SupplierPage() {
     setLoading(true);
     setError("");
     try {
-      const [profileData, inventoryData, payoutData] = await Promise.all([
+      const [profileData, inventoryData, activationData, payoutData] = await Promise.all([
         supplierMe(key),
         getSupplierInventory(key),
+        getSupplierActivations(key, {limit: ACTIVATION_LIMIT, offset: 0}),
         getSupplierPayoutRequests(key)
       ]);
       const transactionData = await getSupplierTransactions(key, {limit: TRANSACTION_LIMIT, offset: 0});
       setProfile(profileData);
       setInventory(inventoryData);
+      setActivations(activationData);
+      setActivationOffset(0);
+      setActivationsHasMore(activationData.length === ACTIVATION_LIMIT);
       setPayouts(payoutData);
       setTransactions(transactionData);
       setTransactionOffset(0);
@@ -98,6 +112,13 @@ export default function SupplierPage() {
     setApiKeyInput("");
     setProfile(null);
     setInventory([]);
+    setActivations([]);
+    setActivationOffset(0);
+    setActivationsHasMore(false);
+    setActivationStatusFilter("");
+    setActivationServiceFilter("");
+    setActivationCountryFilter("");
+    setActivationPhoneFilter("");
     setPayouts([]);
     setTransactions([]);
     setTransactionOffset(0);
@@ -187,6 +208,7 @@ export default function SupplierPage() {
       });
       setSmsResult(result);
       setSmsText("");
+      refreshActivations();
       setToast({
         type: "success",
         message: result.duplicate ? t("supplierCabinet.smsDuplicate") : t("supplierCabinet.smsPushed")
@@ -195,6 +217,60 @@ export default function SupplierPage() {
       setToast({type: "error", message: err instanceof Error ? err.message : t("supplierCabinet.smsFailed")});
     } finally {
       setSmsLoading(false);
+    }
+  }
+
+  function activationFilters() {
+    return {
+      status: activationStatusFilter.trim() || undefined,
+      service: activationServiceFilter.trim() || undefined,
+      country: activationCountryFilter.trim() ? activationCountryFilter.trim().toUpperCase() : undefined,
+      phone: activationPhoneFilter.trim() || undefined
+    };
+  }
+
+  async function refreshActivations(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!apiKey) return;
+    try {
+      const rows = await getSupplierActivations(apiKey, {limit: ACTIVATION_LIMIT, offset: 0, ...activationFilters()});
+      setActivations(rows);
+      setActivationOffset(0);
+      setActivationsHasMore(rows.length === ACTIVATION_LIMIT);
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("supplierCabinet.activationsFailed")});
+    }
+  }
+
+  async function clearActivationFilters() {
+    setActivationStatusFilter("");
+    setActivationServiceFilter("");
+    setActivationCountryFilter("");
+    setActivationPhoneFilter("");
+    if (!apiKey) return;
+    try {
+      const rows = await getSupplierActivations(apiKey, {limit: ACTIVATION_LIMIT, offset: 0});
+      setActivations(rows);
+      setActivationOffset(0);
+      setActivationsHasMore(rows.length === ACTIVATION_LIMIT);
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("supplierCabinet.activationsFailed")});
+    }
+  }
+
+  async function loadMoreActivations() {
+    if (!apiKey || activationsLoadingMore) return;
+    const nextOffset = activationOffset + ACTIVATION_LIMIT;
+    setActivationsLoadingMore(true);
+    try {
+      const nextRows = await getSupplierActivations(apiKey, {limit: ACTIVATION_LIMIT, offset: nextOffset, ...activationFilters()});
+      setActivations((current) => [...current, ...nextRows]);
+      setActivationOffset(nextOffset);
+      setActivationsHasMore(nextRows.length === ACTIVATION_LIMIT);
+    } catch (err) {
+      setToast({type: "error", message: err instanceof Error ? err.message : t("supplierCabinet.activationsFailed")});
+    } finally {
+      setActivationsLoadingMore(false);
     }
   }
 
@@ -245,7 +321,7 @@ export default function SupplierPage() {
         <>
           {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
           <div className="mt-6 flex flex-wrap gap-2">
-            {(["profile", "inventory", "sms", "payouts", "transactions"] as SupplierTab[]).map((item) => (
+            {(["profile", "inventory", "activations", "sms", "payouts", "transactions"] as SupplierTab[]).map((item) => (
               <button className={`btn ${tab === item ? "btn-primary" : "btn-secondary"}`} key={item} onClick={() => setTab(item)}>
                 {t(`supplierCabinet.${item}`)}
               </button>
@@ -323,6 +399,110 @@ export default function SupplierPage() {
                     {key: "last_sync_at", header: t("common.lastSync"), render: (row) => dateTime(row.last_sync_at || row.updated_at)}
                   ]}
                 />
+              </Card>
+            </section>
+          )}
+
+          {tab === "activations" && (
+            <section className="mt-6">
+              <Card title={t("supplierCabinet.activations")} description={t("supplierCabinet.activationsDesc")}>
+                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1.2fr_auto_auto]" onSubmit={refreshActivations}>
+                  <label className="grid gap-1 text-sm">
+                    {t("common.status")}
+                    <select className="field" value={activationStatusFilter} onChange={(event) => setActivationStatusFilter(event.target.value)}>
+                      <option value="">{t("admin.allStatuses")}</option>
+                      <option value="reserved">{t("status.reserved")}</option>
+                      <option value="waiting_sms">{t("status.waiting_sms")}</option>
+                      <option value="sms_received">{t("status.sms_received")}</option>
+                      <option value="completed">{t("status.completed")}</option>
+                      <option value="cancelled">{t("status.cancelled")}</option>
+                      <option value="expired">{t("status.expired")}</option>
+                      <option value="refunded">{t("status.refunded")}</option>
+                      <option value="failed">{t("status.failed")}</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("common.service")}
+                    <input
+                      className="field"
+                      value={activationServiceFilter}
+                      onChange={(event) => setActivationServiceFilter(event.target.value)}
+                      placeholder="telegram"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("common.country")}
+                    <input
+                      className="field"
+                      value={activationCountryFilter}
+                      onChange={(event) => setActivationCountryFilter(event.target.value)}
+                      placeholder="ID"
+                      maxLength={2}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    {t("common.phone")}
+                    <input
+                      className="field"
+                      value={activationPhoneFilter}
+                      onChange={(event) => setActivationPhoneFilter(event.target.value)}
+                      placeholder="+628123456789"
+                    />
+                  </label>
+                  <button className="btn btn-secondary self-end" type="submit">{t("common.refresh")}</button>
+                  <button className="btn btn-secondary self-end" type="button" onClick={clearActivationFilters}>{t("common.clearFilters")}</button>
+                </form>
+                <DataTable
+                  rows={activations as unknown as Record<string, unknown>[]}
+                  emptyTitle={t("supplierCabinet.noActivations")}
+                  columns={[
+                    {
+                      key: "supplier_activation_id",
+                      header: t("common.supplierActivationId"),
+                      render: (row) => (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate">{row.supplier_activation_id ? truncate(row.supplier_activation_id, 22) : "-"}</span>
+                          <CopyButton value={row.supplier_activation_id ? String(row.supplier_activation_id) : null} />
+                        </span>
+                      )
+                    },
+                    {
+                      key: "phone_number",
+                      header: t("common.phone"),
+                      render: (row) => (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate">{String(row.phone_number || "-")}</span>
+                          <CopyButton value={row.phone_number ? String(row.phone_number) : null} />
+                        </span>
+                      )
+                    },
+                    {key: "service_code", header: t("common.service")},
+                    {key: "country_iso2", header: t("common.country")},
+                    {key: "operator", header: t("common.operator"), render: (row) => row.operator ? String(row.operator) : t("common.any")},
+                    {key: "status", header: t("common.status"), render: (row) => <StatusBadge status={String(row.status)} />},
+                    {
+                      key: "order_public_id",
+                      header: t("common.order"),
+                      render: (row) => row.order_public_id ? (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate">{truncate(row.order_public_id, 18)}</span>
+                          <CopyButton value={String(row.order_public_id)} />
+                        </span>
+                      ) : "-"
+                    },
+                    {key: "sms_count", header: t("supplierCabinet.smsCount")},
+                    {key: "latest_sms_at", header: t("supplierCabinet.latestSmsAt"), render: (row) => dateTime(row.latest_sms_at)},
+                    {key: "created_at", header: t("common.createdAt"), render: (row) => dateTime(row.created_at)},
+                    {key: "updated_at", header: t("supplierCabinet.updatedAt"), render: (row) => dateTime(row.updated_at)}
+                  ]}
+                />
+                {activationsHasMore && (
+                  <div className="mt-4">
+                    <button className="btn btn-secondary" onClick={loadMoreActivations} disabled={activationsLoadingMore}>
+                      {activationsLoadingMore ? t("common.loading") : t("supplierCabinet.loadMoreActivations")}
+                    </button>
+                  </div>
+                )}
               </Card>
             </section>
           )}

@@ -184,6 +184,21 @@ export type SupplierTransactionHistoryRow = {
   created_at: string;
 };
 
+export type SupplierActivationHistoryRow = {
+  id?: number;
+  supplier_activation_id?: string | null;
+  phone_number: string;
+  service_code: string;
+  country_iso2: string;
+  operator?: string | null;
+  status: string;
+  order_public_id?: string | null;
+  sms_count: number;
+  latest_sms_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Metrics = Record<string, unknown>;
 
 export type AdminOpsSummary = {

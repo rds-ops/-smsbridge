@@ -1,4 +1,5 @@
 import type {
+  SupplierActivationHistoryRow,
   SupplierInventoryRow,
   SupplierInventoryUpdateItem,
   SupplierPayoutRequest,
@@ -55,6 +56,20 @@ export function updateSupplierInventory(apiKey: string, items: SupplierInventory
 
 export function getSupplierPayoutRequests(apiKey: string) {
   return supplierFetch<SupplierPayoutRequest[]>(apiKey, "/supplier/v1/payout-requests");
+}
+
+export function getSupplierActivations(
+  apiKey: string,
+  params: {limit?: number; offset?: number; status?: string; service?: string; country?: string; phone?: string} = {}
+) {
+  const query = new URLSearchParams();
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  if (params.status) query.set("status", params.status);
+  if (params.service) query.set("service", params.service);
+  if (params.country) query.set("country", params.country);
+  if (params.phone) query.set("phone", params.phone);
+  return supplierFetch<SupplierActivationHistoryRow[]>(apiKey, `/supplier/v1/activations?${query.toString()}`);
 }
 
 export function getSupplierTransactions(

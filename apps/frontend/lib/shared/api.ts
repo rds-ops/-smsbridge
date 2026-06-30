@@ -48,7 +48,35 @@ export function clearAuthTokens() {
 }
 
 export function logout() {
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    void fetch(`${API_BASE}/auth/logout`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({refresh_token: refreshToken}),
+      cache: "no-store"
+    }).catch(() => null);
+  }
   clearAuthTokens();
+}
+
+export async function logoutAll() {
+  const token = getToken();
+  try {
+    if (!token) return {status: "ok", revoked_sessions: 0};
+    const response = await fetch(`${API_BASE}/auth/logout-all`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      cache: "no-store"
+    });
+    if (!response.ok) throw await parseApiError(response);
+    return response.json() as Promise<{status: string; revoked_sessions: number}>;
+  } finally {
+    clearAuthTokens();
+  }
 }
 
 function isAuthEndpoint(path: string) {

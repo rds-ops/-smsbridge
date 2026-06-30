@@ -36,9 +36,9 @@ Meaning:
 | Orders `/orders`, `/orders/{public_id}` | Implemented | `GET /api/v1/orders`, `GET /orders/{public_id}`, cancel, finish | Complete | Mostly ready | Browser QA for active polling/cancel/finish; buyer order events are backend-admin only, so timeline is deferred | Yes for RC-2 | No |
 | Wallet history | Implemented in dashboard | `GET /api/v1/wallet/transactions` | Complete | Mostly ready | Verify pagination/load-more behavior in browser | Beta useful | Yes |
 | Deposit `/deposit` | Implemented for `manual_test` | `POST /api/v1/payment-intents`, `GET /api/v1/payment-intents`, detail | Complete for manual/local only | Mostly ready | Confirm copy says admin/manual completion is required; browser QA | Yes for friendly-buyer clarity | No |
-| Settings `/settings` | Implemented basic account/settings | `GET /auth/me`; frontend local logout only | Backend logout exists | Partial | Wire logout to `POST /auth/logout`; optionally expose current-user `POST /auth/logout-all` if kept simple | Beta useful | Yes for small friendly beta |
+| Settings `/settings` | Implemented basic account/settings | `GET /auth/me`; `POST /auth/logout`; `POST /auth/logout-all` | Backend logout exists | Mostly ready | Browser QA for backend logout/logout-all behavior during longer sessions | Beta useful | Yes for small friendly beta |
 | API docs `/api-docs` | Implemented public docs + signed-in key management | `POST/GET /api/v1/api-keys`, revoke, usage; legacy regenerate | Complete | Mostly ready | Browser QA for create raw-key-once, scopes, usage, revoke | Yes for API beta | No if only browser buyers |
-| Auth modal/pages | Implemented | `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all` | Complete | Partial | Login/register modal QA; protected-route behavior; backend logout/logout-all wiring | Yes for RC-2 modal QA | Logout-all can wait |
+| Auth modal/pages | Implemented | `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all` | Complete | Mostly ready | Login/register modal QA; protected-route behavior; logout/logout-all browser QA | Yes for RC-2 modal QA | Logout-all can wait |
 
 ## 3. Supplier Screens
 
@@ -47,7 +47,7 @@ Meaning:
 | Supplier cabinet `/supplier` | Implemented MVP | Supplier API-key auth across `/supplier/v1/*` | Complete for sandbox API | Mostly ready | Browser QA for pasted key, session storage, refresh, errors | Beta useful | Yes for buyer-only beta |
 | Dashboard/profile | Implemented | `GET /supplier/v1/me` | Complete | Mostly ready | Browser QA | No for buyer beta | Yes |
 | Inventory | Implemented | `GET /supplier/v1/inventory`, `POST /inventory/update` | Complete | Mostly ready | Browser QA for update form and validation | No for buyer beta | Yes |
-| Activation history | Missing in supplier UI | `GET /supplier/v1/activations` | Complete | Missing | Add typed supplier client method, type, tab/table, filters if simple | Blocker for supplier sandbox visibility | Yes for buyer beta |
+| Activation history | Implemented in supplier UI | `GET /supplier/v1/activations` | Complete | Mostly ready | Browser QA for filters, pagination and SMS push correlation | Blocker for supplier sandbox visibility | Yes for buyer beta |
 | Transactions | Implemented | `GET /supplier/v1/transactions` | Complete | Mostly ready | Browser QA for pagination/load-more | No for buyer beta | Yes |
 | Payouts | Implemented | `POST/GET /supplier/v1/payout-requests` | Complete for manual payouts | Mostly ready | Browser QA for create/list/error handling | No for buyer beta | Yes |
 | Supplier API key access | Implemented as paste-key MVP | Admin creates/regenerates key; no supplier self-key endpoint | Complete for admin-issued key | MVP ready | Clarify that key is admin-issued; do not build self-service key management without backend | No for buyer beta | Yes |
@@ -65,8 +65,8 @@ Meaning:
 | Supplier payouts | Implemented | list/detail/approve/reject/mark-paid | Complete | Mostly ready | Browser QA for lifecycle actions and idempotent refresh | Supplier sandbox useful | Yes |
 | Release retries | Implemented | `GET /admin/supplier-release-retries` | Complete | Mostly ready | Browser QA in Reliability tab | Supplier sandbox useful | Yes |
 | Payment intents | Implemented | list/detail/manual-complete/reconciliation | Complete for `manual_test` | Mostly ready | Browser QA for manual complete and filters | Yes for manual funding ops | No |
-| Users | Implemented list/basic views | users/status/limits; session revoke endpoint exists | Backend complete | Partial | Add UI/API client for `POST /admin/users/{user_id}/sessions/revoke-all`; verify status/limit controls if present | Beta useful security ops | Yes for tiny friendly beta |
-| Session revoke | Missing in UI | `POST /admin/users/{user_id}/sessions/revoke-all` | Complete | Missing | Add admin client method and user action button/result count | Beta useful | Yes for tiny friendly beta |
+| Users | Implemented list/basic views | users/status/limits; session revoke endpoint exists | Backend complete | Mostly ready | Browser QA for session revoke action and status/limit controls if present | Beta useful security ops | Yes for tiny friendly beta |
+| Session revoke | Implemented in UI | `POST /admin/users/{user_id}/sessions/revoke-all` | Complete | Mostly ready | Browser QA for action button/result count | Beta useful | Yes for tiny friendly beta |
 | Audit logs | Implemented | `GET /admin/audit-logs` | Complete | Mostly ready | Browser QA and high-volume usability check | Beta useful | Yes |
 | Request logs | Implemented | `GET /admin/api-request-logs` with filters | Complete | Mostly ready | Browser QA for request_id/method/status filters and copy button | Yes for support readiness | No |
 | Risk actions | Implemented | risk users/detail/actions | Complete | Mostly ready | Browser QA for watch/note/clear/review | Beta useful | Yes |
@@ -82,11 +82,11 @@ Meaning:
 | Buyer wallet transactions | Yes | Yes | Mostly no | Yes |
 | Buyer manual_test deposits | Yes | Yes for manual/local | Mostly no | Yes |
 | Buyer managed API keys | Yes | Yes | Mostly no | Yes |
-| Auth logout/logout-all | Yes | Yes | Yes | Yes |
+| Auth logout/logout-all | Yes | Yes | No | Yes |
 | Supplier profile/inventory/payouts/SMS/transactions | Yes | Yes | Mostly no | Yes |
-| Supplier activation history | Yes | Yes | Yes | Yes |
+| Supplier activation history | Yes | Yes | No | Yes |
 | Admin ops/risk/reliability/payments/payouts/logs | Yes | Yes | Mostly no | Yes |
-| Admin session revoke-all | Yes | Yes | Yes | Yes |
+| Admin session revoke-all | Yes | Yes | No | Yes |
 | Real payment checkout | No usable real provider API | No | No | No |
 | Real SMS provider operations | No real adapters | No | No | No |
 | Supplier self-service onboarding/settings | No | No | No | No |
@@ -113,9 +113,9 @@ Goal: make friendly-buyer support and basic operator actions smooth.
 
 Tasks:
 
-1. Wire frontend logout to `POST /auth/logout`.
-2. Add current-user logout-all control if simple and clearly placed.
-3. Add admin user session revoke-all control using existing backend endpoint.
+1. Wire frontend logout to `POST /auth/logout`. Done.
+2. Add current-user logout-all control if simple and clearly placed. Done.
+3. Add admin user session revoke-all control using existing backend endpoint. Done.
 4. Browser-test managed API key create/list/revoke/usage and wallet transaction history.
 5. Browser-test manual_test funding runbook end to end with admin manual completion.
 
@@ -125,8 +125,8 @@ Goal: expose existing supplier backend visibility to sandbox suppliers and opera
 
 Tasks:
 
-1. Add supplier activation history tab to `/supplier` using `GET /supplier/v1/activations`.
-2. Add supplier activation history type and supplier API client method.
+1. Add supplier activation history tab to `/supplier` using `GET /supplier/v1/activations`. Done.
+2. Add supplier activation history type and supplier API client method. Done.
 3. Browser-test supplier SMS push against returned activation ids.
 4. Browser-test admin supplier onboarding/config/API-key issuance.
 5. Browser-test supplier release retries and supplier payout lifecycle visibility.
@@ -160,9 +160,9 @@ Absolutely must be finished:
 
 Can safely wait:
 
-- Supplier activation history UI, if RC-2 is buyer-only.
-- Admin user session revoke-all UI, if beta is very small/trusted and backend endpoint is available for API use.
-- Current-user logout-all UI.
+- Supplier activation history browser QA, if RC-2 is buyer-only.
+- Admin user session revoke-all browser QA, if beta is very small/trusted.
+- Current-user logout-all browser QA.
 - High-volume pagination polish.
 - Buyer order event timeline, because buyer-safe backend endpoint does not exist yet.
 - Real payment provider UX.
@@ -171,4 +171,4 @@ Can safely wait:
 
 ## 8. Recommended First Frontend Task
 
-RC-2 is complete. Next recommended frontend task: wire frontend logout to backend logout and add the admin target-user session revoke-all control, then implement supplier activation history UI before the first supplier sandbox.
+RC-2 is complete. Backend logout/logout-all, admin target-user session revoke-all, and supplier activation history are now wired in frontend. Next recommended frontend task: run supplier sandbox browser QA against activation history plus SMS push, then execute supplier sandbox signoff.

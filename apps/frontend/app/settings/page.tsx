@@ -4,7 +4,7 @@ import {useEffect, useState} from "react";
 import {SmsMarketplace} from "@/components/buyer/SmsMarketplace";
 import {Alert, Card, PageHeader, PageShell, StatusBadge} from "@/components/shared/ui";
 import {getLimits} from "@/lib/client/api";
-import {currentUser, logout} from "@/lib/shared/api";
+import {currentUser, logout, logoutAll} from "@/lib/shared/api";
 import type {User, UserLimit} from "@/lib/shared/types";
 import {money} from "@/lib/shared/format";
 import {useTranslation} from "@/lib/i18n";
@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [limits, setLimits] = useState<UserLimit | null>(null);
   const [error, setError] = useState("");
+  const [logoutAllBusy, setLogoutAllBusy] = useState(false);
 
   useEffect(() => {
     Promise.all([currentUser(), getLimits()])
@@ -27,6 +28,15 @@ export default function SettingsPage() {
 
   function updateLocale(value: string) {
     setLocale(value as Locale);
+  }
+
+  async function endAllSessions() {
+    setLogoutAllBusy(true);
+    try {
+      await logoutAll();
+    } finally {
+      setLogoutAllBusy(false);
+    }
   }
 
   return (
@@ -48,7 +58,12 @@ export default function SettingsPage() {
                 <option value="ru">{t("common.russian")}</option>
               </select>
             </label>
-            <button className="btn btn-secondary w-fit" onClick={logout}>{t("nav.logout")}</button>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-secondary w-fit" onClick={logout}>{t("nav.logout")}</button>
+              <button className="btn btn-secondary w-fit" disabled={logoutAllBusy} onClick={endAllSessions}>
+                {logoutAllBusy ? t("common.saving") : t("settings.logoutAll")}
+              </button>
+            </div>
           </div>
         </Card>
         <Card title={t("settings.limits")} description={t("settings.limitsDesc")}>

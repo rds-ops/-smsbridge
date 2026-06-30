@@ -132,6 +132,10 @@ export function getAdminUsers() {
   return apiFetch<User[]>("/admin/users");
 }
 
+export function revokeUserSessions(userId: number) {
+  return apiFetch<{status: string; revoked_sessions: number}>(`/admin/users/${userId}/sessions/revoke-all`, {method: "POST"});
+}
+
 export function getAdminOrders() {
   return apiFetch<Order[]>("/admin/orders");
 }
